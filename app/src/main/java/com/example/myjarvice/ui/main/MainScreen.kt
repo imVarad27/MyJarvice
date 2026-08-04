@@ -105,7 +105,9 @@ fun MainScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.updateServerIp(tempIp)
+                    val targetIp = tempIp.trim()
+                    viewModel.updateServerIp(targetIp)
+                    android.widget.Toast.makeText(context, "Connecting to $targetIp...", android.widget.Toast.LENGTH_SHORT).show()
                     showIpDialog = false
                 }) {
                     Text("Connect", color = JarvisCyan)
