@@ -15,7 +15,7 @@ app = FastAPI(title="MyJarvice Host Server", version="1.0.0")
 
 # --- Configuration ---
 OLLAMA_URL = "http://localhost:11434/api/chat"
-DEFAULT_MODEL = "gemma2:9b"
+DEFAULT_MODEL = "gemma4:12b"  # Google Gemma 4 (Natively Multimodal & Agentic)
 
 # --- In-Memory Personal Vector/Knowledge Store Mock ---
 PERSONAL_KNOWLEDGE_BASE = [
