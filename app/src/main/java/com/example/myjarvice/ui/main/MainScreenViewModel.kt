@@ -24,7 +24,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val isSpeaking: StateFlow<Boolean> = speechManager.isSpeaking
     val isListening: StateFlow<Boolean> = speechManager.isListening
 
-    private val _serverIp = MutableStateFlow("10.0.2.2") // 10.0.2.2 for Android Emulator, or Host local LAN IP
+    private val _serverIp = MutableStateFlow("192.168.1.35") // Host PC Wi-Fi IP (or 127.0.0.1 via USB)
     val serverIp: StateFlow<String> = _serverIp.asStateFlow()
 
     init {

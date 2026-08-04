@@ -1,5 +1,6 @@
 package com.example.myjarvice.data
 
+import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import okhttp3.OkHttpClient
@@ -42,18 +43,30 @@ class JarviceWebSocketClient {
     private val _chatHistory = MutableStateFlow<List<JarviceMessage>>(emptyList())
     val chatHistory: StateFlow<List<JarviceMessage>> = _chatHistory
 
-    fun connect(serverIp: String = "10.0.2.2", port: Int = 8000) {
+    private var serverIp = "192.168.1.35"
+
+    fun connect(rawIpOrUrl: String = "192.168.1.35") {
         _connectionStatus.value = ConnectionStatus.CONNECTING
-        val wsUrl = "ws://$serverIp:$port/ws/jarvice"
+        this.serverIp = rawIpOrUrl.trim()
+
+        val wsUrl = when {
+            serverIp.startsWith("ws://") || serverIp.startsWith("wss://") -> serverIp
+            serverIp.contains(":") -> "ws://$serverIp/ws/jarvice"
+            else -> "ws://$serverIp:8000/ws/jarvice"
+        }
+
+        Log.d("JarviceWS", "Attempting connection to: $wsUrl")
         val request = Request.Builder().url(wsUrl).build()
 
         webSocket?.cancel()
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                Log.d("JarviceWS", "WebSocket Connected Successfully!")
                 _connectionStatus.value = ConnectionStatus.CONNECTED
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
+                Log.d("JarviceWS", "Message received: $text")
                 try {
                     val json = JSONObject(text)
                     val sender = json.optString("sender", "JARVICE")
@@ -65,15 +78,17 @@ class JarviceWebSocketClient {
                     _latestResponse.value = msg
                     _chatHistory.value = _chatHistory.value + msg
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    Log.e("JarviceWS", "Error parsing message: ${e.message}")
                 }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                Log.e("JarviceWS", "WebSocket Connection Failed: ${t.message}", t)
                 _connectionStatus.value = ConnectionStatus.ERROR
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                Log.d("JarviceWS", "WebSocket Closed: $reason")
                 _connectionStatus.value = ConnectionStatus.DISCONNECTED
             }
         })
@@ -91,20 +106,17 @@ class JarviceWebSocketClient {
         if (_connectionStatus.value == ConnectionStatus.CONNECTED) {
             webSocket?.send(payload.toString())
         } else {
-            // Local offline response fallback if server not connected
             val offlineMsg = JarviceMessage(
                 sender = "JARVICE (Offline)",
-                text = "Sir, primary server link is currently offline ($serverIp). Operating on emergency local protocol."
+                text = "Sir, server link ($serverIp) is offline. Re-establishing link..."
             )
             _latestResponse.value = offlineMsg
             _chatHistory.value = _chatHistory.value + offlineMsg
+            connect(serverIp)
         }
     }
 
-    private var serverIp = "10.0.2.2"
-
     fun updateServerIp(ip: String) {
-        this.serverIp = ip
         connect(ip)
     }
 
