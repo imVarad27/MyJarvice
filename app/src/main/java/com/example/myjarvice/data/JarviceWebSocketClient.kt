@@ -25,6 +25,13 @@ data class JarviceMessage(
     val timestamp: String = ""
 )
 
+/** A directive from the server for the phone to execute locally (Phase 3). */
+data class JarviceAction(
+    val id: String,      // unique per message (server timestamp) so repeats re-trigger
+    val type: String,    // "CALL" | "OPEN_APP"
+    val query: String
+)
+
 class JarviceWebSocketClient {
 
     private var client: OkHttpClient = OkHttpClient.Builder()
@@ -39,6 +46,9 @@ class JarviceWebSocketClient {
 
     private val _latestResponse = MutableStateFlow<JarviceMessage?>(null)
     val latestResponse: StateFlow<JarviceMessage?> = _latestResponse
+
+    private val _latestAction = MutableStateFlow<JarviceAction?>(null)
+    val latestAction: StateFlow<JarviceAction?> = _latestAction
 
     private val _chatHistory = MutableStateFlow<List<JarviceMessage>>(emptyList())
     val chatHistory: StateFlow<List<JarviceMessage>> = _chatHistory
@@ -77,6 +87,16 @@ class JarviceWebSocketClient {
                     val msg = JarviceMessage(sender, messageText, msgType, ts)
                     _latestResponse.value = msg
                     _chatHistory.value = _chatHistory.value + msg
+
+                    // Phase 3: execute a phone action if the server sent one.
+                    val actionObj = json.optJSONObject("action")
+                    if (actionObj != null) {
+                        _latestAction.value = JarviceAction(
+                            id = ts.ifBlank { System.currentTimeMillis().toString() },
+                            type = actionObj.optString("type"),
+                            query = actionObj.optString("query")
+                        )
+                    }
                 } catch (e: Exception) {
                     Log.e("JarviceWS", "Error parsing message: ${e.message}")
                 }

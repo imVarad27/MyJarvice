@@ -1,7 +1,6 @@
 package com.example.myjarvice.ui.main
 
 import android.app.Application
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,26 +15,24 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,24 +40,32 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myjarvice.data.ConnectionStatus
 import com.example.myjarvice.data.JarviceMessage
+import com.example.myjarvice.theme.AiBubbleBg
 import com.example.myjarvice.theme.ArcGold
+import com.example.myjarvice.theme.JarvisBgBottom
+import com.example.myjarvice.theme.JarvisBgTop
 import com.example.myjarvice.theme.JarvisBlue
 import com.example.myjarvice.theme.JarvisCyan
 import com.example.myjarvice.theme.JarvisDarkBackground
 import com.example.myjarvice.theme.JarvisSurfaceBorder
 import com.example.myjarvice.theme.JarvisSurfaceDark
+import com.example.myjarvice.theme.OfflineGray
+import com.example.myjarvice.theme.OnlineGreen
 import com.example.myjarvice.theme.TextPrimary
 import com.example.myjarvice.theme.TextSecondary
+import com.example.myjarvice.theme.UserBubbleBg
 import com.example.myjarvice.ui.JarvisArcReactor
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -83,44 +88,18 @@ fun MainScreen(
     var showIpDialog by remember { mutableStateOf(false) }
 
     if (showIpDialog) {
-        var tempIp by remember { mutableStateOf(serverIp) }
-        AlertDialog(
-            onDismissRequest = { showIpDialog = false },
-            title = { Text("Server Config", color = JarvisCyan) },
-            text = {
-                Column {
-                    Text("Enter Host PC Local IP address (e.g., 192.168.1.100 or 10.0.2.2 for emulator):", color = TextSecondary, fontSize = 13.sp)
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = tempIp,
-                        onValueChange = { tempIp = it },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = JarvisCyan,
-                            unfocusedBorderColor = JarvisSurfaceBorder,
-                            focusedTextColor = TextPrimary
-                        )
-                    )
-                }
+        ServerConfigDialog(
+            currentIp = serverIp,
+            onConnect = { ip ->
+                viewModel.updateServerIp(ip)
+                android.widget.Toast.makeText(context, "Connecting to $ip...", android.widget.Toast.LENGTH_SHORT).show()
+                showIpDialog = false
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    val targetIp = tempIp.trim()
-                    viewModel.updateServerIp(targetIp)
-                    android.widget.Toast.makeText(context, "Connecting to $targetIp...", android.widget.Toast.LENGTH_SHORT).show()
-                    showIpDialog = false
-                }) {
-                    Text("Connect", color = JarvisCyan)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showIpDialog = false }) {
-                    Text("Cancel", color = TextSecondary)
-                }
-            },
-            containerColor = JarvisSurfaceDark
+            onDismiss = { showIpDialog = false }
         )
     }
+
+    val screenGradient = Brush.verticalGradient(listOf(JarvisBgTop, JarvisBgBottom))
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -129,198 +108,386 @@ fun MainScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(screenGradient)
                 .padding(innerPadding)
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // --- TOP HUD HEADER ---
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(JarvisSurfaceDark)
-                    .border(1.dp, JarvisSurfaceBorder, RoundedCornerShape(12.dp))
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text("MYJARVICE HUD v1.0", color = JarvisCyan, fontWeight = FontWeight.Bold, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
-                    Text("HOST: $serverIp:8000", color = TextSecondary, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                }
+            HudHeader(
+                serverIp = serverIp,
+                connectionStatus = connectionStatus,
+                onStatusClick = { showIpDialog = true }
+            )
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val (statusColor, statusText) = when (connectionStatus) {
-                        ConnectionStatus.CONNECTED -> Color(0xFF00FF66) to "ONLINE"
-                        ConnectionStatus.CONNECTING -> ArcGold to "CONNECTING"
-                        ConnectionStatus.DISCONNECTED -> Color.Gray to "OFFLINE"
-                        ConnectionStatus.ERROR -> Color.Red to "ERROR"
-                    }
+            Spacer(Modifier.height(14.dp))
 
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(statusColor)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        statusText,
-                        color = statusColor,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.clickable { showIpDialog = true }
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            // --- CENTER ARC REACTOR HUD ---
+            // --- CENTER ARC REACTOR ---
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(260.dp),
+                    .height(230.dp),
                 contentAlignment = Alignment.Center
             ) {
                 JarvisArcReactor(isListening = isListening, isSpeaking = isSpeaking)
             }
 
+            val (statusLine, statusLineColor) = when {
+                isListening -> ">>> LISTENING <<<" to OnlineGreen
+                isSpeaking -> ">>> SPEAKING <<<" to ArcGold
+                connectionStatus == ConnectionStatus.CONNECTED -> "NEURAL CORE READY" to JarvisCyan
+                connectionStatus == ConnectionStatus.CONNECTING -> "ESTABLISHING LINK..." to ArcGold
+                else -> "OFFLINE — TAP STATUS TO SET IP" to OfflineGray
+            }
             Text(
-                text = when {
-                    isListening -> ">>> LISTENING TO USER VOICE <<<"
-                    isSpeaking -> ">>> JARVICE SPEAKING <<<"
-                    connectionStatus == ConnectionStatus.CONNECTED -> "GEMMA 9B ENGINE READY"
-                    else -> "SERVER STANDBY (CLICK STATUS TO SET IP)"
-                },
-                color = if (isListening) Color(0xFF00FF66) else if (isSpeaking) ArcGold else JarvisCyan,
+                text = statusLine,
+                color = statusLineColor,
                 fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 2.sp
             )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
 
-            // --- QUICK ACTION CHIPS ---
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                val quickPrompts = listOf(
-                    "Jarvis, check status",
-                    "Jarvis, turn on lab lights",
-                    "Jarvis, what is my schedule?",
-                    "Jarvis, weather report"
-                )
-                items(quickPrompts) { prompt ->
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(JarvisSurfaceDark)
-                            .border(1.dp, JarvisSurfaceBorder, RoundedCornerShape(16.dp))
-                            .clickable { viewModel.sendQuery(prompt) }
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Text(prompt, color = TextPrimary, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                    }
-                }
-            }
+            QuickActionRow(onPrompt = { viewModel.sendQuery(it) })
 
             Spacer(Modifier.height(12.dp))
 
-            // --- CHAT LOGS FEED ---
-            LazyColumn(
+            // --- CHAT FEED ---
+            ChatFeed(
+                chatHistory = chatHistory,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(JarvisSurfaceDark)
-                    .border(1.dp, JarvisSurfaceBorder, RoundedCornerShape(12.dp))
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(chatHistory) { msg ->
-                    ChatBubble(msg)
+            )
+
+            Spacer(Modifier.height(10.dp))
+
+            InputBar(
+                textInput = textInput,
+                onTextChange = { textInput = it },
+                isListening = isListening,
+                onSend = {
+                    if (textInput.isNotBlank()) {
+                        viewModel.sendQuery(textInput)
+                        textInput = ""
+                    } else {
+                        viewModel.toggleVoiceInput()
+                    }
                 }
-            }
+            )
+        }
+    }
+}
 
-            Spacer(Modifier.height(12.dp))
+@Composable
+private fun HudHeader(
+    serverIp: String,
+    connectionStatus: ConnectionStatus,
+    onStatusClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(JarvisSurfaceDark.copy(alpha = 0.85f))
+            .border(1.dp, JarvisSurfaceBorder, RoundedCornerShape(14.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column {
+            Text(
+                "J A R V I C E",
+                color = JarvisCyan,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 3.sp
+            )
+            Text(
+                "HOST · $serverIp:8000",
+                color = TextSecondary,
+                fontSize = 10.sp,
+                fontFamily = FontFamily.Monospace
+            )
+        }
 
-            // --- BOTTOM VOICE & INPUT BAR ---
+        val (dotColor, statusText) = when (connectionStatus) {
+            ConnectionStatus.CONNECTED -> OnlineGreen to "ONLINE"
+            ConnectionStatus.CONNECTING -> ArcGold to "LINKING"
+            ConnectionStatus.DISCONNECTED -> OfflineGray to "OFFLINE"
+            ConnectionStatus.ERROR -> Color(0xFFFF5A5A) to "ERROR"
+        }
+
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(dotColor.copy(alpha = 0.12f))
+                .border(1.dp, dotColor.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                .clickable { onStatusClick() }
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(dotColor)
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                statusText,
+                color = dotColor,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 1.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuickActionRow(onPrompt: (String) -> Unit) {
+    val quickPrompts = listOf(
+        "System status" to "⚡",
+        "Turn on lab lights" to "💡",
+        "My schedule" to "📅",
+        "Weather report" to "🌤️"
+    )
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        items(quickPrompts) { (label, icon) ->
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(JarvisSurfaceDark)
+                    .border(1.dp, JarvisCyan.copy(alpha = 0.3f), RoundedCornerShape(18.dp))
+                    .clickable { onPrompt(label) }
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedTextField(
-                    value = textInput,
-                    onValueChange = { textInput = it },
-                    placeholder = { Text("Command Jarvice...", color = TextSecondary, fontSize = 13.sp) },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = JarvisCyan,
-                        unfocusedBorderColor = JarvisSurfaceBorder,
-                        focusedTextColor = TextPrimary,
-                        cursorColor = JarvisCyan
-                    ),
-                    shape = RoundedCornerShape(24.dp)
-                )
-
-                Spacer(Modifier.width(8.dp))
-
-                Button(
-                    onClick = {
-                        if (textInput.isNotBlank()) {
-                            viewModel.sendQuery(textInput)
-                            textInput = ""
-                        } else {
-                            viewModel.toggleVoiceInput()
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = if (isListening) Color(0xFF00FF66) else JarvisCyan),
-                    shape = CircleShape,
-                    modifier = Modifier.size(52.dp)
-                ) {
-                    Text(if (isListening) "🎙️" else "⚡", fontSize = 18.sp, color = JarvisDarkBackground)
-                }
+                Text(icon, fontSize = 12.sp)
+                Spacer(Modifier.width(5.dp))
+                Text(label, color = TextPrimary, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
             }
         }
     }
 }
 
 @Composable
+private fun ChatFeed(
+    chatHistory: List<JarviceMessage>,
+    modifier: Modifier = Modifier
+) {
+    val listState = rememberLazyListState()
+
+    // Auto-scroll to the newest message.
+    LaunchedEffect(chatHistory.size) {
+        if (chatHistory.isNotEmpty()) {
+            listState.animateScrollToItem(chatHistory.size - 1)
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(JarvisSurfaceDark.copy(alpha = 0.55f))
+            .border(1.dp, JarvisSurfaceBorder, RoundedCornerShape(14.dp))
+    ) {
+        if (chatHistory.isEmpty()) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(24.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("◈", color = JarvisCyan.copy(alpha = 0.5f), fontSize = 34.sp)
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Awaiting your command, Sir.",
+                    color = TextSecondary,
+                    fontSize = 13.sp,
+                    fontFamily = FontFamily.Monospace,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    "Try a chip above or type below.",
+                    color = TextSecondary.copy(alpha = 0.6f),
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize().padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(chatHistory) { msg -> ChatBubble(msg) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InputBar(
+    textInput: String,
+    onTextChange: (String) -> Unit,
+    isListening: Boolean,
+    onSend: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedTextField(
+            value = textInput,
+            onValueChange = onTextChange,
+            placeholder = { Text("Command JARVICE...", color = TextSecondary, fontSize = 13.sp) },
+            modifier = Modifier.weight(1f),
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = JarvisCyan,
+                unfocusedBorderColor = JarvisSurfaceBorder,
+                focusedTextColor = TextPrimary,
+                unfocusedTextColor = TextPrimary,
+                cursorColor = JarvisCyan,
+                focusedContainerColor = JarvisSurfaceDark.copy(alpha = 0.6f),
+                unfocusedContainerColor = JarvisSurfaceDark.copy(alpha = 0.6f)
+            ),
+            shape = RoundedCornerShape(24.dp)
+        )
+
+        Spacer(Modifier.width(8.dp))
+
+        Button(
+            onClick = onSend,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (isListening) OnlineGreen else JarvisCyan
+            ),
+            shape = CircleShape,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+            modifier = Modifier.size(52.dp)
+        ) {
+            Text(
+                if (isListening) "🎙️" else if (textInput.isBlank()) "🎤" else "➤",
+                fontSize = 18.sp,
+                color = JarvisDarkBackground
+            )
+        }
+    }
+}
+
+@Composable
+private fun ServerConfigDialog(
+    currentIp: String,
+    onConnect: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var tempIp by remember { mutableStateOf(currentIp) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Server Config", color = JarvisCyan, fontFamily = FontFamily.Monospace) },
+        text = {
+            Column {
+                Text(
+                    "Enter the Host PC's local IP (e.g. 192.168.1.35, or 192.168.137.1 on PC hotspot):",
+                    color = TextSecondary,
+                    fontSize = 13.sp
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = tempIp,
+                    onValueChange = { tempIp = it },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = JarvisCyan,
+                        unfocusedBorderColor = JarvisSurfaceBorder,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConnect(tempIp.trim()) }) {
+                Text("Connect", color = JarvisCyan)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = TextSecondary)
+            }
+        },
+        containerColor = JarvisSurfaceDark
+    )
+}
+
+@Composable
 fun ChatBubble(msg: JarviceMessage) {
     val isUser = msg.sender == "USER"
+    val bubbleColor = if (isUser) UserBubbleBg else AiBubbleBg
+    val accent = if (isUser) JarvisBlue else JarvisCyan
+    val time = formatTimestamp(msg.timestamp)
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
     ) {
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = if (isUser) JarvisBlue.copy(alpha = 0.3f) else JarvisDarkBackground
-            ),
-            border = androidx.compose.foundation.BorderStroke(
-                1.dp,
-                if (isUser) JarvisBlue else JarvisCyan
-            ),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Column(modifier = Modifier.padding(10.dp)) {
-                Text(
-                    msg.sender,
-                    color = if (isUser) JarvisBlue else JarvisCyan,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace
+        Column(
+            modifier = Modifier
+                .widthIn(max = 300.dp)
+                .clip(
+                    RoundedCornerShape(
+                        topStart = 14.dp,
+                        topEnd = 14.dp,
+                        bottomStart = if (isUser) 14.dp else 3.dp,
+                        bottomEnd = if (isUser) 3.dp else 14.dp
+                    )
                 )
-                Spacer(Modifier.height(2.dp))
+                .background(bubbleColor)
+                .border(
+                    1.dp,
+                    accent.copy(alpha = 0.4f),
+                    RoundedCornerShape(
+                        topStart = 14.dp,
+                        topEnd = 14.dp,
+                        bottomStart = if (isUser) 14.dp else 3.dp,
+                        bottomEnd = if (isUser) 3.dp else 14.dp
+                    )
+                )
+                .padding(horizontal = 12.dp, vertical = 9.dp)
+        ) {
+            Text(
+                if (isUser) "YOU" else "JARVICE",
+                color = accent,
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.sp,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 1.sp
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(msg.text, color = TextPrimary, fontSize = 14.sp, lineHeight = 19.sp)
+            if (time.isNotEmpty()) {
+                Spacer(Modifier.height(3.dp))
                 Text(
-                    msg.text,
-                    color = TextPrimary,
-                    fontSize = 13.sp
+                    time,
+                    color = TextSecondary.copy(alpha = 0.7f),
+                    fontSize = 9.sp,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.align(Alignment.End)
                 )
             }
         }
     }
+}
+
+/** Extracts HH:mm from an ISO timestamp like "2026-08-04T22:06:40.014193". */
+private fun formatTimestamp(ts: String): String {
+    if (ts.length < 16 || !ts.contains("T")) return ""
+    val timePart = ts.substringAfter("T")
+    return if (timePart.length >= 5) timePart.substring(0, 5) else ""
 }

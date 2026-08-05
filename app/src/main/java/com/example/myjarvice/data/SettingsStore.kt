@@ -1,0 +1,51 @@
+package com.example.myjarvice.data
+
+import android.content.Context
+import com.example.myjarvice.theme.ThemeMode
+
+/**
+ * Lightweight persistence for app-level preferences, backed by SharedPreferences.
+ *
+ * Kept intentionally dependency-free (no DataStore) for the current app size —
+ * this is the "pragmatic architecture" choice. If preferences grow or need
+ * reactive flows across processes, migrate to DataStore.
+ */
+class SettingsStore(context: Context) {
+
+    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    var themeMode: ThemeMode
+        get() = runCatching {
+            ThemeMode.valueOf(prefs.getString(KEY_THEME, ThemeMode.SYSTEM.name) ?: ThemeMode.SYSTEM.name)
+        }.getOrDefault(ThemeMode.SYSTEM)
+        set(value) {
+            prefs.edit().putString(KEY_THEME, value.name).apply()
+        }
+
+    var dynamicColor: Boolean
+        get() = prefs.getBoolean(KEY_DYNAMIC, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_DYNAMIC, value).apply()
+        }
+
+    /** Picovoice access key for the "Hi Jarvis" wake word (from console.picovoice.ai). */
+    var picovoiceKey: String
+        get() = prefs.getString(KEY_PICOVOICE, "") ?: ""
+        set(value) {
+            prefs.edit().putString(KEY_PICOVOICE, value.trim()).apply()
+        }
+
+    var wakeWordEnabled: Boolean
+        get() = prefs.getBoolean(KEY_WAKE, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_WAKE, value).apply()
+        }
+
+    companion object {
+        private const val PREFS_NAME = "jarvic_settings"
+        private const val KEY_THEME = "theme_mode"
+        private const val KEY_DYNAMIC = "dynamic_color"
+        private const val KEY_PICOVOICE = "picovoice_key"
+        private const val KEY_WAKE = "wake_word_enabled"
+    }
+}

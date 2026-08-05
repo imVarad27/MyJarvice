@@ -4,10 +4,12 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myjarvice.data.ConnectionStatus
+import com.example.myjarvice.data.DeviceActionExecutor
 import com.example.myjarvice.data.DeviceContextProvider
 import com.example.myjarvice.data.JarviceMessage
 import com.example.myjarvice.data.JarviceWebSocketClient
 import com.example.myjarvice.data.SpeechManager
+import com.example.myjarvice.wake.WakeEvents
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,6 +20,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val wsClient = JarviceWebSocketClient()
     val deviceContext = DeviceContextProvider(application.applicationContext)
     val speechManager = SpeechManager(application.applicationContext)
+    private val actionExecutor = DeviceActionExecutor(application.applicationContext)
 
     val connectionStatus: StateFlow<ConnectionStatus> = wsClient.connectionStatus
     val chatHistory: StateFlow<List<JarviceMessage>> = wsClient.chatHistory
@@ -35,6 +38,25 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 msg?.let {
                     if (it.sender.startsWith("JARVICE")) {
                         speechManager.speak(it.text)
+                    }
+                }
+            }
+        }
+
+        // Execute phone actions (call / open app) the server directs.
+        viewModelScope.launch {
+            wsClient.latestAction.collect { action ->
+                action?.let { actionExecutor.execute(it) }
+            }
+        }
+
+        // When opened by the "Jarvis" wake word, immediately start listening.
+        viewModelScope.launch {
+            WakeEvents.voiceTrigger.collect { triggered ->
+                if (triggered) {
+                    WakeEvents.voiceTrigger.value = false
+                    if (!isListening.value) {
+                        speechManager.startListening { voiceText -> sendQuery(voiceText) }
                     }
                 }
             }

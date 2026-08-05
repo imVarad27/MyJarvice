@@ -84,4 +84,7 @@ dependencies {
 
   // Networking & WebSockets
   implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+  // Wake-word detection ("Hi Jarvis") — offline, no API key
+  implementation(libs.vosk.android)
 }

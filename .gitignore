@@ -17,3 +17,9 @@ local.properties
 # Python
 __pycache__/
 *.pyc
+
+# JARVICE local personal data (never commit)
+server/jarvice.db
+
+# Vosk offline model (large; fetched separately)
+app/src/main/assets/model-en-us/
