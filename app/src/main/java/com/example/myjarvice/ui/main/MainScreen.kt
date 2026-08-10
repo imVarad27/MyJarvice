@@ -1,17 +1,25 @@
 package com.example.myjarvice.ui.main
 
 import android.app.Application
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -67,8 +75,11 @@ import com.example.myjarvice.theme.TextPrimary
 import com.example.myjarvice.theme.TextSecondary
 import com.example.myjarvice.theme.UserBubbleBg
 import com.example.myjarvice.ui.JarvisArcReactor
+import com.example.myjarvice.ui.voice.VoiceInfoDialog
+import com.example.myjarvice.ui.voice.VoiceModeScreen
+import com.example.myjarvice.ui.voice.VoicePickerDialog
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun MainScreen(
     modifier: Modifier = Modifier
@@ -83,9 +94,16 @@ fun MainScreen(
     val isSpeaking by viewModel.isSpeaking.collectAsStateWithLifecycle()
     val isListening by viewModel.isListening.collectAsStateWithLifecycle()
     val serverIp by viewModel.serverIp.collectAsStateWithLifecycle()
+    val voiceModeActive by viewModel.voiceModeActive.collectAsStateWithLifecycle()
+    val micMuted by viewModel.micMuted.collectAsStateWithLifecycle()
+    val micLevel by viewModel.micLevel.collectAsStateWithLifecycle()
+    val voices by viewModel.voices.collectAsStateWithLifecycle()
+    val selectedVoiceId by viewModel.selectedVoiceId.collectAsStateWithLifecycle()
 
     var textInput by remember { mutableStateOf("") }
     var showIpDialog by remember { mutableStateOf(false) }
+    var showVoiceInfo by remember { mutableStateOf(false) }
+    var showVoicePicker by remember { mutableStateOf(false) }
 
     if (showIpDialog) {
         ServerConfigDialog(
@@ -99,85 +117,155 @@ fun MainScreen(
         )
     }
 
+    if (showVoiceInfo) {
+        VoiceInfoDialog(
+            serverIp = serverIp,
+            connectionStatus = connectionStatus,
+            messageCount = chatHistory.size,
+            voiceLabel = voices.firstOrNull { it.id == selectedVoiceId }?.label ?: "Engine default",
+            onDismiss = { showVoiceInfo = false }
+        )
+    }
+
+    if (showVoicePicker) {
+        VoicePickerDialog(
+            voices = voices,
+            selectedVoiceId = selectedVoiceId,
+            onSelect = { viewModel.selectVoice(it) },
+            onDismiss = { showVoicePicker = false }
+        )
+    }
+
     val screenGradient = Brush.verticalGradient(listOf(JarvisBgTop, JarvisBgBottom))
 
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        containerColor = JarvisDarkBackground
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(screenGradient)
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            HudHeader(
-                serverIp = serverIp,
-                connectionStatus = connectionStatus,
-                onStatusClick = { showIpDialog = true }
-            )
+    // The keyboard steals roughly 40% of the viewport. Collapsing the reactor and
+    // the quick-action chips keeps the chat feed and input bar usable instead of
+    // letting the fixed-height chrome squeeze the feed's weight down to nothing.
+    val imeVisible = WindowInsets.isImeVisible
 
-            Spacer(Modifier.height(14.dp))
-
-            // --- CENTER ARC REACTOR ---
-            Box(
+    Box(modifier = modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = JarvisDarkBackground
+        ) { innerPadding ->
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(230.dp),
-                contentAlignment = Alignment.Center
+                    .fillMaxSize()
+                    .background(screenGradient)
+                    .padding(innerPadding)
+                    .imePadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                JarvisArcReactor(isListening = isListening, isSpeaking = isSpeaking)
-            }
+                HudHeader(
+                    serverIp = serverIp,
+                    connectionStatus = connectionStatus,
+                    onStatusClick = { showIpDialog = true }
+                )
 
-            val (statusLine, statusLineColor) = when {
-                isListening -> ">>> LISTENING <<<" to OnlineGreen
-                isSpeaking -> ">>> SPEAKING <<<" to ArcGold
-                connectionStatus == ConnectionStatus.CONNECTED -> "NEURAL CORE READY" to JarvisCyan
-                connectionStatus == ConnectionStatus.CONNECTING -> "ESTABLISHING LINK..." to ArcGold
-                else -> "OFFLINE — TAP STATUS TO SET IP" to OfflineGray
-            }
-            Text(
-                text = statusLine,
-                color = statusLineColor,
-                fontSize = 12.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 2.sp
-            )
-
-            Spacer(Modifier.height(14.dp))
-
-            QuickActionRow(onPrompt = { viewModel.sendQuery(it) })
-
-            Spacer(Modifier.height(12.dp))
-
-            // --- CHAT FEED ---
-            ChatFeed(
-                chatHistory = chatHistory,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-            )
-
-            Spacer(Modifier.height(10.dp))
-
-            InputBar(
-                textInput = textInput,
-                onTextChange = { textInput = it },
-                isListening = isListening,
-                onSend = {
-                    if (textInput.isNotBlank()) {
-                        viewModel.sendQuery(textInput)
-                        textInput = ""
-                    } else {
-                        viewModel.toggleVoiceInput()
+                // --- CENTER ARC REACTOR (hidden while typing) ---
+                AnimatedVisibility(visible = !imeVisible) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Spacer(Modifier.height(14.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(230.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            JarvisArcReactor(isListening = isListening, isSpeaking = isSpeaking)
+                        }
                     }
                 }
+
+                val (statusLine, statusLineColor) = when {
+                    isListening -> ">>> LISTENING <<<" to OnlineGreen
+                    isSpeaking -> ">>> SPEAKING <<<" to ArcGold
+                    connectionStatus == ConnectionStatus.CONNECTED -> "NEURAL CORE READY" to JarvisCyan
+                    connectionStatus == ConnectionStatus.CONNECTING -> "ESTABLISHING LINK..." to ArcGold
+                    else -> "OFFLINE — TAP STATUS TO SET IP" to OfflineGray
+                }
+                Text(
+                    text = statusLine,
+                    color = statusLineColor,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 2.sp,
+                    modifier = Modifier.padding(top = if (imeVisible) 8.dp else 0.dp)
+                )
+
+                // --- QUICK ACTIONS (hidden while typing) ---
+                AnimatedVisibility(visible = !imeVisible) {
+                    Column {
+                        Spacer(Modifier.height(14.dp))
+                        QuickActionRow(onPrompt = { viewModel.sendQuery(it) })
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                // --- CHAT FEED ---
+                ChatFeed(
+                    chatHistory = chatHistory,
+                    imeVisible = imeVisible,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                InputBar(
+                    textInput = textInput,
+                    onTextChange = { textInput = it },
+                    isListening = isListening,
+                    onSend = {
+                        if (textInput.isNotBlank()) {
+                            viewModel.sendQuery(textInput)
+                            textInput = ""
+                        } else {
+                            viewModel.enterVoiceMode()
+                        }
+                    }
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = voiceModeActive,
+            enter = fadeIn(animationSpec = tween(220)),
+            exit = fadeOut(animationSpec = tween(180))
+        ) {
+            VoiceModeScreen(
+                isListening = isListening,
+                isSpeaking = isSpeaking,
+                micMuted = micMuted,
+                micLevel = micLevel,
+                onToggleMute = { viewModel.toggleMute() },
+                onClose = { viewModel.exitVoiceMode() },
+                onInfo = { showVoiceInfo = true },
+                onShare = { shareTranscript(context, viewModel.buildTranscript()) },
+                onChangeVoice = { showVoicePicker = true }
             )
         }
     }
+}
+
+/** Hands the conversation transcript to the system share sheet. */
+private fun shareTranscript(context: android.content.Context, transcript: String) {
+    if (transcript.isBlank()) {
+        android.widget.Toast
+            .makeText(context, "Nothing to share yet.", android.widget.Toast.LENGTH_SHORT)
+            .show()
+        return
+    }
+    val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(android.content.Intent.EXTRA_SUBJECT, "JARVICE conversation")
+        putExtra(android.content.Intent.EXTRA_TEXT, transcript)
+    }
+    context.startActivity(android.content.Intent.createChooser(send, "Share transcript"))
 }
 
 @Composable
@@ -281,12 +369,14 @@ private fun QuickActionRow(onPrompt: (String) -> Unit) {
 @Composable
 private fun ChatFeed(
     chatHistory: List<JarviceMessage>,
+    imeVisible: Boolean,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
 
-    // Auto-scroll to the newest message.
-    LaunchedEffect(chatHistory.size) {
+    // Auto-scroll to the newest message — also when the keyboard opens or closes,
+    // since the feed is resized and would otherwise strand the user mid-history.
+    LaunchedEffect(chatHistory.size, imeVisible) {
         if (chatHistory.isNotEmpty()) {
             listState.animateScrollToItem(chatHistory.size - 1)
         }

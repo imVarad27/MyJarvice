@@ -41,11 +41,22 @@ class SettingsStore(context: Context) {
             prefs.edit().putBoolean(KEY_WAKE, value).apply()
         }
 
+    /**
+     * Name of the TTS voice chosen in voice mode's "Change Voice" sheet.
+     * Empty means "whatever the engine defaults to".
+     */
+    var ttsVoice: String
+        get() = prefs.getString(KEY_TTS_VOICE, "") ?: ""
+        set(value) {
+            prefs.edit().putString(KEY_TTS_VOICE, value).apply()
+        }
+
     companion object {
         private const val PREFS_NAME = "jarvic_settings"
         private const val KEY_THEME = "theme_mode"
         private const val KEY_DYNAMIC = "dynamic_color"
         private const val KEY_PICOVOICE = "picovoice_key"
         private const val KEY_WAKE = "wake_word_enabled"
+        private const val KEY_TTS_VOICE = "tts_voice"
     }
 }
