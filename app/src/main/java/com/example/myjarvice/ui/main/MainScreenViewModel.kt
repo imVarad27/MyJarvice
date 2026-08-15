@@ -45,6 +45,10 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     private val _micMuted = MutableStateFlow(false)
     val micMuted: StateFlow<Boolean> = _micMuted.asStateFlow()
 
+    /** True between sending a query and the reply landing, so the UI can show progress. */
+    private val _isThinking = MutableStateFlow(false)
+    val isThinking: StateFlow<Boolean> = _isThinking.asStateFlow()
+
     /** Non-null while an email draft is waiting on the user's yes/no. */
     val pendingEmail: StateFlow<PendingEmail?> = wsClient.pendingEmail
 
@@ -58,6 +62,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             wsClient.latestResponse.collect { msg ->
                 msg?.let {
+                    _isThinking.value = false
                     // Case-insensitive so both the server's "JARVIS" and the client's
                     // "Jarvis (Offline)" placeholder are spoken.
                     if (it.sender.startsWith("JARVIS", ignoreCase = true)) {
@@ -87,7 +92,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         // Hands-free turn taking: once JARVICE finishes speaking, listen again.
         viewModelScope.launch {
             speechManager.isSpeaking.collect { speaking ->
-                if (!speaking && _voiceModeActive.value && !_micMuted.value && !isListening.value) {
+                if (!speaking && _voiceModeActive.value && !_micMuted.value &&
+                    !isListening.value && !_isThinking.value
+                ) {
                     beginListening()
                 }
             }
@@ -103,8 +110,10 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 // leave the mic dead, so pick it back up after a short breath.
                 viewModelScope.launch {
                     delay(RELISTEN_DELAY_MS)
+                    // Never re-open the mic while a reply is still in flight; otherwise
+                    // room noise fires a second query on top of the one being answered.
                     if (_voiceModeActive.value && !_micMuted.value &&
-                        !isSpeaking.value && !isListening.value
+                        !isSpeaking.value && !isListening.value && !_isThinking.value
                     ) {
                         beginListening()
                     }
@@ -123,6 +132,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     fun exitVoiceMode() {
         _voiceModeActive.value = false
+        _isThinking.value = false
         speechManager.stopListening()
         speechManager.stopSpeaking()
     }
@@ -159,6 +169,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     fun sendQuery(text: String) {
         if (text.isNotBlank()) {
+            _isThinking.value = true
             val ctx = deviceContext.getDeviceContext()
             wsClient.sendMessage(text, ctx)
         }

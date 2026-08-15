@@ -106,6 +106,7 @@ fun MainScreen(
     val voices by viewModel.voices.collectAsStateWithLifecycle()
     val selectedVoiceId by viewModel.selectedVoiceId.collectAsStateWithLifecycle()
     val pendingEmail by viewModel.pendingEmail.collectAsStateWithLifecycle()
+    val isThinking by viewModel.isThinking.collectAsStateWithLifecycle()
 
     // Exactly one recogniser may own the microphone at a time: the always-on wake-word
     // service (Vosk) or the in-app recogniser. Whichever loses gets fed silence by
@@ -224,6 +225,7 @@ fun MainScreen(
                         }
 
                         val (statusLine, statusLineColor) = when {
+                            isThinking -> ">>> THINKING <<<" to JarvisBlue
                             isListening -> ">>> LISTENING <<<" to OnlineGreen
                             isSpeaking -> ">>> SPEAKING <<<" to ArcGold
                             connectionStatus == ConnectionStatus.CONNECTED -> "NEURAL CORE READY" to JarvisCyan
@@ -282,6 +284,7 @@ fun MainScreen(
             VoiceModeScreen(
                 isListening = isListening,
                 isSpeaking = isSpeaking,
+                isThinking = isThinking,
                 micMuted = micMuted,
                 micLevel = micLevel,
                 onToggleMute = { viewModel.toggleMute() },

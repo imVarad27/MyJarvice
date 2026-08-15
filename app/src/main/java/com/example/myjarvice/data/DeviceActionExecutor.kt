@@ -38,11 +38,45 @@ class DeviceActionExecutor(private val context: Context) {
     )
 
     fun execute(action: JarviceAction) {
+        Log.i(TAG, "Executing ${action.type} -> '${action.query}'")
         when (action.type.uppercase()) {
             "CALL" -> placeCall(action.query)
             "OPEN_APP" -> openApp(action.query)
-            else -> Log.w("JarviceAction", "Unknown action type: ${action.type}")
+            "NAVIGATE" -> navigateTo(action.query)
+            else -> Log.w(TAG, "Unknown action type: ${action.type}")
         }
+    }
+
+    // --- Navigate ---------------------------------------------------------
+    /**
+     * Starts turn-by-turn navigation to [destination] from wherever the phone is.
+     *
+     * This needs no Maps API key and no billing account: `google.navigation:` is a
+     * plain intent handled by the installed Maps app, which does the routing itself.
+     * A key would only be required to compute routes inside our own process.
+     */
+    private fun navigateTo(destination: String) {
+        val target = destination.trim()
+        if (target.isBlank()) return
+        val encoded = Uri.encode(target)
+
+        // Turn-by-turn in Google Maps, then plain map search, then any maps handler.
+        val candidates = listOf(
+            Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$encoded"))
+                .setPackage(MAPS_PACKAGE),
+            Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$encoded"))
+                .setPackage(MAPS_PACKAGE),
+            Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$encoded"))
+        )
+
+        for (intent in candidates) {
+            if (intent.resolveActivity(context.packageManager) != null) {
+                Log.i(TAG, "Navigating to '$target' via ${intent.data}")
+                launch(intent)
+                return
+            }
+        }
+        toast("No maps app available to navigate to \"$target\"")
     }
 
     // --- Open app ---------------------------------------------------------
@@ -53,7 +87,11 @@ class DeviceActionExecutor(private val context: Context) {
 
         // 1) Known alias package
         appAliases[q]?.let { pkg ->
-            pm.getLaunchIntentForPackage(pkg)?.let { launch(it); return }
+            val intent = pm.getLaunchIntentForPackage(pkg)
+            if (intent != null) {
+                launch(intent); return
+            }
+            Log.w(TAG, "Alias '$q' -> $pkg but that package is not installed")
         }
 
         // 2) System destinations without a normal launcher entry
@@ -70,6 +108,7 @@ class DeviceActionExecutor(private val context: Context) {
             pm.getLaunchIntentForPackage(match.activityInfo.packageName)?.let { launch(it); return }
         }
 
+        Log.w(TAG, "No installed app matched '$q' (searched ${apps.size} launchable apps)")
         toast("Couldn't find an app called \"$rawQuery\"")
     }
 
@@ -125,8 +164,9 @@ class DeviceActionExecutor(private val context: Context) {
         try {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
+            Log.i(TAG, "Launched ${intent.`package` ?: intent.data ?: intent.action}")
         } catch (e: Exception) {
-            Log.e("JarviceAction", "Failed to launch: ${e.message}", e)
+            Log.e(TAG, "Failed to launch: ${e.message}", e)
             toast("Couldn't complete that action")
         }
     }
@@ -135,5 +175,10 @@ class DeviceActionExecutor(private val context: Context) {
         Handler(Looper.getMainLooper()).post {
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private companion object {
+        const val TAG = "JarviceAction"
+        const val MAPS_PACKAGE = "com.google.android.apps.maps"
     }
 }

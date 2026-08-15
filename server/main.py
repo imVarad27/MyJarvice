@@ -217,6 +217,26 @@ def maybe_run_action(user_text: str) -> Optional[str]:
 CALL_RE = re.compile(r"^\s*(?:please\s+)?(?:call|phone|dial|ring)\s+(?:up\s+)?(.+)$", re.IGNORECASE)
 OPEN_RE = re.compile(r"^\s*(?:please\s+)?(?:open|launch|start|go to)\s+(?:the\s+)?(.+)$", re.IGNORECASE)
 
+# Navigation is checked before OPEN_RE because "open maps and route to X" starts with
+# "open" but is a navigation request, not a request to launch an app.
+NAVIGATE_RE = re.compile(
+    r"\b(?:navigate|directions?|route|take me|drive me|guide me)\b[^.]*?\bto\s+(.+)$",
+    re.IGNORECASE,
+)
+
+# Trailing origin phrases Maps infers on its own — "from my current location" etc.
+ORIGIN_TAIL_RE = re.compile(
+    r"\s*\bfrom\s+(?:my\s+)?(?:the\s+)?(?:current\s+location|here|my\s+place|where\s+i\s+am)\b.*$",
+    re.IGNORECASE,
+)
+
+
+def _clean_destination(text: str) -> str:
+    text = ORIGIN_TAIL_RE.sub("", text)
+    text = text.strip().rstrip("?.!,")
+    text = re.sub(r"^\b(?:the\s+)?(?:city\s+of\s+)?", "", text, flags=re.IGNORECASE)
+    return text.strip()
+
 
 def _clean_target(text: str) -> str:
     text = text.strip().rstrip("?.!")
@@ -230,6 +250,12 @@ def detect_device_action(user_text: str) -> Optional[Dict[str, str]]:
     low = user_text.strip().lower()
     if low.startswith("call me") or low.startswith("call my"):
         return None
+
+    m = NAVIGATE_RE.search(user_text)
+    if m:
+        destination = _clean_destination(m.group(1))
+        if destination:
+            return {"type": "NAVIGATE", "query": destination}
 
     m = CALL_RE.match(user_text)
     if m:
@@ -547,6 +573,8 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
             text = f"Calling {target} now, {address}."
         elif device_action["type"] == "OPEN_APP":
             text = f"Opening {target}, {address}."
+        elif device_action["type"] == "NAVIGATE":
+            text = f"Starting navigation to {target}, {address}."
         else:
             text = f"Right away, {address}."
         return text, device_action, None

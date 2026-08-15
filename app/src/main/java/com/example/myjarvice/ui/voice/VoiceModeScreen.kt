@@ -61,6 +61,7 @@ private val MutedAccent = Color(0xFFFF5A5A)
 fun VoiceModeScreen(
     isListening: Boolean,
     isSpeaking: Boolean,
+    isThinking: Boolean,
     micMuted: Boolean,
     micLevel: Float,
     onToggleMute: () -> Unit,
@@ -105,12 +106,14 @@ fun VoiceModeScreen(
                 VoiceOrb(
                     isListening = isListening && !micMuted,
                     isSpeaking = isSpeaking,
+                    isThinking = isThinking,
                     micLevel = micLevel
                 )
                 Spacer(Modifier.height(36.dp))
                 Text(
                     text = when {
                         micMuted -> "Muted"
+                        isThinking -> "Thinking…"
                         isSpeaking -> "Speaking…"
                         isListening -> "Listening…"
                         else -> "Tap the mic to speak"
@@ -155,15 +158,23 @@ fun VoiceModeScreen(
 private fun VoiceOrb(
     isListening: Boolean,
     isSpeaking: Boolean,
+    isThinking: Boolean,
     micLevel: Float
 ) {
     val transition = rememberInfiniteTransition(label = "orb")
 
+    // Thinking gets its own tempo — a steady, deliberate pulse that reads as work in
+    // progress rather than the quick cadence of speech or the idle breath.
+    val breathPeriod = when {
+        isThinking -> 1100
+        isSpeaking -> 700
+        else -> 2600
+    }
     val breath by transition.animateFloat(
-        initialValue = 0.96f,
-        targetValue = 1.04f,
+        initialValue = if (isThinking) 0.92f else 0.96f,
+        targetValue = if (isThinking) 1.08f else 1.04f,
         animationSpec = infiniteRepeatable(
-            animation = tween(if (isSpeaking) 700 else 2600, easing = FastOutSlowInEasing),
+            animation = tween(breathPeriod, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "breath"
