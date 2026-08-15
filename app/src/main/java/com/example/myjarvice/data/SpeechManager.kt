@@ -9,6 +9,7 @@ import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
+import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.util.Locale
@@ -43,8 +44,18 @@ class SpeechManager(private val context: Context) : TextToSpeech.OnInitListener 
     private val _selectedVoiceId = MutableStateFlow(settings.ttsVoice)
     val selectedVoiceId: StateFlow<String> = _selectedVoiceId
 
+    /** The engine binds asynchronously; speaking before this is set silently fails. */
+    private var ttsReady = false
+
+    /** Holds an utterance that arrived before the engine finished binding. */
+    private var pendingUtterance: String? = null
+
     override fun onInit(status: Int) {
-        if (status != TextToSpeech.SUCCESS) return
+        if (status != TextToSpeech.SUCCESS) {
+            Log.w(TAG, "TTS engine failed to initialise (status=$status)")
+            _isSpeaking.value = false
+            return
+        }
 
         tts?.language = Locale.US
         tts?.setPitch(0.95f) // Crisp, sophisticated JARVIS tone
@@ -63,6 +74,14 @@ class SpeechManager(private val context: Context) : TextToSpeech.OnInitListener 
 
         loadVoices()
         applyVoice(_selectedVoiceId.value)
+
+        ttsReady = true
+        // The server's greeting usually beats the engine's binding, so replay it now
+        // rather than dropping it and stranding the UI in its "speaking" state.
+        pendingUtterance?.let { queued ->
+            pendingUtterance = null
+            speak(queued)
+        }
     }
 
     private fun loadVoices() {
@@ -108,9 +127,24 @@ class SpeechManager(private val context: Context) : TextToSpeech.OnInitListener 
     }
 
     fun speak(text: String) {
-        if (tts != null && text.isNotBlank()) {
+        if (text.isBlank()) return
+
+        val engine = tts
+        if (engine == null || !ttsReady) {
+            pendingUtterance = text
+            return
+        }
+
+        // Only claim to be speaking if the engine actually accepted the utterance.
+        // Setting it optimistically strands voice mode: the progress callbacks never
+        // fire for a rejected utterance, so the flag would never clear and the
+        // hands-free loop would wait forever for silence that never comes.
+        val result = engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, UTTERANCE_ID)
+        if (result == TextToSpeech.SUCCESS) {
             _isSpeaking.value = true
-            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, UTTERANCE_ID)
+        } else {
+            Log.w(TAG, "TTS refused the utterance (result=$result)")
+            _isSpeaking.value = false
         }
     }
 
@@ -174,6 +208,7 @@ class SpeechManager(private val context: Context) : TextToSpeech.OnInitListener 
     }
 
     private companion object {
+        const val TAG = "SpeechManager"
         const val UTTERANCE_ID = "JARVICE_TTS"
 
         /** Turns "en-us-x-sfg#female_1-local" into something like "US English · Female 1". */

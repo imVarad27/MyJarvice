@@ -64,6 +64,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myjarvice.data.ConnectionStatus
 import com.example.myjarvice.data.JarviceMessage
+import com.example.myjarvice.data.SettingsStore
 import com.example.myjarvice.theme.AiBubbleBg
 import com.example.myjarvice.theme.ArcGold
 import com.example.myjarvice.theme.JarvisBgBottom
@@ -82,6 +83,7 @@ import com.example.myjarvice.ui.JarvisArcReactor
 import com.example.myjarvice.ui.voice.VoiceInfoDialog
 import com.example.myjarvice.ui.voice.VoiceModeScreen
 import com.example.myjarvice.ui.voice.VoicePickerDialog
+import com.example.myjarvice.wake.WakeWordService
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -105,13 +107,30 @@ fun MainScreen(
     val selectedVoiceId by viewModel.selectedVoiceId.collectAsStateWithLifecycle()
     val pendingEmail by viewModel.pendingEmail.collectAsStateWithLifecycle()
 
-    // The wake-word service records continuously. If the in-app recogniser keeps the mic
-    // while the app is off-screen, Android silences the service's input and "Hi Jarvis"
-    // never fires. Leaving the screen therefore hands the microphone back.
+    // Exactly one recogniser may own the microphone at a time: the always-on wake-word
+    // service (Vosk) or the in-app recogniser. Whichever loses gets fed silence by
+    // Android. So they take turns — the wake word yields while the chat is on screen,
+    // and takes the mic back the moment we leave.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
+        val settings = SettingsStore(context.applicationContext)
+
+        // ON_START has usually already fired by the time this observer is registered,
+        // so claim the microphone immediately rather than waiting for an event that
+        // will not arrive until the next foreground trip.
+        WakeWordService.stop(context.applicationContext)
+
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) viewModel.exitVoiceMode()
+            when (event) {
+                Lifecycle.Event.ON_START -> WakeWordService.stop(context.applicationContext)
+                Lifecycle.Event.ON_STOP -> {
+                    viewModel.exitVoiceMode()
+                    if (settings.wakeWordEnabled) {
+                        WakeWordService.start(context.applicationContext)
+                    }
+                }
+                else -> Unit
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
