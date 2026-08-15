@@ -54,7 +54,7 @@ fun VoiceInfoDialog(
                 InfoRow("Voice", voiceLabel)
                 Spacer(Modifier.size(10.dp))
                 Text(
-                    "Speak naturally — JARVICE listens again automatically after each reply.",
+                    "Speak naturally — Jarvis listens again automatically after each reply.",
                     color = TextSecondary,
                     fontSize = 12.sp
                 )

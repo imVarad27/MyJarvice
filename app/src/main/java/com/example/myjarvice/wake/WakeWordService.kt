@@ -13,6 +13,7 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.myjarvice.MainActivity
+import org.json.JSONObject
 import org.vosk.Model
 import org.vosk.Recognizer
 import org.vosk.android.RecognitionListener
@@ -32,9 +33,9 @@ class WakeWordService : Service() {
     private var lastTriggerMs = 0L
 
     private val listener = object : RecognitionListener {
-        override fun onPartialResult(hypothesis: String?) = checkForWake(hypothesis)
-        override fun onResult(hypothesis: String?) = checkForWake(hypothesis)
-        override fun onFinalResult(hypothesis: String?) = checkForWake(hypothesis)
+        override fun onPartialResult(hypothesis: String?) = checkForWake(hypothesis, "partial")
+        override fun onResult(hypothesis: String?) = checkForWake(hypothesis, "result")
+        override fun onFinalResult(hypothesis: String?) = checkForWake(hypothesis, "final")
         override fun onError(e: Exception?) { Log.e(TAG, "Vosk error: ${e?.message}") }
         override fun onTimeout() {}
     }
@@ -51,7 +52,7 @@ class WakeWordService : Service() {
         val channelId = "jarvic_wake"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                channelId, "JARVIC Wake Word", NotificationManager.IMPORTANCE_LOW
+                channelId, "Jarvis Wake Word", NotificationManager.IMPORTANCE_LOW
             ).apply { setShowBadge(false) }
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
@@ -63,8 +64,8 @@ class WakeWordService : Service() {
         )
 
         val notification: Notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("JARVIC is listening")
-            .setContentText("Say \"Jarvis\" to activate")
+            .setContentTitle("Jarvis is listening")
+            .setContentText("Say \"Hi Jarvis\" to activate")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentIntent(tapIntent)
             .setOngoing(true)
@@ -96,8 +97,10 @@ class WakeWordService : Service() {
 
     private fun startRecognition() {
         try {
-            // Restrict vocabulary to the wake word for reliable, low-cost spotting.
-            val recognizer = Recognizer(model, 16000.0f, "[\"jarvis\", \"[unk]\"]")
+            // Restrict vocabulary to the wake phrases. Listing the carrier words people
+            // actually use ("hi jarvis", "hello jarvis") rather than the bare name gives
+            // the grammar's language model a much better shot at the whole utterance.
+            val recognizer = Recognizer(model, 16000.0f, WAKE_GRAMMAR)
             speechService = SpeechService(recognizer, 16000.0f)
             speechService?.startListening(listener)
             Log.i(TAG, "Vosk started — listening for \"jarvis\".")
@@ -107,13 +110,28 @@ class WakeWordService : Service() {
         }
     }
 
-    private fun checkForWake(hypothesis: String?) {
-        if (hypothesis == null || !hypothesis.contains("jarvis", ignoreCase = true)) return
+    private fun checkForWake(hypothesis: String?, source: String) {
+        if (hypothesis == null) return
+
+        // Vosk hands back pretty-printed JSON, so match on the transcript itself rather
+        // than the envelope — and log only utterances that carry words, which keeps
+        // logcat readable when diagnosing why a wake phrase did or didn't land.
+        val spoken = extractSpokenText(hypothesis)
+        if (spoken.isBlank()) return
+        Log.d(TAG, "heard [$source]: $spoken")
+
+        if (!spoken.contains("jarvis", ignoreCase = true)) return
         val now = System.currentTimeMillis()
         if (now - lastTriggerMs < 3000) return   // debounce repeated hits
         lastTriggerMs = now
         onWakeWordDetected()
     }
+
+    /** Pulls the transcript out of Vosk's `{"partial": "..."}` / `{"text": "..."}`. */
+    private fun extractSpokenText(hypothesis: String): String = runCatching {
+        val obj = JSONObject(hypothesis)
+        obj.optString("partial").ifBlank { obj.optString("text") }
+    }.getOrDefault("").trim()
 
     private fun onWakeWordDetected() {
         Log.i(TAG, "Wake word detected — launching JARVIC voice mode.")
@@ -140,6 +158,9 @@ class WakeWordService : Service() {
     companion object {
         private const val TAG = "WakeWordService"
         private const val NOTIF_ID = 42
+
+        private const val WAKE_GRAMMAR =
+            """["jarvis", "hi jarvis", "hello jarvis", "hey jarvis", "ok jarvis", "[unk]"]"""
 
         fun start(context: Context) {
             val intent = Intent(context, WakeWordService::class.java)

@@ -40,6 +40,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +57,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myjarvice.data.ConnectionStatus
@@ -99,6 +103,19 @@ fun MainScreen(
     val micLevel by viewModel.micLevel.collectAsStateWithLifecycle()
     val voices by viewModel.voices.collectAsStateWithLifecycle()
     val selectedVoiceId by viewModel.selectedVoiceId.collectAsStateWithLifecycle()
+    val pendingEmail by viewModel.pendingEmail.collectAsStateWithLifecycle()
+
+    // The wake-word service records continuously. If the in-app recogniser keeps the mic
+    // while the app is off-screen, Android silences the service's input and "Hi Jarvis"
+    // never fires. Leaving the screen therefore hands the microphone back.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) viewModel.exitVoiceMode()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     var textInput by remember { mutableStateOf("") }
     var showIpDialog by remember { mutableStateOf(false) }
@@ -114,6 +131,14 @@ fun MainScreen(
                 showIpDialog = false
             },
             onDismiss = { showIpDialog = false }
+        )
+    }
+
+    pendingEmail?.let { draft ->
+        EmailApprovalDialog(
+            draft = draft,
+            onApprove = { viewModel.resolvePendingEmail(draft.id, approved = true) },
+            onDiscard = { viewModel.resolvePendingEmail(draft.id, approved = false) }
         )
     }
 
@@ -153,20 +178,23 @@ fun MainScreen(
                     .fillMaxSize()
                     .background(screenGradient)
                     .padding(innerPadding)
-                    .imePadding()
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                HudHeader(
-                    serverIp = serverIp,
-                    connectionStatus = connectionStatus,
-                    onStatusClick = { showIpDialog = true }
-                )
-
-                // --- CENTER ARC REACTOR (hidden while typing) ---
+                // The whole HUD folds away while the keyboard is up. This device pans the
+                // window by a fixed amount rather than resizing it, so anything left above
+                // the feed is scrolled off-screen anyway — better to reclaim the space and
+                // give the chat feed the entire visible band.
                 AnimatedVisibility(visible = !imeVisible) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        HudHeader(
+                            serverIp = serverIp,
+                            connectionStatus = connectionStatus,
+                            onStatusClick = { showIpDialog = true }
+                        )
+
                         Spacer(Modifier.height(14.dp))
+
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -175,35 +203,30 @@ fun MainScreen(
                         ) {
                             JarvisArcReactor(isListening = isListening, isSpeaking = isSpeaking)
                         }
-                    }
-                }
 
-                val (statusLine, statusLineColor) = when {
-                    isListening -> ">>> LISTENING <<<" to OnlineGreen
-                    isSpeaking -> ">>> SPEAKING <<<" to ArcGold
-                    connectionStatus == ConnectionStatus.CONNECTED -> "NEURAL CORE READY" to JarvisCyan
-                    connectionStatus == ConnectionStatus.CONNECTING -> "ESTABLISHING LINK..." to ArcGold
-                    else -> "OFFLINE — TAP STATUS TO SET IP" to OfflineGray
-                }
-                Text(
-                    text = statusLine,
-                    color = statusLineColor,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 2.sp,
-                    modifier = Modifier.padding(top = if (imeVisible) 8.dp else 0.dp)
-                )
+                        val (statusLine, statusLineColor) = when {
+                            isListening -> ">>> LISTENING <<<" to OnlineGreen
+                            isSpeaking -> ">>> SPEAKING <<<" to ArcGold
+                            connectionStatus == ConnectionStatus.CONNECTED -> "NEURAL CORE READY" to JarvisCyan
+                            connectionStatus == ConnectionStatus.CONNECTING -> "ESTABLISHING LINK..." to ArcGold
+                            else -> "OFFLINE — TAP STATUS TO SET IP" to OfflineGray
+                        }
+                        Text(
+                            text = statusLine,
+                            color = statusLineColor,
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 2.sp
+                        )
 
-                // --- QUICK ACTIONS (hidden while typing) ---
-                AnimatedVisibility(visible = !imeVisible) {
-                    Column {
                         Spacer(Modifier.height(14.dp))
+
                         QuickActionRow(onPrompt = { viewModel.sendQuery(it) })
+
+                        Spacer(Modifier.height(12.dp))
                     }
                 }
-
-                Spacer(Modifier.height(12.dp))
 
                 // --- CHAT FEED ---
                 ChatFeed(
@@ -262,7 +285,7 @@ private fun shareTranscript(context: android.content.Context, transcript: String
     }
     val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
         type = "text/plain"
-        putExtra(android.content.Intent.EXTRA_SUBJECT, "JARVICE conversation")
+        putExtra(android.content.Intent.EXTRA_SUBJECT, "Jarvis conversation")
         putExtra(android.content.Intent.EXTRA_TEXT, transcript)
     }
     context.startActivity(android.content.Intent.createChooser(send, "Share transcript"))
@@ -286,7 +309,7 @@ private fun HudHeader(
     ) {
         Column {
             Text(
-                "J A R V I C E",
+                "J A R V I S",
                 color = JarvisCyan,
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp,
@@ -436,7 +459,7 @@ private fun InputBar(
         OutlinedTextField(
             value = textInput,
             onValueChange = onTextChange,
-            placeholder = { Text("Command JARVICE...", color = TextSecondary, fontSize = 13.sp) },
+            placeholder = { Text("Command Jarvis...", color = TextSecondary, fontSize = 13.sp) },
             modifier = Modifier.weight(1f),
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
@@ -552,7 +575,7 @@ fun ChatBubble(msg: JarviceMessage) {
                 .padding(horizontal = 12.dp, vertical = 9.dp)
         ) {
             Text(
-                if (isUser) "YOU" else "JARVICE",
+                if (isUser) "YOU" else "JARVIS",
                 color = accent,
                 fontWeight = FontWeight.Bold,
                 fontSize = 9.sp,

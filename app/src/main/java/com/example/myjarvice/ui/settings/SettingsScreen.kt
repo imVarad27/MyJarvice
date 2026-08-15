@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -53,6 +54,7 @@ fun SettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(scheme.background)
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
@@ -178,8 +180,8 @@ fun SettingsScreen(
             Spacer(Modifier.height(8.dp))
             Text(
                 "Fully offline — no account needed. When you enable this, grant "
-                    + "\"display over other apps\" and disable battery optimization so JARVIC "
-                    + "can pop up on \"Jarvis\".",
+                    + "\"display over other apps\" and disable battery optimization so Jarvis "
+                    + "can pop up on \"Hi Jarvis\".",
                 color = scheme.onSurfaceVariant,
                 fontSize = 11.sp
             )

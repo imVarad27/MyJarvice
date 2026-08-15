@@ -50,7 +50,7 @@ fun WelcomeScreen(
     onVoiceMode: () -> Unit,
     onSettings: () -> Unit
 ) {
-    val fullText = "Hello, I'm JARVIC"
+    val fullText = "Hello, I'm JARVIS"
     var shown by remember { mutableStateOf("") }
 
     androidx.compose.runtime.LaunchedEffect(Unit) {

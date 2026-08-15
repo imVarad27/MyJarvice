@@ -4,9 +4,13 @@ import logging
 import datetime
 import os
 import re
+import smtplib
 import sqlite3
+import ssl
 import urllib.request
 import urllib.error
+import uuid as uuid_lib
+from email.message import EmailMessage
 from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
@@ -21,6 +25,37 @@ DEFAULT_MODEL = "gemma4-e4b"          # Local Ollama model
 OLLAMA_TIMEOUT = 120                   # seconds — generous so the real model always answers (Phase 1 fix)
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jarvice.db")
 MAX_HISTORY_TURNS = 8                  # how many past messages to keep in context per session
+
+
+# --- Outgoing email -------------------------------------------------------
+# Credentials come from the environment (or a gitignored .env beside this file);
+# they are never hardcoded and never sent to the phone.
+def _load_dotenv() -> None:
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if not os.path.exists(env_path):
+        return
+    with open(env_path, "r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+_load_dotenv()
+
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER)
+
+# Drafts awaiting the user's explicit approval, keyed by draft id. Nothing is ever
+# sent from here without an APPROVE_EMAIL message arriving for that exact id.
+PENDING_EMAILS: Dict[str, Dict[str, str]] = {}
+
+EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 
 # --- Seed data used only on first run (afterwards memory lives in SQLite) ---
 SEED_MEMORY = [
@@ -256,7 +291,7 @@ def maybe_store_name(user_text: str) -> Optional[str]:
 # ==========================================================================
 #  LLM
 # ==========================================================================
-JARVIS_SYSTEM_PROMPT = """You are JARVICE — an advanced, loyal personal AI assistant modeled after Iron Man's JARVIS.
+JARVIS_SYSTEM_PROMPT = """You are JARVIS — an advanced, loyal personal AI assistant modeled after Iron Man's JARVIS.
 
 STYLE RULES (follow strictly):
 - Reply ONLY in natural, spoken English. Never output JSON, code, markdown, bullet lists, or key/value dumps.
@@ -318,18 +353,190 @@ def fallback_reply(user_text: str, address: str, stored: Optional[str], name_set
             items = "; ".join(r["value"] for r in rows)
             return f"On your agenda, {address}: {items}."
         return f"Your schedule is clear for now, {address}."
-    if "who are you" in t or "jarvice" in t:
-        return ("I am JARVICE — Just A Rather Very Intelligent Computational Entity, "
+    if "who are you" in t or "jarvis" in t or "jarvice" in t:
+        return ("I am JARVIS — Just A Rather Very Intelligent System, "
                 f"operating locally on your host server to assist you, {address}.")
     return (f"My reasoning core is momentarily offline, {address}, but I'm still at your service. "
             "Could you say that again?")
 
 
+# ==========================================================================
+#  Email connector (draft -> user approval -> send)
+# ==========================================================================
+def smtp_configured() -> bool:
+    return bool(SMTP_USER and SMTP_PASSWORD)
+
+
+def lookup_contact_email(name: str) -> Optional[str]:
+    """Finds a saved address for a person, e.g. 'alex' -> alex@example.com."""
+    needle = name.strip().lower()
+    if not needle:
+        return None
+    for row in all_memory():
+        if row["category"] != "contact_email":
+            continue
+        if row["key"].strip().lower() == needle:
+            return row["value"]
+    return None
+
+
+def maybe_store_contact_email(user_text: str) -> Optional[str]:
+    """Handles 'Alex's email is alex@example.com' so future sends can use the name."""
+    match = re.search(
+        r"([A-Za-z][\w .'-]{0,40}?)(?:'s|s')?\s+(?:e-?mail|email address)\s+(?:is|=)\s+([\w.+-]+@[\w-]+\.[\w.-]+)",
+        user_text,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    name = match.group(1).strip().strip(".,")
+    address = match.group(2).strip()
+    for filler in ("remember that", "remember", "note that", "save that", "please"):
+        if name.lower().startswith(filler):
+            name = name[len(filler):].strip()
+    if not name:
+        return None
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT INTO memory (category, key, value, created_at) VALUES (?, ?, ?, ?)",
+            ("contact_email", name.lower(), address, datetime.datetime.now().isoformat()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    logger.info(f"Stored contact email: {name} -> {address}")
+    return f"{name} ({address})"
+
+
+def detect_email_intent(user_text: str) -> bool:
+    t = user_text.lower()
+    if not re.search(r"\b(e-?mail|mail)\b", t):
+        return False
+    return bool(re.search(r"\b(send|write|draft|compose|shoot|fire off|email)\b", t))
+
+
+def resolve_recipient(user_text: str) -> Optional[str]:
+    """Explicit address in the utterance wins; otherwise try the saved contacts."""
+    explicit = EMAIL_RE.search(user_text)
+    if explicit:
+        return explicit.group(0)
+
+    match = re.search(
+        r"\b(?:e-?mail|mail|message)\s+(?:to\s+)?([A-Za-z][\w .'-]{0,40}?)(?:\s+(?:that|about|saying|and|to)\b|[,.]|$)",
+        user_text,
+        re.IGNORECASE,
+    )
+    if match:
+        return lookup_contact_email(match.group(1))
+    return None
+
+
+EMAIL_DRAFT_PROMPT = """You write short, professional emails on the user's behalf.
+Return ONLY a JSON object with exactly these keys: "subject", "body".
+No markdown, no code fences, no commentary.
+The body must be plain text, ready to send, signed off with the user's name.
+Keep it brief — three sentences at most unless the request demands more.
+Never leave placeholders such as [Time], [Name] or TBD; if a detail is unknown,
+write around it so the email reads naturally as-is."""
+
+
+def draft_email_content(user_text: str, sender_name: str) -> Dict[str, str]:
+    """Asks the LLM for a subject/body pair, with a deterministic fallback."""
+    messages = [
+        {"role": "system", "content": EMAIL_DRAFT_PROMPT},
+        {
+            "role": "user",
+            "content": (
+                f"The sender's name is {sender_name}.\n"
+                f"Write the email for this request: {user_text}"
+            ),
+        },
+    ]
+    raw = call_ollama(messages)
+    if raw:
+        cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", raw.strip())
+        cleaned = re.sub(r"\n?```$", "", cleaned).strip()
+        try:
+            parsed = json.loads(cleaned)
+            subject = str(parsed.get("subject", "")).strip()
+            body = str(parsed.get("body", "")).strip()
+            if subject and body:
+                return {"subject": subject, "body": body}
+        except (json.JSONDecodeError, AttributeError):
+            logger.warning("Email draft was not valid JSON; using fallback wording.")
+
+    return {
+        "subject": "A quick note",
+        "body": f"Hello,\n\n{user_text.strip()}\n\nBest regards,\n{sender_name}",
+    }
+
+
+def send_email_smtp(to_address: str, subject: str, body: str) -> None:
+    """Blocking SMTP send. Raises on failure so the caller can report it."""
+    message = EmailMessage()
+    message["From"] = SMTP_FROM
+    message["To"] = to_address
+    message["Subject"] = subject
+    message.set_content(body)
+
+    context = ssl.create_default_context()
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as server:
+        server.ehlo()
+        server.starttls(context=context)
+        server.login(SMTP_USER, SMTP_PASSWORD)
+        server.send_message(message)
+
+
+def build_email_draft(user_text: str, address: str) -> tuple:
+    """Returns (reply_text, pending_email_or_None) for an email request."""
+    if not smtp_configured():
+        return (
+            f"I can draft it, {address}, but my mail credentials aren't configured yet. "
+            "Set SMTP_USER and SMTP_PASSWORD on the host server and I'll be able to send.",
+            None,
+        )
+
+    recipient = resolve_recipient(user_text)
+    if not recipient:
+        return (
+            f"Certainly, {address} — who should I send it to? "
+            "Give me the address, or tell me their email once and I'll remember it.",
+            None,
+        )
+
+    draft = draft_email_content(user_text, address)
+    draft_id = uuid_lib.uuid4().hex
+    pending = {
+        "id": draft_id,
+        "to": recipient,
+        "subject": draft["subject"],
+        "body": draft["body"],
+    }
+    PENDING_EMAILS[draft_id] = pending
+
+    return (
+        f"I've drafted an email to {recipient}, {address}. "
+        "Review it and approve when you're happy.",
+        pending,
+    )
+
+
 def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[Dict[str, str]]):
-    """Returns (reply_text, action) where action is a phone directive or None."""
+    """Returns (reply_text, action, pending_email); the latter two may be None."""
     name_set = maybe_store_name(user_text)
     user_name = get_user_name()
     address = user_name if user_name else "Sir"
+
+    # "Alex's email is ..." — save it before anything else so the same sentence can
+    # also be used to address a message.
+    saved_contact = maybe_store_contact_email(user_text)
+    if saved_contact and not detect_email_intent(user_text):
+        return f"Noted, {address}. I'll remember {saved_contact}.", None, None
+
+    if detect_email_intent(user_text):
+        reply_text, pending = build_email_draft(user_text, address)
+        return reply_text, None, pending
 
     # Phone actions are handled deterministically and returned immediately (no LLM
     # round-trip) so "call Mom" or "open WhatsApp" fire instantly and reliably.
@@ -342,7 +549,7 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
             text = f"Opening {target}, {address}."
         else:
             text = f"Right away, {address}."
-        return text, device_action
+        return text, device_action, None
 
     stored = maybe_store_memory(user_text)
     action_note = maybe_run_action(user_text)
@@ -376,7 +583,31 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
     reply = call_ollama(messages)
     if reply is None:
         reply = fallback_reply(user_text, address, stored, name_set, action_note)
-    return clean_reply(reply), None
+    return clean_reply(reply), None, None
+
+
+def handle_email_verdict(verdict: Dict[str, Any]) -> str:
+    """Sends (or discards) a draft. A draft is consumed either way, so an approval
+    can never be replayed to send the same mail twice."""
+    draft_id = str(verdict.get("id", ""))
+    approved = bool(verdict.get("approved"))
+
+    pending = PENDING_EMAILS.pop(draft_id, None)
+    if not pending:
+        return "That draft has already been dealt with, Sir."
+
+    if not approved:
+        logger.info(f"Email draft {draft_id} discarded by user.")
+        return "Discarded, Sir. Nothing was sent."
+
+    try:
+        send_email_smtp(pending["to"], pending["subject"], pending["body"])
+    except Exception as exc:
+        logger.error(f"Failed to send email: {exc}")
+        return f"I couldn't send it, Sir — the mail server refused: {exc}"
+
+    logger.info(f"Email sent to {pending['to']}")
+    return f"Sent to {pending['to']}, Sir."
 
 
 # ==========================================================================
@@ -384,7 +615,7 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
 # ==========================================================================
 @app.get("/")
 def get_root():
-    return {"status": "JARVICE Host Server Online", "time": datetime.datetime.now().isoformat()}
+    return {"status": "JARVIS Host Server Online", "time": datetime.datetime.now().isoformat()}
 
 
 @app.websocket("/ws/jarvice")
@@ -395,9 +626,9 @@ async def websocket_jarvice_endpoint(websocket: WebSocket):
     history: List[Dict[str, str]] = []  # per-connection conversation memory
 
     await websocket.send_text(json.dumps({
-        "sender": "JARVICE",
+        "sender": "JARVIS",
         "type": "GREETING",
-        "text": "Greetings, Sir. JARVICE core systems online. Standing by for your instructions.",
+        "text": "Greetings, Sir. JARVIS core systems online. Standing by for your instructions.",
         "timestamp": datetime.datetime.now().isoformat(),
     }))
 
@@ -406,12 +637,25 @@ async def websocket_jarvice_endpoint(websocket: WebSocket):
             raw_data = await websocket.receive_text()
             try:
                 msg = json.loads(raw_data)
+
+                # --- Approval verdict for a previously drafted email ---
+                verdict = msg.get("approve_email")
+                if verdict:
+                    reply_text = await asyncio.to_thread(handle_email_verdict, verdict)
+                    await websocket.send_text(json.dumps({
+                        "sender": "JARVIS",
+                        "type": "RESPONSE",
+                        "text": reply_text,
+                        "timestamp": datetime.datetime.now().isoformat(),
+                    }))
+                    continue
+
                 user_text = msg.get("text", "")
                 phone_context = msg.get("context", {})
                 logger.info(f"Received query from client: '{user_text}'")
 
                 # Run the (blocking) LLM call off the event loop so other clients aren't blocked.
-                ai_response, action = await asyncio.to_thread(
+                ai_response, action, pending_email = await asyncio.to_thread(
                     generate_reply, user_text, phone_context, history
                 )
 
@@ -419,16 +663,17 @@ async def websocket_jarvice_endpoint(websocket: WebSocket):
                 history.append({"role": "assistant", "content": ai_response})
 
                 await websocket.send_text(json.dumps({
-                    "sender": "JARVICE",
+                    "sender": "JARVIS",
                     "type": "ACTION" if action else "RESPONSE",
                     "text": ai_response,
                     "action": action,          # {"type": "CALL"|"OPEN_APP", "query": "..."} or null
+                    "pending_email": pending_email,   # draft awaiting approval, or null
                     "iot_status": IOT_DEVICES,
                     "timestamp": datetime.datetime.now().isoformat(),
                 }))
             except json.JSONDecodeError:
                 await websocket.send_text(json.dumps({
-                    "sender": "JARVICE",
+                    "sender": "JARVIS",
                     "type": "ERROR",
                     "text": "Invalid payload format received, Sir.",
                 }))

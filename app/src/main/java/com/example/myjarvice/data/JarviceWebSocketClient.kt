@@ -1,8 +1,14 @@
 package com.example.myjarvice.data
 
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -25,6 +31,14 @@ data class JarviceMessage(
     val timestamp: String = ""
 )
 
+/** An email Jarvis has drafted and is holding until the user approves it. */
+data class PendingEmail(
+    val id: String,
+    val to: String,
+    val subject: String,
+    val body: String
+)
+
 /** A directive from the server for the phone to execute locally (Phase 3). */
 data class JarviceAction(
     val id: String,      // unique per message (server timestamp) so repeats re-trigger
@@ -35,11 +49,19 @@ data class JarviceAction(
 class JarviceWebSocketClient {
 
     private var client: OkHttpClient = OkHttpClient.Builder()
-        .readTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(0, TimeUnit.MILLISECONDS)   // 0 = no read timeout; pings police liveness
         .connectTimeout(5, TimeUnit.SECONDS)
+        .pingInterval(20, TimeUnit.SECONDS)      // detects a silently dead link
         .build()
 
     private var webSocket: WebSocket? = null
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var reconnectJob: Job? = null
+
+    /** False only after an explicit disconnect(), so teardown doesn't fight the retry loop. */
+    private var keepConnected = true
+    private var retryAttempt = 0
 
     private val _connectionStatus = MutableStateFlow(ConnectionStatus.DISCONNECTED)
     val connectionStatus: StateFlow<ConnectionStatus> = _connectionStatus
@@ -53,9 +75,14 @@ class JarviceWebSocketClient {
     private val _chatHistory = MutableStateFlow<List<JarviceMessage>>(emptyList())
     val chatHistory: StateFlow<List<JarviceMessage>> = _chatHistory
 
+    private val _pendingEmail = MutableStateFlow<PendingEmail?>(null)
+    val pendingEmail: StateFlow<PendingEmail?> = _pendingEmail
+
     private var serverIp = "192.168.1.35"
 
     fun connect(rawIpOrUrl: String = "192.168.1.35") {
+        keepConnected = true
+        reconnectJob?.cancel()
         _connectionStatus.value = ConnectionStatus.CONNECTING
         this.serverIp = rawIpOrUrl.trim()
 
@@ -72,6 +99,7 @@ class JarviceWebSocketClient {
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d("JarviceWS", "WebSocket Connected Successfully!")
+                retryAttempt = 0
                 _connectionStatus.value = ConnectionStatus.CONNECTED
             }
 
@@ -79,7 +107,7 @@ class JarviceWebSocketClient {
                 Log.d("JarviceWS", "Message received: $text")
                 try {
                     val json = JSONObject(text)
-                    val sender = json.optString("sender", "JARVICE")
+                    val sender = json.optString("sender", "JARVIS")
                     val messageText = json.optString("text", "")
                     val msgType = json.optString("type", "RESPONSE")
                     val ts = json.optString("timestamp", "")
@@ -87,6 +115,17 @@ class JarviceWebSocketClient {
                     val msg = JarviceMessage(sender, messageText, msgType, ts)
                     _latestResponse.value = msg
                     _chatHistory.value = _chatHistory.value + msg
+
+                    // A drafted email is held here until the user approves it; the
+                    // server will not send anything without an explicit verdict.
+                    json.optJSONObject("pending_email")?.let { draft ->
+                        _pendingEmail.value = PendingEmail(
+                            id = draft.optString("id"),
+                            to = draft.optString("to"),
+                            subject = draft.optString("subject"),
+                            body = draft.optString("body")
+                        )
+                    }
 
                     // Phase 3: execute a phone action if the server sent one.
                     val actionObj = json.optJSONObject("action")
@@ -105,11 +144,13 @@ class JarviceWebSocketClient {
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e("JarviceWS", "WebSocket Connection Failed: ${t.message}", t)
                 _connectionStatus.value = ConnectionStatus.ERROR
+                scheduleReconnect()
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d("JarviceWS", "WebSocket Closed: $reason")
                 _connectionStatus.value = ConnectionStatus.DISCONNECTED
+                scheduleReconnect()
             }
         })
     }
@@ -127,7 +168,7 @@ class JarviceWebSocketClient {
             webSocket?.send(payload.toString())
         } else {
             val offlineMsg = JarviceMessage(
-                sender = "JARVICE (Offline)",
+                sender = "Jarvis (Offline)",
                 text = "Sir, server link ($serverIp) is offline. Re-establishing link..."
             )
             _latestResponse.value = offlineMsg
@@ -136,12 +177,53 @@ class JarviceWebSocketClient {
         }
     }
 
+    /** Relays the user's verdict on a drafted email; clears it either way. */
+    fun resolvePendingEmail(id: String, approved: Boolean) {
+        _pendingEmail.value = null
+        val payload = JSONObject().apply {
+            put("approve_email", JSONObject().apply {
+                put("id", id)
+                put("approved", approved)
+            })
+        }
+        webSocket?.send(payload.toString())
+    }
+
     fun updateServerIp(ip: String) {
+        retryAttempt = 0
         connect(ip)
     }
 
+    /**
+     * Keeps the link up on its own: the server restarting, Wi-Fi dropping, or the USB
+     * tunnel being re-established all resolve without the user touching anything.
+     * Backs off 1s → 30s so a genuinely absent host doesn't spin the radio.
+     */
+    private fun scheduleReconnect() {
+        if (!keepConnected) return
+        if (reconnectJob?.isActive == true) return
+
+        reconnectJob = scope.launch {
+            val delayMs = (INITIAL_RETRY_MS * (1L shl retryAttempt.coerceAtMost(5)))
+                .coerceAtMost(MAX_RETRY_MS)
+            retryAttempt++
+            delay(delayMs)
+            if (keepConnected && _connectionStatus.value != ConnectionStatus.CONNECTED) {
+                Log.d("JarviceWS", "Reconnecting to $serverIp (attempt $retryAttempt)")
+                connect(serverIp)
+            }
+        }
+    }
+
     fun disconnect() {
+        keepConnected = false
+        reconnectJob?.cancel()
         webSocket?.close(1000, "User disconnected")
         _connectionStatus.value = ConnectionStatus.DISCONNECTED
+    }
+
+    private companion object {
+        const val INITIAL_RETRY_MS = 1_000L
+        const val MAX_RETRY_MS = 30_000L
     }
 }

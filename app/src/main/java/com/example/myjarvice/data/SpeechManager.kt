@@ -67,13 +67,26 @@ class SpeechManager(private val context: Context) : TextToSpeech.OnInitListener 
 
     private fun loadVoices() {
         val available = runCatching { tts?.voices.orEmpty() }.getOrDefault(emptySet())
-        _voices.value = available
-            .asSequence()
+        val labelled = available
             .filter { it.locale.language == Locale.ENGLISH.language }
             .filterNot { it.isNetworkConnectionRequired }
             .sortedBy { it.name }
-            .map { VoiceOption(id = it.name, label = prettyVoiceLabel(it)) }
-            .toList()
+            .map { it to prettyVoiceLabel(it) }
+
+        // Many engines expose several voices per locale with no gender hint in the name,
+        // which would render as a list of identical rows. Number the duplicates.
+        val labelCounts = labelled.groupingBy { it.second }.eachCount()
+        val seen = mutableMapOf<String, Int>()
+
+        _voices.value = labelled.map { (voice, label) ->
+            val display = if (labelCounts.getValue(label) > 1) {
+                val n = seen.merge(label, 1, Int::plus) ?: 1
+                "$label · Voice $n"
+            } else {
+                label
+            }
+            VoiceOption(id = voice.name, label = display)
+        }
     }
 
     /** Applies a voice by its engine name. Blank or unknown falls back to the engine default. */
@@ -106,7 +119,11 @@ class SpeechManager(private val context: Context) : TextToSpeech.OnInitListener 
         _isSpeaking.value = false
     }
 
-    fun startListening(onResult: (String) -> Unit) {
+    /**
+     * @param onNoResult fires when recognition ended without producing text (silence,
+     *   timeout, engine error). Lets hands-free mode re-arm instead of going deaf.
+     */
+    fun startListening(onResult: (String) -> Unit, onNoResult: () -> Unit = {}) {
         if (!SpeechRecognizer.isRecognitionAvailable(context)) return
 
         speechRecognizer?.destroy()
@@ -120,6 +137,7 @@ class SpeechManager(private val context: Context) : TextToSpeech.OnInitListener 
                 override fun onError(error: Int) {
                     _isListening.value = false
                     _micLevel.value = 0f
+                    onNoResult()
                 }
                 override fun onResults(results: Bundle?) {
                     _isListening.value = false

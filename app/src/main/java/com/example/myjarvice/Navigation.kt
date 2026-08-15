@@ -1,6 +1,6 @@
 package com.example.myjarvice
 
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation3.runtime.entryProvider
@@ -11,6 +11,7 @@ import com.example.myjarvice.ui.main.MainScreen
 import com.example.myjarvice.ui.settings.SettingsScreen
 import com.example.myjarvice.ui.splash.SplashScreen
 import com.example.myjarvice.ui.welcome.WelcomeScreen
+import com.example.myjarvice.wake.WakeEvents
 
 @Composable
 fun MainNavigation(
@@ -38,12 +39,20 @@ fun MainNavigation(
             entry<Welcome> {
                 WelcomeScreen(
                     onStartChat = { backStack.add(Main) },
-                    onVoiceMode = { backStack.add(Main) },
+                    onVoiceMode = {
+                        // Reuses the wake-word trigger the chat screen already listens on,
+                        // so the chat opens straight into full-screen voice mode.
+                        WakeEvents.voiceTrigger.value = true
+                        backStack.add(Main)
+                    },
                     onSettings = { backStack.add(Settings) }
                 )
             }
             entry<Main> {
-                MainScreen(modifier = Modifier.safeDrawingPadding())
+                // Deliberately not safeDrawingPadding(): that also insets for the IME,
+                // which double-counts against the window's own resize and shoves the
+                // header off-screen. The chat screen handles the keyboard itself.
+                MainScreen(modifier = Modifier.systemBarsPadding())
             }
             entry<Settings> {
                 SettingsScreen(
