@@ -14,10 +14,22 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.util.Locale
 
+import android.media.AudioManager
+import android.media.ToneGenerator
+
 /** A selectable TTS voice, surfaced by voice mode's "Change Voice" sheet. */
 data class VoiceOption(val id: String, val label: String)
 
 class SpeechManager(private val context: Context) : TextToSpeech.OnInitListener {
+
+    fun playActivationTone() {
+        try {
+            val toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 85)
+            toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP2, 180)
+        } catch (e: Exception) {
+            Log.e("SpeechManager", "Error playing activation tone: ${e.message}")
+        }
+    }
 
     private val settings = SettingsStore(context)
 
