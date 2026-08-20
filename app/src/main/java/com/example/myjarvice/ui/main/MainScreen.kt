@@ -384,6 +384,7 @@ private fun HudHeader(
 @Composable
 private fun QuickActionRow(onPrompt: (String) -> Unit) {
     val quickPrompts = listOf(
+        "Search my docs" to "📄",
         "System status" to "⚡",
         "Turn on lab lights" to "💡",
         "My schedule" to "📅",

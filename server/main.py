@@ -13,6 +13,7 @@ import uuid as uuid_lib
 from email.message import EmailMessage
 from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from rag_engine import query_personal_documents
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("MyJarviceServer")
@@ -601,6 +602,12 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
         context_block += f"\n\nThe user just told you their name is {name_set}. Warmly acknowledge it and use it."
     if stored:
         context_block += f"\n\nYou just saved a new fact to memory: '{stored}'. Briefly confirm you'll remember it."
+
+    low_text = user_text.lower()
+    if any(k in low_text for k in ["doc", "docs", "document", "pdf", "file", "notes", "protocol", "search", "read"]):
+        doc_context = query_personal_documents(user_text)
+        if doc_context:
+            context_block += f"\n\n[Retrieved Personal Documents Context]:\n{doc_context}"
 
     messages: List[Dict[str, str]] = [
         {"role": "system", "content": JARVIS_SYSTEM_PROMPT + "\n" + context_block}
