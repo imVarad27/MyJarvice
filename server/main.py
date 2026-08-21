@@ -245,12 +245,30 @@ def _clean_target(text: str) -> str:
     return text.strip()
 
 
+FLASHLIGHT_RE = re.compile(r"\b(?:flashlight|torch|flash)\b", re.IGNORECASE)
+ALARM_RE = re.compile(r"\b(?:alarm|wake me up)\b", re.IGNORECASE)
+WHATSAPP_RE = re.compile(r"\b(?:whatsapp|whatsapp message)\b", re.IGNORECASE)
+
+
 def detect_device_action(user_text: str) -> Optional[Dict[str, str]]:
     """Returns a directive {type, query} for the app to execute on the phone,
     or None. 'call me X' is intentionally excluded — that sets the user's name."""
     low = user_text.strip().lower()
     if low.startswith("call me") or low.startswith("call my"):
         return None
+
+    if FLASHLIGHT_RE.search(user_text):
+        action_state = "OFF" if "off" in low else "ON"
+        return {"type": "FLASHLIGHT", "query": action_state}
+
+    if ALARM_RE.search(user_text):
+        return {"type": "SET_ALARM", "query": user_text}
+
+    if WHATSAPP_RE.search(user_text):
+        msg_content = user_text
+        if "saying" in low:
+            msg_content = user_text.split("saying", 1)[1].strip()
+        return {"type": "WHATSAPP", "query": msg_content}
 
     m = NAVIGATE_RE.search(user_text)
     if m:

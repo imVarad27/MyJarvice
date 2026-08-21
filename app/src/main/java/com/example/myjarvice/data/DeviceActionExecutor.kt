@@ -43,7 +43,66 @@ class DeviceActionExecutor(private val context: Context) {
             "CALL" -> placeCall(action.query)
             "OPEN_APP" -> openApp(action.query)
             "NAVIGATE" -> navigateTo(action.query)
+            "FLASHLIGHT" -> toggleFlashlight(action.query)
+            "SET_ALARM" -> setAlarm(action.query)
+            "WHATSAPP" -> sendWhatsAppMessage(action.query)
             else -> Log.w(TAG, "Unknown action type: ${action.type}")
+        }
+    }
+
+    // --- Flashlight --------------------------------------------------------
+    private var isTorchOn = false
+
+    private fun toggleFlashlight(command: String) {
+        try {
+            val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as? android.hardware.camera2.CameraManager
+            val cameraId = cameraManager?.cameraIdList?.firstOrNull()
+            if (cameraId == null) {
+                toast("No camera flash available")
+                return
+            }
+            val turnOn = command.lowercase().contains("on") || (!isTorchOn && !command.lowercase().contains("off"))
+            cameraManager.setTorchMode(cameraId, turnOn)
+            isTorchOn = turnOn
+            toast("Flashlight ${if (turnOn) "ON" else "OFF"}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error toggling flashlight: ${e.message}")
+            toast("Flashlight control failed")
+        }
+    }
+
+    // --- Alarm ------------------------------------------------------------
+    private fun setAlarm(timeQuery: String) {
+        try {
+            val hour = Regex("""(\d{1,2})""").find(timeQuery)?.groupValues?.get(1)?.toIntOrNull() ?: 7
+            val isPm = timeQuery.lowercase().contains("pm")
+            val finalHour = if (isPm && hour < 12) hour + 12 else if (!isPm && hour == 12) 0 else hour
+            val minute = Regex(""":(\d{2})""").find(timeQuery)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+
+            val intent = Intent(android.provider.AlarmClock.ACTION_SET_ALARM).apply {
+                putExtra(android.provider.AlarmClock.EXTRA_HOUR, finalHour)
+                putExtra(android.provider.AlarmClock.EXTRA_MINUTES, minute)
+                putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, "JARVICE Alarm")
+                putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, false)
+            }
+            launch(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting alarm: ${e.message}")
+            toast("Failed to set alarm")
+        }
+    }
+
+    // --- WhatsApp ---------------------------------------------------------
+    private fun sendWhatsAppMessage(messageText: String) {
+        try {
+            val encodedText = Uri.encode(messageText)
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com/send?text=$encodedText")).apply {
+                setPackage("com.whatsapp")
+            }
+            launch(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error opening WhatsApp: ${e.message}")
+            toast("WhatsApp not available")
         }
     }
 
