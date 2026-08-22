@@ -60,7 +60,7 @@ class SettingsStore(context: Context) {
 
     companion object {
         /** Matches the client default; overridden as soon as the user sets an address. */
-        const val DEFAULT_SERVER_IP = "192.168.1.35"
+        const val DEFAULT_SERVER_IP = "192.168.1.34"
 
         private const val PREFS_NAME = "jarvic_settings"
         private const val KEY_SERVER_IP = "server_ip"

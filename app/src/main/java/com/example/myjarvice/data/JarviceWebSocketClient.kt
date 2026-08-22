@@ -78,9 +78,9 @@ class JarviceWebSocketClient {
     private val _pendingEmail = MutableStateFlow<PendingEmail?>(null)
     val pendingEmail: StateFlow<PendingEmail?> = _pendingEmail
 
-    private var serverIp = "192.168.1.35"
+    private var serverIp = "192.168.1.34"
 
-    fun connect(rawIpOrUrl: String = "192.168.1.35") {
+    fun connect(rawIpOrUrl: String = "192.168.1.34") {
         keepConnected = true
         reconnectJob?.cancel()
         _connectionStatus.value = ConnectionStatus.CONNECTING
@@ -209,8 +209,10 @@ class JarviceWebSocketClient {
             retryAttempt++
             delay(delayMs)
             if (keepConnected && _connectionStatus.value != ConnectionStatus.CONNECTED) {
-                Log.d("JarviceWS", "Reconnecting to $serverIp (attempt $retryAttempt)")
-                connect(serverIp)
+                val fallbackList = listOf("192.168.1.34", "127.0.0.1", "192.168.137.1")
+                val nextTarget = fallbackList[retryAttempt % fallbackList.size]
+                Log.d("JarviceWS", "Reconnecting to $nextTarget (attempt $retryAttempt)")
+                connect(nextTarget)
             }
         }
     }
