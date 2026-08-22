@@ -9,41 +9,61 @@ logger = logging.getLogger("JarviceRAG")
 DOCUMENTS_DIR = os.path.join(os.path.dirname(__file__), "documents")
 
 class DocumentRAGEngine:
-    def __init__(self, doc_dir: str = DOCUMENTS_DIR):
-        self.doc_dir = doc_dir
+    def __init__(self, watch_dirs: List[str] = None):
+        if watch_dirs is None:
+            watch_dirs = [DOCUMENTS_DIR, "D:\\", "E:\\"]
+        self.watch_dirs = watch_dirs
         self.chunks: List[Dict[str, str]] = []
         self.reload_documents()
 
     def reload_documents(self):
-        """Scans the documents directory and indexes all PDF, MD, and TXT files."""
+        r"""Scans entire D:\ drive and E:\ drive (if present) and indexes documents."""
         self.chunks.clear()
-        if not os.path.exists(self.doc_dir):
-            os.makedirs(self.doc_dir, exist_ok=True)
-            return
+        ignored_dirs = {
+            "node_modules", ".git", ".venv", "venv", "__pycache__", "build", 
+            ".gradle", ".idea", "bin", "obj", ".gemini", "$RECYCLE.BIN", 
+            "System Volume Information", "MyJarviceModels", "AndroidStudio", "AppData"
+        }
 
-        supported_files = glob.glob(os.path.join(self.doc_dir, "**/*.*"), recursive=True)
-        for filepath in supported_files:
-            filename = os.path.basename(filepath)
-            ext = os.path.splitext(filename)[1].lower()
-            text = ""
+        for target_dir in self.watch_dirs:
+            if not os.path.exists(target_dir):
+                logger.info(f"RAG watch directory '{target_dir}' does not exist, skipping.")
+                continue
 
-            try:
-                if ext == ".pdf":
-                    reader = pypdf.PdfReader(filepath)
-                    for page in reader.pages:
-                        extracted = page.extract_text()
-                        if extracted:
-                            text += extracted + "\n"
-                elif ext in [".txt", ".md", ".json", ".csv"]:
-                    with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
-                        text = f.read()
+            logger.info(f"RAG indexing directory: {target_dir}")
+            for root, dirs, files in os.walk(target_dir):
+                # Filter out heavy developer directories
+                dirs[:] = [d for d in dirs if d not in ignored_dirs and not d.startswith(".")]
 
-                if text.strip():
-                    self._split_and_index(filename, text)
-            except Exception as e:
-                logger.error(f"Error reading document {filename}: {e}")
+                for filename in files:
+                    ext = os.path.splitext(filename)[1].lower()
+                    if ext not in [".pdf", ".txt", ".md", ".json", ".csv", ".py", ".kt", ".cs", ".js", ".ts"]:
+                        continue
 
-        logger.info(f"RAG Engine loaded {len(self.chunks)} document chunks from {self.doc_dir}")
+                    filepath = os.path.join(root, filename)
+                    # Limit individual file size to 2MB to prevent memory bloat
+                    try:
+                        if os.path.getsize(filepath) > 2 * 1024 * 1024:
+                            continue
+
+                        text = ""
+                        if ext == ".pdf":
+                            reader = pypdf.PdfReader(filepath)
+                            for page in reader.pages:
+                                extracted = page.extract_text()
+                                if extracted:
+                                    text += extracted + "\n"
+                        else:
+                            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                                text = f.read()
+
+                        if text.strip():
+                            rel_path = os.path.relpath(filepath, target_dir)
+                            self._split_and_index(f"{os.path.basename(target_dir)}/{rel_path}", text)
+                    except Exception as e:
+                        logger.error(f"Error reading document {filename}: {e}")
+
+        logger.info(f"RAG Engine loaded {len(self.chunks)} document chunks.")
 
     def _split_and_index(self, filename: str, text: str, chunk_size: int = 400, overlap: int = 50):
         words = text.split()
