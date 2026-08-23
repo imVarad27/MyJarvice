@@ -100,6 +100,8 @@ fun MainScreen(
     val isSpeaking by viewModel.isSpeaking.collectAsStateWithLifecycle()
     val isListening by viewModel.isListening.collectAsStateWithLifecycle()
     val serverIp by viewModel.serverIp.collectAsStateWithLifecycle()
+    val serverToken by viewModel.serverToken.collectAsStateWithLifecycle()
+    val pendingAction by viewModel.pendingAction.collectAsStateWithLifecycle()
     val voiceModeActive by viewModel.voiceModeActive.collectAsStateWithLifecycle()
     val micMuted by viewModel.micMuted.collectAsStateWithLifecycle()
     val micLevel by viewModel.micLevel.collectAsStateWithLifecycle()
@@ -145,8 +147,9 @@ fun MainScreen(
     if (showIpDialog) {
         ServerConfigDialog(
             currentIp = serverIp,
-            onConnect = { ip ->
-                viewModel.updateServerIp(ip)
+            currentToken = serverToken,
+            onConnect = { ip, token ->
+                viewModel.updateServerConnection(ip, token)
                 android.widget.Toast.makeText(context, "Connecting to $ip...", android.widget.Toast.LENGTH_SHORT).show()
                 showIpDialog = false
             },
@@ -159,6 +162,16 @@ fun MainScreen(
             draft = draft,
             onApprove = { viewModel.resolvePendingEmail(draft.id, approved = true) },
             onDiscard = { viewModel.resolvePendingEmail(draft.id, approved = false) }
+        )
+    }
+
+    pendingAction?.let { action ->
+        AlertDialog(
+            onDismissRequest = { viewModel.resolvePendingAction(false) },
+            title = { Text("Confirm phone action") },
+            text = { Text("Allow JARVICE to ${action.type.lowercase().replace('_', ' ')}: ${action.query}?") },
+            confirmButton = { TextButton(onClick = { viewModel.resolvePendingAction(true) }) { Text("Allow") } },
+            dismissButton = { TextButton(onClick = { viewModel.resolvePendingAction(false) }) { Text("Deny") } }
         )
     }
 
@@ -520,17 +533,19 @@ private fun InputBar(
 @Composable
 private fun ServerConfigDialog(
     currentIp: String,
-    onConnect: (String) -> Unit,
+    currentToken: String,
+    onConnect: (String, String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var tempIp by remember { mutableStateOf(currentIp) }
+    var tempToken by remember { mutableStateOf(currentToken) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Server Config", color = JarvisCyan, fontFamily = FontFamily.Monospace) },
         text = {
             Column {
                 Text(
-                    "Enter the Host PC's local IP (e.g. 192.168.1.35, or 192.168.137.1 on PC hotspot):",
+                    "Enter the secure host URL (for example, jarvice.example.com) and its pairing token:",
                     color = TextSecondary,
                     fontSize = 13.sp
                 )
@@ -546,10 +561,23 @@ private fun ServerConfigDialog(
                         unfocusedTextColor = TextPrimary
                     )
                 )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = tempToken,
+                    onValueChange = { tempToken = it },
+                    label = { Text("Pairing token") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = JarvisCyan,
+                        unfocusedBorderColor = JarvisSurfaceBorder,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary
+                    )
+                )
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConnect(tempIp.trim()) }) {
+            TextButton(onClick = { onConnect(tempIp.trim(), tempToken.trim()) }, enabled = tempIp.isNotBlank() && tempToken.isNotBlank()) {
                 Text("Connect", color = JarvisCyan)
             }
         },

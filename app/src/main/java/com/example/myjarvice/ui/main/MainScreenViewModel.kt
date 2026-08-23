@@ -7,6 +7,7 @@ import com.example.myjarvice.data.ConnectionStatus
 import com.example.myjarvice.data.DeviceActionExecutor
 import com.example.myjarvice.data.DeviceContextProvider
 import com.example.myjarvice.data.JarviceMessage
+import com.example.myjarvice.data.JarviceAction
 import com.example.myjarvice.data.JarviceWebSocketClient
 import com.example.myjarvice.data.PendingEmail
 import com.example.myjarvice.data.SettingsStore
@@ -36,6 +37,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     // Restored from disk so the link comes back by itself on every launch.
     private val _serverIp = MutableStateFlow(settings.serverIp)
     val serverIp: StateFlow<String> = _serverIp.asStateFlow()
+    private val _serverToken = MutableStateFlow(settings.serverToken)
+    val serverToken: StateFlow<String> = _serverToken.asStateFlow()
 
     /** Full-screen, hands-free voice mode (the ChatGPT-style orb screen). */
     private val _voiceModeActive = MutableStateFlow(false)
@@ -52,12 +55,18 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     /** Non-null while an email draft is waiting on the user's yes/no. */
     val pendingEmail: StateFlow<PendingEmail?> = wsClient.pendingEmail
 
+    /** Phone commands require a local confirmation before execution. */
+    private val _pendingAction = MutableStateFlow<JarviceAction?>(null)
+    val pendingAction: StateFlow<JarviceAction?> = _pendingAction.asStateFlow()
+
     val micLevel: StateFlow<Float> = speechManager.micLevel
     val voices: StateFlow<List<VoiceOption>> = speechManager.voices
     val selectedVoiceId: StateFlow<String> = speechManager.selectedVoiceId
 
     init {
-        wsClient.connect(_serverIp.value)
+        if (_serverIp.value.isNotBlank() && _serverToken.value.isNotBlank()) {
+            wsClient.connect(_serverIp.value, _serverToken.value)
+        }
 
         viewModelScope.launch {
             wsClient.latestResponse.collect { msg ->
@@ -75,7 +84,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         // Execute phone actions (call / open app) the server directs.
         viewModelScope.launch {
             wsClient.latestAction.collect { action ->
-                action?.let { actionExecutor.execute(it) }
+                action?.let { _pendingAction.value = it }
             }
         }
 
@@ -153,6 +162,12 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     fun resolvePendingEmail(id: String, approved: Boolean) =
         wsClient.resolvePendingEmail(id, approved)
 
+    fun resolvePendingAction(approved: Boolean) {
+        val action = _pendingAction.value ?: return
+        _pendingAction.value = null
+        if (approved) actionExecutor.execute(action)
+    }
+
     /** Plain-text transcript for voice mode's share action. */
     fun buildTranscript(): String =
         chatHistory.value.joinToString("\n\n") { msg ->
@@ -160,11 +175,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             "$who: ${msg.text}"
         }
 
-    fun updateServerIp(newIp: String) {
+    fun updateServerConnection(newIp: String, newToken: String) {
         val trimmed = newIp.trim()
         _serverIp.value = trimmed
+        _serverToken.value = newToken.trim()
         settings.serverIp = trimmed
-        wsClient.updateServerIp(trimmed)
+        settings.serverToken = _serverToken.value
+        wsClient.updateServerConnection(trimmed, _serverToken.value)
     }
 
     fun sendQuery(text: String) {

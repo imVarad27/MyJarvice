@@ -12,7 +12,7 @@ import urllib.error
 import uuid as uuid_lib
 from email.message import EmailMessage
 from typing import Dict, Any, List, Optional
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, status
 from rag_engine import query_personal_documents
 
 logging.basicConfig(level=logging.INFO)
@@ -51,6 +51,8 @@ SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("SMTP_USER", "")
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
 SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER)
+JARVICE_API_TOKEN = os.environ.get("JARVICE_API_TOKEN", "").strip()
+MAX_MESSAGE_CHARS = 4_000
 
 # Drafts awaiting the user's explicit approval, keyed by draft id. Nothing is ever
 # sent from here without an APPROVE_EMAIL message arriving for that exact id.
@@ -82,7 +84,7 @@ IOT_DEVICES = {
 #  Persistent Memory (SQLite)
 # ==========================================================================
 def get_db() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -101,6 +103,7 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_memory_category_key ON memory(category, key)")
         conn.commit()
         count = conn.execute("SELECT COUNT(*) AS c FROM memory").fetchone()["c"]
         if count == 0:
@@ -673,6 +676,17 @@ def get_root():
 
 @app.websocket("/ws/jarvice")
 async def websocket_jarvice_endpoint(websocket: WebSocket):
+    # A shared pairing token is required whenever the service is exposed beyond
+    # localhost.  It prevents arbitrary devices on the LAN from commanding a phone.
+    if not JARVICE_API_TOKEN:
+        logger.error("Refusing WebSocket connection: JARVICE_API_TOKEN is not configured.")
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Host pairing token is not configured")
+        return
+    auth = websocket.headers.get("authorization", "")
+    if auth != f"Bearer {JARVICE_API_TOKEN}":
+        logger.warning("Rejected unauthenticated WebSocket connection.")
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid pairing token")
+        return
     await websocket.accept()
     logger.info("Jarvice Android Client connected over WebSocket.")
 
@@ -705,7 +719,12 @@ async def websocket_jarvice_endpoint(websocket: WebSocket):
 
                 user_text = msg.get("text", "")
                 phone_context = msg.get("context", {})
-                logger.info(f"Received query from client: '{user_text}'")
+                if not isinstance(user_text, str) or not user_text.strip() or len(user_text) > MAX_MESSAGE_CHARS:
+                    await websocket.send_text(json.dumps({"sender": "JARVIS", "type": "ERROR", "text": "Please send a message up to 4,000 characters."}))
+                    continue
+                if not isinstance(phone_context, dict):
+                    phone_context = {}
+                logger.info("Received query from authenticated client (%d characters).", len(user_text))
 
                 # Run the (blocking) LLM call off the event loop so other clients aren't blocked.
                 ai_response, action, pending_email = await asyncio.to_thread(
@@ -742,4 +761,4 @@ if __name__ == "__main__":
     import uvicorn
     # reload disabled: the file-watch reloader spawns child processes that made
     # restarts non-deterministic. Restart the process manually after code changes.
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=os.environ.get("JARVICE_HOST", "127.0.0.1"), port=8000)

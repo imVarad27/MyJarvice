@@ -78,22 +78,30 @@ class JarviceWebSocketClient {
     private val _pendingEmail = MutableStateFlow<PendingEmail?>(null)
     val pendingEmail: StateFlow<PendingEmail?> = _pendingEmail
 
-    private var serverIp = "192.168.1.34"
+    private var serverIp = ""
+    private var serverToken = ""
 
-    fun connect(rawIpOrUrl: String = "192.168.1.34") {
+    fun connect(rawIpOrUrl: String, pairingToken: String) {
         keepConnected = true
         reconnectJob?.cancel()
         _connectionStatus.value = ConnectionStatus.CONNECTING
         this.serverIp = rawIpOrUrl.trim()
+        this.serverToken = pairingToken.trim()
+        if (serverIp.isBlank() || serverToken.isBlank()) {
+            _connectionStatus.value = ConnectionStatus.ERROR
+            return
+        }
 
         val wsUrl = when {
             serverIp.startsWith("ws://") || serverIp.startsWith("wss://") -> serverIp
-            serverIp.contains(":") -> "ws://$serverIp/ws/jarvice"
-            else -> "ws://$serverIp:8000/ws/jarvice"
+            serverIp.contains(":") -> "wss://$serverIp/ws/jarvice"
+            else -> "wss://$serverIp/ws/jarvice"
         }
 
         Log.d("JarviceWS", "Attempting connection to: $wsUrl")
-        val request = Request.Builder().url(wsUrl).build()
+        val request = Request.Builder().url(wsUrl)
+            .header("Authorization", "Bearer $serverToken")
+            .build()
 
         webSocket?.cancel()
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
@@ -173,7 +181,7 @@ class JarviceWebSocketClient {
             )
             _latestResponse.value = offlineMsg
             _chatHistory.value = _chatHistory.value + offlineMsg
-            connect(serverIp)
+            connect(serverIp, serverToken)
         }
     }
 
@@ -189,9 +197,9 @@ class JarviceWebSocketClient {
         webSocket?.send(payload.toString())
     }
 
-    fun updateServerIp(ip: String) {
+    fun updateServerConnection(ip: String, pairingToken: String) {
         retryAttempt = 0
-        connect(ip)
+        connect(ip, pairingToken)
     }
 
     /**
@@ -209,10 +217,8 @@ class JarviceWebSocketClient {
             retryAttempt++
             delay(delayMs)
             if (keepConnected && _connectionStatus.value != ConnectionStatus.CONNECTED) {
-                val fallbackList = listOf("192.168.1.34", "127.0.0.1", "192.168.137.1")
-                val nextTarget = fallbackList[retryAttempt % fallbackList.size]
-                Log.d("JarviceWS", "Reconnecting to $nextTarget (attempt $retryAttempt)")
-                connect(nextTarget)
+                Log.d("JarviceWS", "Reconnecting to configured server (attempt $retryAttempt)")
+                connect(serverIp, serverToken)
             }
         }
     }

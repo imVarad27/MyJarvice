@@ -11,13 +11,15 @@ DOCUMENTS_DIR = os.path.join(os.path.dirname(__file__), "documents")
 class DocumentRAGEngine:
     def __init__(self, watch_dirs: List[str] = None):
         if watch_dirs is None:
-            watch_dirs = [DOCUMENTS_DIR, "D:\\", "E:\\"]
+            # Index only the dedicated, user-managed folder.  Scanning whole drives
+            # is both surprising and risks placing unrelated private data in prompts.
+            watch_dirs = [DOCUMENTS_DIR]
         self.watch_dirs = watch_dirs
         self.chunks: List[Dict[str, str]] = []
         self.reload_documents()
 
     def reload_documents(self):
-        r"""Scans entire D:\ drive and E:\ drive (if present) and indexes documents."""
+        """Indexes documents from explicitly configured folders only."""
         self.chunks.clear()
         ignored_dirs = {
             "node_modules", ".git", ".venv", "venv", "__pycache__", "build", 

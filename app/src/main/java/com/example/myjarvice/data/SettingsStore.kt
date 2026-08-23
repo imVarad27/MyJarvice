@@ -48,6 +48,11 @@ class SettingsStore(context: Context) {
             prefs.edit().putString(KEY_SERVER_IP, value.trim()).apply()
         }
 
+    /** Pairing token configured on the host; never included in chat payloads. */
+    var serverToken: String
+        get() = prefs.getString(KEY_SERVER_TOKEN, "") ?: ""
+        set(value) { prefs.edit().putString(KEY_SERVER_TOKEN, value.trim()).apply() }
+
     /**
      * Name of the TTS voice chosen in voice mode's "Change Voice" sheet.
      * Empty means "whatever the engine defaults to".
@@ -60,10 +65,11 @@ class SettingsStore(context: Context) {
 
     companion object {
         /** Matches the client default; overridden as soon as the user sets an address. */
-        const val DEFAULT_SERVER_IP = "192.168.1.34"
+        const val DEFAULT_SERVER_IP = ""
 
         private const val PREFS_NAME = "jarvic_settings"
         private const val KEY_SERVER_IP = "server_ip"
+        private const val KEY_SERVER_TOKEN = "server_token"
         private const val KEY_THEME = "theme_mode"
         private const val KEY_DYNAMIC = "dynamic_color"
         private const val KEY_PICOVOICE = "picovoice_key"

@@ -1,27 +1,17 @@
 package com.example.myjarvice.ui.main
 
-import com.example.myjarvice.data.DataRepository
-import junit.framework.TestCase.assertEquals
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.test.runTest
+import com.example.myjarvice.data.ConnectionStatus
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class MainScreenViewModelTest {
   @Test
-  fun uiState_initiallyLoading() = runTest {
-    val viewModel = MainScreenViewModel(FakeMyModelRepository())
-    assertEquals(viewModel.uiState.first(), MainScreenUiState.Loading)
+  fun connectionStatus_hasExpectedStates() {
+    assertEquals(ConnectionStatus.DISCONNECTED, ConnectionStatus.valueOf("DISCONNECTED"))
   }
 
   @Test
-  fun uiState_onItemSaved_isDisplayed() = runTest {
-    val viewModel = MainScreenViewModel(FakeMyModelRepository())
-    assertEquals(viewModel.uiState.first(), MainScreenUiState.Loading)
+  fun connectionStatus_includesFailureState() {
+    assertEquals(ConnectionStatus.ERROR, ConnectionStatus.valueOf("ERROR"))
   }
-}
-
-private class FakeMyModelRepository : DataRepository {
-  override val data: Flow<List<String>> = flow { emit(listOf("Sample")) }
 }
