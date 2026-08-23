@@ -761,4 +761,14 @@ if __name__ == "__main__":
     import uvicorn
     # reload disabled: the file-watch reloader spawns child processes that made
     # restarts non-deterministic. Restart the process manually after code changes.
-    uvicorn.run(app, host=os.environ.get("JARVICE_HOST", "127.0.0.1"), port=8000)
+    certfile = os.environ.get("JARVICE_TLS_CERT", "").strip()
+    keyfile = os.environ.get("JARVICE_TLS_KEY", "").strip()
+    if bool(certfile) != bool(keyfile):
+        raise RuntimeError("Set both JARVICE_TLS_CERT and JARVICE_TLS_KEY, or neither.")
+    uvicorn.run(
+        app,
+        host=os.environ.get("JARVICE_HOST", "127.0.0.1"),
+        port=int(os.environ.get("JARVICE_PORT", "8000")),
+        ssl_certfile=certfile or None,
+        ssl_keyfile=keyfile or None,
+    )
