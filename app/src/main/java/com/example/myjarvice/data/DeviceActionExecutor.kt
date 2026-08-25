@@ -37,8 +37,9 @@ class DeviceActionExecutor(private val context: Context) {
         "play store" to "com.android.vending"
     )
 
-    fun execute(action: JarviceAction) {
+    fun execute(action: JarvisAction) {
         Log.i(TAG, "Executing ${action.type} -> '${action.query}'")
+
         when (action.type.uppercase()) {
             "CALL" -> placeCall(action.query)
             "OPEN_APP" -> openApp(action.query)
@@ -82,7 +83,7 @@ class DeviceActionExecutor(private val context: Context) {
             val intent = Intent(android.provider.AlarmClock.ACTION_SET_ALARM).apply {
                 putExtra(android.provider.AlarmClock.EXTRA_HOUR, finalHour)
                 putExtra(android.provider.AlarmClock.EXTRA_MINUTES, minute)
-                putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, "JARVICE Alarm")
+                putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, "JARVIS Alarm")
                 putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, false)
             }
             launch(intent)
@@ -237,7 +238,8 @@ class DeviceActionExecutor(private val context: Context) {
     }
 
     private companion object {
-        const val TAG = "JarviceAction"
+        const val TAG = "JarvisAction"
         const val MAPS_PACKAGE = "com.google.android.apps.maps"
     }
+
 }

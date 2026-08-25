@@ -26,8 +26,9 @@ class WakeWordService : Service() {
         const val ACTION_START = "ACTION_START_WAKE_WORD"
         const val ACTION_STOP = "ACTION_STOP_WAKE_WORD"
         const val ACTION_WAKE_WORD_DETECTED = "com.example.myjarvice.WAKE_WORD_DETECTED"
-        const val CHANNEL_ID = "JarviceWakeChannel"
+        const val CHANNEL_ID = "JarvisWakeChannel"
         const val NOTIFICATION_ID = 1001
+
         private const val TAG = "WakeWordService"
 
         fun start(context: Context) {
@@ -201,8 +202,9 @@ class WakeWordService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("JARVICE Sentinel Mode Active")
+            .setContentTitle("JARVIS Sentinel Mode Active")
             .setContentText("Listening hands-free for 'Jarvis'...")
+
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentIntent(pendingIntent)
             .setOngoing(true)

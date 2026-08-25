@@ -8,9 +8,9 @@ import com.example.myjarvice.data.ChatSession
 import com.example.myjarvice.data.ConnectionStatus
 import com.example.myjarvice.data.DeviceActionExecutor
 import com.example.myjarvice.data.DeviceContextProvider
-import com.example.myjarvice.data.JarviceAction
-import com.example.myjarvice.data.JarviceMessage
-import com.example.myjarvice.data.JarviceWebSocketClient
+import com.example.myjarvice.data.JarvisAction
+import com.example.myjarvice.data.JarvisMessage
+import com.example.myjarvice.data.JarvisWebSocketClient
 import com.example.myjarvice.data.PendingEmail
 import com.example.myjarvice.data.SettingsStore
 import com.example.myjarvice.data.SpeechManager
@@ -25,16 +25,17 @@ import java.util.UUID
 
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
 
-    val wsClient = JarviceWebSocketClient()
+    val wsClient = JarvisWebSocketClient()
     val deviceContext = DeviceContextProvider(application.applicationContext)
     val speechManager = SpeechManager(application.applicationContext)
     private val actionExecutor = DeviceActionExecutor(application.applicationContext)
     private val historyStore = ChatHistoryStore(application.applicationContext)
 
     val connectionStatus: StateFlow<ConnectionStatus> = wsClient.connectionStatus
-    val chatHistory: StateFlow<List<JarviceMessage>> = wsClient.chatHistory
+    val chatHistory: StateFlow<List<JarvisMessage>> = wsClient.chatHistory
     val isSpeaking: StateFlow<Boolean> = speechManager.isSpeaking
     val isListening: StateFlow<Boolean> = speechManager.isListening
+
 
     private val settings = SettingsStore(application.applicationContext)
 
@@ -67,8 +68,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val pendingEmail: StateFlow<PendingEmail?> = wsClient.pendingEmail
 
     /** Phone commands require a local confirmation before execution. */
-    private val _pendingAction = MutableStateFlow<JarviceAction?>(null)
-    val pendingAction: StateFlow<JarviceAction?> = _pendingAction.asStateFlow()
+    private val _pendingAction = MutableStateFlow<JarvisAction?>(null)
+    val pendingAction: StateFlow<JarvisAction?> = _pendingAction.asStateFlow()
+
 
     val micLevel: StateFlow<Float> = speechManager.micLevel
     val voices: StateFlow<List<VoiceOption>> = speechManager.voices

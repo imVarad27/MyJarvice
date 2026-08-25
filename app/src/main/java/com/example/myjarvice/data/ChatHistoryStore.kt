@@ -11,7 +11,7 @@ data class ChatSession(
     val title: String,
     val createdAt: Long,
     val updatedAt: Long,
-    val messages: List<JarviceMessage>
+    val messages: List<JarvisMessage>
 )
 
 class ChatHistoryStore(context: Context) {
@@ -36,12 +36,12 @@ class ChatHistoryStore(context: Context) {
                 val updatedAt = obj.optLong("updatedAt", createdAt)
 
                 val msgArray = obj.optJSONArray("messages") ?: JSONArray()
-                val messages = mutableListOf<JarviceMessage>()
+                val messages = mutableListOf<JarvisMessage>()
 
                 for (j in 0 until msgArray.length()) {
                     val msgObj = msgArray.getJSONObject(j)
                     messages.add(
-                        JarviceMessage(
+                        JarvisMessage(
                             sender = msgObj.optString("sender", "USER"),
                             text = msgObj.optString("text", ""),
                             type = msgObj.optString("type", "RESPONSE"),
@@ -49,6 +49,7 @@ class ChatHistoryStore(context: Context) {
                         )
                     )
                 }
+
 
                 sessions.add(
                     ChatSession(

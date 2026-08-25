@@ -80,9 +80,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myjarvice.data.ChatSession
 import com.example.myjarvice.data.ConnectionStatus
-import com.example.myjarvice.data.JarviceMessage
+import com.example.myjarvice.data.JarvisMessage
 import com.example.myjarvice.data.PendingEmail
 import com.example.myjarvice.data.SettingsStore
+
 import com.example.myjarvice.theme.ArcGold
 import com.example.myjarvice.theme.JarvisCyan
 import com.example.myjarvice.theme.JarvisDarkBackground
@@ -746,7 +747,7 @@ private fun PromptSuggestionCard(
  */
 @Composable
 private fun ChatFeed(
-    chatHistory: List<JarviceMessage>,
+    chatHistory: List<JarvisMessage>,
     isThinking: Boolean,
     onCopy: (String) -> Unit,
     onSpeak: (String) -> Unit,
@@ -786,7 +787,7 @@ private fun ChatFeed(
 }
 
 @Composable
-private fun UserMessageBubble(msg: JarviceMessage) {
+private fun UserMessageBubble(msg: JarvisMessage) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.End
@@ -810,10 +811,11 @@ private fun UserMessageBubble(msg: JarviceMessage) {
 
 @Composable
 private fun JarvisMessageBubble(
-    msg: JarviceMessage,
+    msg: JarvisMessage,
     onCopy: () -> Unit,
     onSpeak: () -> Unit
 ) {
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Start

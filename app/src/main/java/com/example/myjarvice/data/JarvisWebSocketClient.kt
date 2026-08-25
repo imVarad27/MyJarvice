@@ -24,7 +24,7 @@ enum class ConnectionStatus {
     ERROR
 }
 
-data class JarviceMessage(
+data class JarvisMessage(
     val sender: String,
     val text: String,
     val type: String = "RESPONSE",
@@ -39,14 +39,18 @@ data class PendingEmail(
     val body: String
 )
 
-/** A directive from the server for the phone to execute locally (Phase 3). */
-data class JarviceAction(
+/** A directive from the server for the phone to execute locally. */
+data class JarvisAction(
     val id: String,      // unique per message (server timestamp) so repeats re-trigger
     val type: String,    // "CALL" | "OPEN_APP"
     val query: String
 )
 
-class JarviceWebSocketClient {
+// Backward-compatibility aliases
+typealias JarviceMessage = JarvisMessage
+typealias JarviceAction = JarvisAction
+
+class JarvisWebSocketClient {
 
     private var client: OkHttpClient = OkHttpClient.Builder()
         .readTimeout(0, TimeUnit.MILLISECONDS)   // 0 = no read timeout; pings police liveness
@@ -66,14 +70,14 @@ class JarviceWebSocketClient {
     private val _connectionStatus = MutableStateFlow(ConnectionStatus.DISCONNECTED)
     val connectionStatus: StateFlow<ConnectionStatus> = _connectionStatus
 
-    private val _latestResponse = MutableStateFlow<JarviceMessage?>(null)
-    val latestResponse: StateFlow<JarviceMessage?> = _latestResponse
+    private val _latestResponse = MutableStateFlow<JarvisMessage?>(null)
+    val latestResponse: StateFlow<JarvisMessage?> = _latestResponse
 
-    private val _latestAction = MutableStateFlow<JarviceAction?>(null)
-    val latestAction: StateFlow<JarviceAction?> = _latestAction
+    private val _latestAction = MutableStateFlow<JarvisAction?>(null)
+    val latestAction: StateFlow<JarvisAction?> = _latestAction
 
-    private val _chatHistory = MutableStateFlow<List<JarviceMessage>>(emptyList())
-    val chatHistory: StateFlow<List<JarviceMessage>> = _chatHistory
+    private val _chatHistory = MutableStateFlow<List<JarvisMessage>>(emptyList())
+    val chatHistory: StateFlow<List<JarvisMessage>> = _chatHistory
 
     private val _pendingEmail = MutableStateFlow<PendingEmail?>(null)
     val pendingEmail: StateFlow<PendingEmail?> = _pendingEmail
@@ -81,7 +85,6 @@ class JarviceWebSocketClient {
     private var serverIp = ""
     private var serverToken = ""
     private val fallbackIps = listOf("127.0.0.1:8000", "192.168.1.37:8000", "192.168.1.34:8000", "192.168.137.1:8000")
-
 
     fun connect(rawIpOrUrl: String = "", pairingToken: String = "") {
         keepConnected = true
@@ -96,11 +99,11 @@ class JarviceWebSocketClient {
 
         val wsUrl = when {
             serverIp.startsWith("ws://") || serverIp.startsWith("wss://") -> serverIp
-            serverIp.contains(":") -> "ws://$serverIp/ws/jarvice"
-            else -> "ws://$serverIp:8000/ws/jarvice"
+            serverIp.contains(":") -> "ws://$serverIp/ws/jarvis"
+            else -> "ws://$serverIp:8000/ws/jarvis"
         }
 
-        Log.d("JarviceWS", "Attempting connection to: $wsUrl")
+        Log.d("JarvisWS", "Attempting connection to: $wsUrl")
         val request = Request.Builder().url(wsUrl)
             .header("Authorization", "Bearer $serverToken")
             .build()
@@ -108,108 +111,124 @@ class JarviceWebSocketClient {
         webSocket?.cancel()
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                Log.d("JarviceWS", "WebSocket Connected Successfully to $wsUrl!")
-                retryAttempt = 0
                 _connectionStatus.value = ConnectionStatus.CONNECTED
+                retryAttempt = 0
+                Log.d("JarvisWS", "WebSocket Connected Successfully to $wsUrl!")
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
-                Log.d("JarviceWS", "Message received: $text")
                 try {
-                    val json = JSONObject(text)
-                    val sender = json.optString("sender", "JARVIS")
-                    val messageText = json.optString("text", "")
-                    val msgType = json.optString("type", "RESPONSE")
-                    val ts = json.optString("timestamp", "")
+                    val obj = JSONObject(text)
+                    val sender = obj.optString("sender", "JARVIS")
+                    Log.d("JarvisWS", "Message received: $text")
 
-                    val msg = JarviceMessage(sender, messageText, msgType, ts)
+                    val actionType = obj.optString("action", "")
+                    val actionQuery = obj.optString("target", "")
+
+                    val msgType = obj.optString("type", "RESPONSE")
+                    val messageText = obj.optString("text", "")
+                    val ts = obj.optString("timestamp", "")
+                    val msg = JarvisMessage(sender, messageText, msgType, ts)
+
+                    // Drafted email waiting for approval
+                    if (obj.has("pending_email")) {
+                        val pe = obj.getJSONObject("pending_email")
+                        _pendingEmail.value = PendingEmail(
+                            id = pe.getString("id"),
+                            to = pe.optString("to", ""),
+                            subject = pe.optString("subject", ""),
+                            body = pe.optString("body", "")
+                        )
+                    }
+
+                    if (actionType.isNotBlank() && actionQuery.isNotBlank()) {
+                        _latestAction.value = JarvisAction(
+                            id = ts.ifBlank { System.currentTimeMillis().toString() },
+                            type = actionType,
+                            query = actionQuery
+                        )
+                    }
+
                     _latestResponse.value = msg
                     _chatHistory.value = _chatHistory.value + msg
-
-                    // A drafted email is held here until the user approves it; the
-                    // server will not send anything without an explicit verdict.
-                    json.optJSONObject("pending_email")?.let { draft ->
-                        _pendingEmail.value = PendingEmail(
-                            id = draft.optString("id"),
-                            to = draft.optString("to"),
-                            subject = draft.optString("subject"),
-                            body = draft.optString("body")
-                        )
-                    }
-
-                    // Phase 3: execute a phone action if the server sent one.
-                    val actionObj = json.optJSONObject("action")
-                    if (actionObj != null) {
-                        _latestAction.value = JarviceAction(
-                            id = ts.ifBlank { System.currentTimeMillis().toString() },
-                            type = actionObj.optString("type"),
-                            query = actionObj.optString("query")
-                        )
-                    }
                 } catch (e: Exception) {
-                    Log.e("JarviceWS", "Error parsing message: ${e.message}")
+                    Log.e("JarvisWS", "Error parsing message: ${e.message}")
                 }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                Log.e("JarviceWS", "WebSocket Connection Failed to $wsUrl: ${t.message}")
                 _connectionStatus.value = ConnectionStatus.ERROR
-                scheduleReconnect()
+                Log.e("JarvisWS", "WebSocket Connection Failed to $wsUrl: ${t.message}")
+
+                // Auto fallback to alternative IP
+                if (retryAttempt < fallbackIps.size - 1) {
+                    retryAttempt++
+                    val nextIp = fallbackIps[retryAttempt % fallbackIps.size]
+                    Log.d("JarvisWS", "Attempting fallback IP: $nextIp")
+                    connect(nextIp, serverToken)
+                } else {
+                    scheduleReconnect()
+                }
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                Log.d("JarviceWS", "WebSocket Closed: $reason")
                 _connectionStatus.value = ConnectionStatus.DISCONNECTED
-                scheduleReconnect()
+                Log.d("JarvisWS", "WebSocket Closed: $reason ($code)")
+                if (keepConnected) scheduleReconnect()
             }
         })
     }
 
-
-    fun sendMessage(userText: String, phoneContext: Map<String, Any> = emptyMap()) {
-        val userMsg = JarviceMessage("USER", userText)
-        _chatHistory.value = _chatHistory.value + userMsg
-
-        val payload = JSONObject().apply {
-            put("text", userText)
-            put("context", JSONObject(phoneContext))
-        }
-
-        if (_connectionStatus.value == ConnectionStatus.CONNECTED) {
-            webSocket?.send(payload.toString())
-        } else {
-            val offlineMsg = JarviceMessage(
-                sender = "Jarvis (Offline)",
-                text = "Sir, server link ($serverIp) is offline. Re-establishing link..."
-            )
-            _latestResponse.value = offlineMsg
-            _chatHistory.value = _chatHistory.value + offlineMsg
-            connect(serverIp, serverToken)
+    fun updateServerConnection(newIp: String, newToken: String) {
+        val trimmedIp = newIp.trim()
+        val trimmedToken = newToken.trim()
+        if (trimmedIp != serverIp || trimmedToken != serverToken || _connectionStatus.value != ConnectionStatus.CONNECTED) {
+            disconnect()
+            retryAttempt = 0
+            connect(trimmedIp, trimmedToken)
         }
     }
 
-    /** Relays the user's verdict on a drafted email; clears it either way. */
-    fun resolvePendingEmail(id: String, approved: Boolean) {
+    fun sendMessage(query: String, deviceContext: Map<String, Any> = emptyMap()) {
+        val userMsg = JarvisMessage(
+            sender = "USER",
+            text = query,
+            type = "QUERY",
+            timestamp = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+        )
+        _chatHistory.value = _chatHistory.value + userMsg
+
+        val payload = JSONObject().apply {
+            put("query", query)
+            put("device_context", JSONObject(deviceContext))
+        }
+
+        val sent = webSocket?.send(payload.toString()) ?: false
+        if (!sent) {
+            val offlineMsg = JarvisMessage(
+                sender = "JARVIS (Offline)",
+                text = "Cannot reach Host Server ($serverIp). Please ensure the Python server is running.",
+                type = "ERROR"
+            )
+            _chatHistory.value = _chatHistory.value + offlineMsg
+            _latestResponse.value = offlineMsg
+        }
+    }
+
+    /**
+     * Send user approval or rejection for a drafted email.
+     */
+    fun resolvePendingEmail(draftId: String, approved: Boolean) {
         _pendingEmail.value = null
         val payload = JSONObject().apply {
             put("approve_email", JSONObject().apply {
-                put("id", id)
+                put("id", draftId)
                 put("approved", approved)
             })
         }
         webSocket?.send(payload.toString())
     }
 
-    fun updateServerConnection(ip: String, pairingToken: String) {
-        retryAttempt = 0
-        connect(ip, pairingToken)
-    }
-
-    /**
-     * Keeps the link up on its own: the server restarting, Wi-Fi dropping, or the USB
-     * tunnel being re-established all resolve without the user touching anything.
-     * Backs off 1s → 30s so a genuinely absent host doesn't spin the radio.
-     */
     private fun scheduleReconnect() {
         if (!keepConnected) return
         if (reconnectJob?.isActive == true) return
@@ -220,7 +239,7 @@ class JarviceWebSocketClient {
             retryAttempt++
             delay(delayMs)
             if (keepConnected && _connectionStatus.value != ConnectionStatus.CONNECTED) {
-                Log.d("JarviceWS", "Reconnecting to configured server (attempt $retryAttempt)")
+                Log.d("JarvisWS", "Reconnecting to configured server (attempt $retryAttempt)")
                 connect(serverIp, serverToken)
             }
         }
@@ -231,10 +250,9 @@ class JarviceWebSocketClient {
         _latestResponse.value = null
     }
 
-    fun setChatHistory(messages: List<JarviceMessage>) {
+    fun setChatHistory(messages: List<JarvisMessage>) {
         _chatHistory.value = messages
     }
-
 
     fun disconnect() {
         keepConnected = false
@@ -243,9 +261,11 @@ class JarviceWebSocketClient {
         _connectionStatus.value = ConnectionStatus.DISCONNECTED
     }
 
-
     private companion object {
         const val INITIAL_RETRY_MS = 1_000L
         const val MAX_RETRY_MS = 30_000L
     }
 }
+
+// Backward-compatibility class alias
+typealias JarviceWebSocketClient = JarvisWebSocketClient

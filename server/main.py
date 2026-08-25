@@ -16,15 +16,16 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, status
 from rag_engine import query_personal_documents
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("MyJarviceServer")
+logger = logging.getLogger("MyJarvisServer")
 
-app = FastAPI(title="MyJarvice Host Server", version="2.0.0")
+app = FastAPI(title="MyJarvis Host Server", version="2.0.0")
 
 # --- Configuration ---
 OLLAMA_URL = "http://localhost:11434/api/chat"
 DEFAULT_MODEL = "gemma4-e4b"          # Local Ollama model
-OLLAMA_TIMEOUT = 120                   # seconds — generous so the real model always answers (Phase 1 fix)
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jarvice.db")
+OLLAMA_TIMEOUT = 120                   # seconds — generous so the real model always answers
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jarvis.db")
+
 MAX_HISTORY_TURNS = 8                  # how many past messages to keep in context per session
 
 
@@ -674,9 +675,10 @@ def get_root():
     return {"status": "JARVIS Host Server Online", "time": datetime.datetime.now().isoformat()}
 
 
+@app.websocket("/ws/jarvis")
 @app.websocket("/ws/jarvice")
-async def websocket_jarvice_endpoint(websocket: WebSocket):
-    token = os.environ.get("JARVICE_API_TOKEN", "jarvis_local_token").strip()
+async def websocket_jarvis_endpoint(websocket: WebSocket):
+    token = os.environ.get("JARVIS_API_TOKEN", os.environ.get("JARVICE_API_TOKEN", "jarvis_local_token")).strip()
     auth = websocket.headers.get("authorization", "")
 
     if token and auth and auth != f"Bearer {token}":
@@ -685,7 +687,8 @@ async def websocket_jarvice_endpoint(websocket: WebSocket):
         return
 
     await websocket.accept()
-    logger.info("✅ Jarvice Android Client connected successfully over WebSocket.")
+    logger.info("✅ Jarvis Android Client connected successfully over WebSocket.")
+
 
 
     history: List[Dict[str, str]] = []  # per-connection conversation memory
