@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -66,7 +65,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -86,21 +84,39 @@ import com.example.myjarvice.data.JarviceMessage
 import com.example.myjarvice.data.PendingEmail
 import com.example.myjarvice.data.SettingsStore
 import com.example.myjarvice.theme.ArcGold
-import com.example.myjarvice.theme.JarvisBlue
 import com.example.myjarvice.theme.JarvisCyan
 import com.example.myjarvice.theme.JarvisDarkBackground
 import com.example.myjarvice.theme.JarvisSurfaceBorder
 import com.example.myjarvice.theme.JarvisSurfaceDark
+import com.example.myjarvice.theme.JarvisSurfaceElevated
 import com.example.myjarvice.theme.OfflineGray
 import com.example.myjarvice.theme.OnlineGreen
 import com.example.myjarvice.theme.TextPrimary
 import com.example.myjarvice.theme.TextSecondary
+import com.example.myjarvice.theme.TextTertiary
+import com.example.myjarvice.theme.UserBubbleBg
 import com.example.myjarvice.ui.JarvisArcReactor
+import com.example.myjarvice.ui.icons.IconActivity
+import com.example.myjarvice.ui.icons.IconCopy
+import com.example.myjarvice.ui.icons.IconDocument
+import com.example.myjarvice.ui.icons.IconMail
+import com.example.myjarvice.ui.icons.IconMenu
+import com.example.myjarvice.ui.icons.IconMessage
+import com.example.myjarvice.ui.icons.IconMicrophone
+import com.example.myjarvice.ui.icons.IconNewChat
+import com.example.myjarvice.ui.icons.IconPlus
+import com.example.myjarvice.ui.icons.IconSend
+import com.example.myjarvice.ui.icons.IconSettings
+import com.example.myjarvice.ui.icons.IconSparkles
+import com.example.myjarvice.ui.icons.IconSpeaker
+import com.example.myjarvice.ui.icons.IconTrash
+import com.example.myjarvice.ui.icons.IconVoiceWaveform
 import com.example.myjarvice.ui.voice.VoiceInfoDialog
 import com.example.myjarvice.ui.voice.VoiceModeScreen
 import com.example.myjarvice.ui.voice.VoicePickerDialog
 import com.example.myjarvice.wake.WakeWordService
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -185,9 +201,9 @@ fun MainScreen(
     if (currentPendingAction != null) {
         AlertDialog(
             onDismissRequest = { viewModel.resolvePendingAction(false) },
-            title = { Text("Confirm Phone Action", color = JarvisCyan) },
-            text = { Text("Allow JARVIS to ${currentPendingAction.type.lowercase().replace('_', ' ')}: ${currentPendingAction.query}?", color = TextPrimary) },
-            confirmButton = { TextButton(onClick = { viewModel.resolvePendingAction(true) }) { Text("Allow", color = JarvisCyan) } },
+            title = { Text("Confirm Device Action", color = TextPrimary, fontWeight = FontWeight.SemiBold) },
+            text = { Text("Allow JARVIS to ${currentPendingAction.type.lowercase().replace('_', ' ')}: ${currentPendingAction.query}?", color = TextSecondary) },
+            confirmButton = { TextButton(onClick = { viewModel.resolvePendingAction(true) }) { Text("Allow", color = JarvisCyan, fontWeight = FontWeight.SemiBold) } },
             dismissButton = { TextButton(onClick = { viewModel.resolvePendingAction(false) }) { Text("Deny", color = TextSecondary) } },
             containerColor = JarvisSurfaceDark
         )
@@ -212,15 +228,13 @@ fun MainScreen(
         )
     }
 
-    val screenBg = Brush.verticalGradient(listOf(Color(0xFF0D121D), Color(0xFF060910)))
-
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
-                drawerContainerColor = Color(0xFF0D131F),
+                drawerContainerColor = JarvisSurfaceDark,
                 drawerShape = RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp),
-                modifier = Modifier.width(310.dp)
+                modifier = Modifier.width(300.dp)
             ) {
                 HistoryDrawerContent(
                     savedSessions = savedSessions,
@@ -246,13 +260,12 @@ fun MainScreen(
             }
         }
     ) {
-        Box(modifier = modifier.fillMaxSize()) {
+        Box(modifier = modifier.fillMaxSize().background(JarvisDarkBackground)) {
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
                 containerColor = JarvisDarkBackground,
                 topBar = {
                     ChatTopBar(
-                        serverIp = serverIp,
                         connectionStatus = connectionStatus,
                         onOpenDrawer = { coroutineScope.launch { drawerState.open() } },
                         onStatusClick = { showIpDialog = true },
@@ -264,11 +277,10 @@ fun MainScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(screenBg)
                         .padding(innerPadding)
                         .imePadding()
                 ) {
-                    // Main Content Area: Empty Hero State OR Active Message Stream
+                    // Content Area: Empty Hero OR Chat Feed
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -297,7 +309,7 @@ fun MainScreen(
                         }
                     }
 
-                    // Floating ChatGPT-style Bottom Bar
+                    // Floating Bottom Input Bar (ChatGPT / Gemini style)
                     FloatingInputBar(
                         textInput = textInput,
                         onTextChange = { textInput = it },
@@ -320,7 +332,7 @@ fun MainScreen(
                 }
             }
 
-            // Fullscreen ChatGPT-style Arc Reactor Voice Mode
+            // Fullscreen Voice Mode (Gemini / ChatGPT Live style)
             AnimatedVisibility(
                 visible = voiceModeActive,
                 enter = fadeIn(animationSpec = tween(220)),
@@ -344,11 +356,10 @@ fun MainScreen(
 }
 
 /**
- * Top App Bar (ChatGPT mobile layout)
+ * Top App Bar (Modern Clean Standard)
  */
 @Composable
 private fun ChatTopBar(
-    serverIp: String,
     connectionStatus: ConnectionStatus,
     onOpenDrawer: () -> Unit,
     onStatusClick: () -> Unit,
@@ -358,23 +369,21 @@ private fun ChatTopBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFF0D121D))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .height(56.dp)
+            .background(JarvisDarkBackground)
+            .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        // Left: History Drawer Icon (☰)
+        // Left: Menu Icon
         IconButton(
             onClick = onOpenDrawer,
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(JarvisSurfaceDark.copy(alpha = 0.6f))
+            modifier = Modifier.size(40.dp)
         ) {
-            Text("☰", fontSize = 18.sp, color = JarvisCyan)
+            IconMenu(tint = TextSecondary, size = 20.dp)
         }
 
-        // Center: Model Selector Dropdown Pill
+        // Center: Model Selector Chip
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(20.dp))
@@ -384,44 +393,45 @@ private fun ChatTopBar(
                 .padding(horizontal = 14.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val (dotColor, _) = when (connectionStatus) {
-                ConnectionStatus.CONNECTED -> OnlineGreen to "Online"
-                ConnectionStatus.CONNECTING -> ArcGold to "Connecting"
-                ConnectionStatus.DISCONNECTED -> OfflineGray to "Offline"
-                ConnectionStatus.ERROR -> Color(0xFFFF5A5A) to "Error"
+            val dotColor = when (connectionStatus) {
+                ConnectionStatus.CONNECTED -> OnlineGreen
+                ConnectionStatus.CONNECTING -> ArcGold
+                ConnectionStatus.DISCONNECTED -> OfflineGray
+                ConnectionStatus.ERROR -> Color(0xFFEF4444)
             }
 
             Box(
                 modifier = Modifier
-                    .size(7.dp)
+                    .size(6.dp)
                     .clip(CircleShape)
                     .background(dotColor)
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                "JARVIS 4.0",
+                "JARVIS",
                 color = TextPrimary,
                 fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.SansSerif
+                fontWeight = FontWeight.SemiBold
             )
             Spacer(Modifier.width(4.dp))
-            Text("▾", color = TextSecondary, fontSize = 12.sp)
+            Text(
+                "4.0",
+                color = TextTertiary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Normal
+            )
         }
 
-        // Right Action Icons: New Chat & Voice Mode
+        // Right Actions: New Chat & Voice Mode
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(
                 onClick = onNewChat,
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(JarvisSurfaceDark.copy(alpha = 0.6f))
+                modifier = Modifier.size(38.dp)
             ) {
-                Text("➕", fontSize = 13.sp, color = JarvisCyan)
+                IconNewChat(tint = TextSecondary, size = 20.dp)
             }
 
             IconButton(
@@ -429,17 +439,16 @@ private fun ChatTopBar(
                 modifier = Modifier
                     .size(38.dp)
                     .clip(CircleShape)
-                    .background(JarvisCyan.copy(alpha = 0.15f))
-                    .border(1.dp, JarvisCyan.copy(alpha = 0.4f), CircleShape)
+                    .background(JarvisSurfaceElevated)
             ) {
-                Text("🎧", fontSize = 16.sp)
+                IconVoiceWaveform(tint = JarvisCyan, size = 18.dp)
             }
         }
     }
 }
 
 /**
- * ChatGPT-Style Sidebar Navigation Drawer (Chat History)
+ * Sidebar Navigation Drawer (Chat History)
  */
 @Composable
 private fun HistoryDrawerContent(
@@ -455,70 +464,39 @@ private fun HistoryDrawerContent(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // Drawer Header
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            JarvisArcReactor(size = 32.dp)
-            Spacer(Modifier.width(10.dp))
-            Column {
-                Text(
-                    "JARVIS AI",
-                    color = JarvisCyan,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.sp
-                )
-                Text(
-                    "Conversation History",
-                    color = TextSecondary,
-                    fontSize = 11.sp
-                )
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        // "➕ New Chat" Button (ChatGPT style)
+        // "+ New chat" Button
         Button(
             onClick = onNewChat,
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF162030)),
+            colors = ButtonDefaults.buttonColors(containerColor = JarvisSurfaceElevated),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, JarvisCyan.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                .border(1.dp, JarvisSurfaceBorder, RoundedCornerShape(12.dp))
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Start,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("➕", fontSize = 13.sp, color = JarvisCyan)
+                IconPlus(tint = TextPrimary, size = 16.dp)
                 Spacer(Modifier.width(10.dp))
                 Text(
                     "New chat",
                     color = TextPrimary,
                     fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.Medium
                 )
             }
         }
 
-        Spacer(Modifier.height(14.dp))
-        HorizontalDivider(color = Color(0xFF1F293B), thickness = 1.dp)
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(18.dp))
 
-        // Sessions List
         Text(
-            "RECENT CONVERSATIONS",
-            color = TextSecondary.copy(alpha = 0.7f),
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = 1.sp,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
+            "Recent",
+            color = TextSecondary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
 
         if (savedSessions.isEmpty()) {
@@ -529,10 +507,9 @@ private fun HistoryDrawerContent(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    "No saved conversations yet.\nStart asking JARVIS questions!",
-                    color = TextSecondary.copy(alpha = 0.5f),
-                    fontSize = 12.sp,
-                    textAlign = TextAlign.Center
+                    "No conversation history",
+                    color = TextTertiary,
+                    fontSize = 13.sp
                 )
             }
         } else {
@@ -540,15 +517,15 @@ private fun HistoryDrawerContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 items(savedSessions, key = { it.id }) { session ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(10.dp))
                             .clickable { onSelectSession(session) }
-                            .padding(horizontal = 8.dp, vertical = 10.dp),
+                            .padding(horizontal = 10.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -556,7 +533,7 @@ private fun HistoryDrawerContent(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("💬", fontSize = 13.sp)
+                            IconMessage(tint = TextTertiary, size = 16.dp)
                             Spacer(Modifier.width(10.dp))
                             Text(
                                 session.title,
@@ -569,56 +546,65 @@ private fun HistoryDrawerContent(
 
                         IconButton(
                             onClick = { onDeleteSession(session.id) },
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(28.dp)
                         ) {
-                            Text("🗑️", fontSize = 11.sp)
+                            IconTrash(tint = TextTertiary, size = 14.dp)
                         }
                     }
                 }
             }
         }
 
-        HorizontalDivider(color = Color(0xFF1F293B), thickness = 1.dp)
+        HorizontalDivider(color = JarvisSurfaceBorder, thickness = 1.dp)
         Spacer(Modifier.height(10.dp))
 
-        // Drawer Bottom Actions
+        // Bottom Actions: Settings & Clear History
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(10.dp))
                 .clickable { onOpenSettings() }
-                .padding(horizontal = 8.dp, vertical = 10.dp),
+                .padding(horizontal = 10.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("⚙️", fontSize = 15.sp)
-            Spacer(Modifier.width(10.dp))
-            Text("Settings & Voice Match", color = TextPrimary, fontSize = 13.sp)
+            IconSettings(tint = TextSecondary, size = 18.dp)
+            Spacer(Modifier.width(12.dp))
+            Text("Settings", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         }
 
         if (savedSessions.isNotEmpty()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(10.dp))
                     .clickable { onClearAllHistory() }
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("🧹", fontSize = 13.sp)
-                Spacer(Modifier.width(10.dp))
-                Text("Clear All History", color = Color(0xFFFF6B6B), fontSize = 12.sp)
+                IconTrash(tint = Color(0xFFEF4444), size = 16.dp)
+                Spacer(Modifier.width(12.dp))
+                Text("Clear conversations", color = Color(0xFFEF4444), fontSize = 13.sp)
             }
         }
     }
 }
 
 /**
- * Empty Chat State Hero (ChatGPT style with central pulsing Arc Reactor)
+ * Empty Chat State Hero (Gemini & ChatGPT Standards)
  */
 @Composable
 private fun EmptyChatHero(
     onPromptSelected: (String) -> Unit
 ) {
+    val greeting = remember {
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        when {
+            hour < 12 -> "Good morning, Sir"
+            hour < 18 -> "Good afternoon, Sir"
+            else -> "Good evening, Sir"
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -626,41 +612,60 @@ private fun EmptyChatHero(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Central Arc Reactor Hero
+        // Delicate Precision Arc Reactor Emblem
         JarvisArcReactor(
-            size = 110.dp,
+            size = 72.dp,
             isListening = false,
             isSpeaking = false
         )
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(24.dp))
 
         Text(
-            "What can I help with today, Sir?",
+            greeting,
             color = TextPrimary,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center
         )
 
         Spacer(Modifier.height(6.dp))
 
         Text(
-            "JARVIS Mark VII Neural Core • Gemma 4 7.5B",
+            "How can I assist your workflow today?",
             color = TextSecondary,
-            fontSize = 12.sp,
-            fontFamily = FontFamily.Monospace,
+            fontSize = 14.sp,
             textAlign = TextAlign.Center
         )
 
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(32.dp))
 
-        // Quick Suggestion Cards in 2x2 Grid
+        // Professional 2x2 Suggestion Cards
         val promptCards = listOf(
-            Triple("⚡ System Diagnostics", "Check battery, memory & network status", "Jarvis, run a complete device health and battery check."),
-            Triple("📁 Drive RAG Engine", "Search documents across D: and E: drives", "Jarvis, search my local indexed files for recent project documents."),
-            Triple("✉️ Compose Email", "Draft a quick status update email", "Jarvis, draft a polite status update email to the team."),
-            Triple("💡 CS & AI Insights", "Analyze algorithms & architectures", "Jarvis, explain modern transformer multi-head attention simply.")
+            PromptCardItem(
+                title = "Device Health",
+                desc = "Run diagnostics & battery telemetry",
+                prompt = "Jarvis, run a complete device health and battery check.",
+                icon = { IconActivity(tint = JarvisCyan, size = 18.dp) }
+            ),
+            PromptCardItem(
+                title = "Local Document RAG",
+                desc = "Query indexed files across drives",
+                prompt = "Jarvis, search my local indexed files for recent project documents.",
+                icon = { IconDocument(tint = Color(0xFF60A5FA), size = 18.dp) }
+            ),
+            PromptCardItem(
+                title = "Compose Message",
+                desc = "Draft team updates & emails",
+                prompt = "Jarvis, draft a polite status update email to the team.",
+                icon = { IconMail(tint = Color(0xFF34D399), size = 18.dp) }
+            ),
+            PromptCardItem(
+                title = "AI Architecture",
+                desc = "Explain models & algorithms",
+                prompt = "Jarvis, explain modern transformer multi-head attention simply.",
+                icon = { IconSparkles(tint = ArcGold, size = 18.dp) }
+            )
         )
 
         Column(
@@ -672,11 +677,10 @@ private fun EmptyChatHero(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    rowItems.forEach { (title, subtitle, prompt) ->
+                    rowItems.forEach { item ->
                         PromptSuggestionCard(
-                            title = title,
-                            subtitle = subtitle,
-                            onClick = { onPromptSelected(prompt) },
+                            item = item,
+                            onClick = { onPromptSelected(item.prompt) },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -686,39 +690,59 @@ private fun EmptyChatHero(
     }
 }
 
+private data class PromptCardItem(
+    val title: String,
+    val desc: String,
+    val prompt: String,
+    val icon: @Composable () -> Unit
+)
+
 @Composable
 private fun PromptSuggestionCard(
-    title: String,
-    subtitle: String,
+    item: PromptCardItem,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFF141A26))
-            .border(1.dp, Color(0xFF222D3E), RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(JarvisSurfaceDark)
+            .border(1.dp, JarvisSurfaceBorder, RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .padding(14.dp)
     ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(JarvisSurfaceElevated),
+            contentAlignment = Alignment.Center
+        ) {
+            item.icon()
+        }
+
+        Spacer(Modifier.height(10.dp))
+
         Text(
-            title,
-            color = JarvisCyan,
+            item.title,
+            color = TextPrimary,
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold
         )
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(2.dp))
         Text(
-            subtitle,
+            item.desc,
             color = TextSecondary,
             fontSize = 11.sp,
-            lineHeight = 15.sp
+            lineHeight = 15.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
 
 /**
- * Message Feed (ChatGPT stream layout)
+ * Message Feed (Gemini / ChatGPT Clean Reading Flow)
  */
 @Composable
 private fun ChatFeed(
@@ -738,8 +762,8 @@ private fun ChatFeed(
 
     LazyColumn(
         state = listState,
-        modifier = modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        modifier = modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         items(chatHistory) { msg ->
             if (msg.sender == "USER") {
@@ -755,15 +779,12 @@ private fun ChatFeed(
 
         if (isThinking) {
             item {
-                ThinkingIndicatorBubble()
+                ThinkingIndicator()
             }
         }
     }
 }
 
-/**
- * User Chat Bubble (ChatGPT style anchored on right)
- */
 @Composable
 private fun UserMessageBubble(msg: JarviceMessage) {
     Row(
@@ -774,13 +795,12 @@ private fun UserMessageBubble(msg: JarviceMessage) {
             modifier = Modifier
                 .widthIn(max = 290.dp)
                 .clip(RoundedCornerShape(18.dp))
-                .background(Color(0xFF1C2433))
-                .border(1.dp, Color(0xFF2E3D54), RoundedCornerShape(18.dp))
+                .background(UserBubbleBg)
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
             Text(
                 msg.text,
-                color = Color.White,
+                color = TextPrimary,
                 fontSize = 14.sp,
                 lineHeight = 20.sp
             )
@@ -788,9 +808,6 @@ private fun UserMessageBubble(msg: JarviceMessage) {
     }
 }
 
-/**
- * JARVIS Chat Bubble (ChatGPT style with Arc Reactor Avatar & Action Toolbar)
- */
 @Composable
 private fun JarvisMessageBubble(
     msg: JarviceMessage,
@@ -801,43 +818,37 @@ private fun JarvisMessageBubble(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Start
     ) {
-        // Mini Arc Reactor Avatar
+        // Mini Avatar
         Box(
             modifier = Modifier
                 .padding(top = 2.dp)
-                .size(30.dp)
+                .size(24.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF111824))
-                .border(1.dp, JarvisCyan.copy(alpha = 0.5f), CircleShape),
+                .background(JarvisSurfaceDark),
             contentAlignment = Alignment.Center
         ) {
-            JarvisArcReactor(size = 22.dp)
+            JarvisArcReactor(size = 18.dp)
         }
 
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(12.dp))
 
         Column(modifier = Modifier.weight(1f)) {
-            // Header Label
+            // Header
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
                     "JARVIS",
-                    color = JarvisCyan,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.sp
+                    color = TextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(Color(0xFF162030))
-                        .padding(horizontal = 5.dp, vertical = 1.dp)
-                ) {
-                    Text("Gemma 4", color = TextSecondary, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
-                }
+                Text(
+                    "4.0",
+                    color = TextTertiary,
+                    fontSize = 11.sp
+                )
             }
 
             Spacer(Modifier.height(4.dp))
@@ -847,41 +858,46 @@ private fun JarvisMessageBubble(
                 msg.text,
                 color = TextPrimary,
                 fontSize = 14.sp,
-                lineHeight = 21.sp
+                lineHeight = 22.sp
             )
 
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(8.dp))
 
             // Action Toolbar (Copy, Speak, Timestamp)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Row(
-                    modifier = Modifier.clickable(onClick = onCopy),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable(onClick = onCopy)
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("📋", fontSize = 11.sp)
+                    IconCopy(tint = TextSecondary, size = 14.dp)
                     Spacer(Modifier.width(4.dp))
-                    Text("Copy", color = TextSecondary, fontSize = 10.sp)
+                    Text("Copy", color = TextSecondary, fontSize = 11.sp)
                 }
 
                 Row(
-                    modifier = Modifier.clickable(onClick = onSpeak),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable(onClick = onSpeak)
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("🔊", fontSize = 11.sp)
+                    IconSpeaker(tint = TextSecondary, size = 14.dp)
                     Spacer(Modifier.width(4.dp))
-                    Text("Listen", color = TextSecondary, fontSize = 10.sp)
+                    Text("Listen", color = TextSecondary, fontSize = 11.sp)
                 }
 
                 val time = formatTimestamp(msg.timestamp)
                 if (time.isNotBlank()) {
                     Text(
                         time,
-                        color = TextSecondary.copy(alpha = 0.5f),
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace
+                        color = TextTertiary,
+                        fontSize = 11.sp
                     )
                 }
             }
@@ -889,11 +905,8 @@ private fun JarvisMessageBubble(
     }
 }
 
-/**
- * Thinking Bubble (ChatGPT-style streaming indicator)
- */
 @Composable
-private fun ThinkingIndicatorBubble() {
+private fun ThinkingIndicator() {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Start,
@@ -901,28 +914,28 @@ private fun ThinkingIndicatorBubble() {
     ) {
         Box(
             modifier = Modifier
-                .size(30.dp)
+                .size(24.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF111824)),
+                .background(JarvisSurfaceDark),
             contentAlignment = Alignment.Center
         ) {
-            JarvisArcReactor(size = 22.dp, isSpeaking = true)
+            JarvisArcReactor(size = 18.dp, isSpeaking = true)
         }
 
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(12.dp))
 
         val transition = rememberInfiniteTransition(label = "thinking")
         val alpha by transition.animateFloat(
             initialValue = 0.3f,
             targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(700, easing = LinearEasing), RepeatMode.Reverse),
+            animationSpec = infiniteRepeatable(tween(600, easing = LinearEasing), RepeatMode.Reverse),
             label = "thinkingAlpha"
         )
 
         Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(14.dp))
-                .background(Color(0xFF131A26))
+                .clip(RoundedCornerShape(12.dp))
+                .background(JarvisSurfaceDark)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -930,14 +943,14 @@ private fun ThinkingIndicatorBubble() {
                 "Thinking...",
                 color = JarvisCyan.copy(alpha = alpha),
                 fontSize = 13.sp,
-                fontFamily = FontFamily.Monospace
+                fontWeight = FontWeight.Medium
             )
         }
     }
 }
 
 /**
- * Floating Bottom Input Bar (ChatGPT mobile design)
+ * Floating Bottom Input Bar (ChatGPT / Gemini Pill Standard)
  */
 @Composable
 private fun FloatingInputBar(
@@ -960,18 +973,18 @@ private fun FloatingInputBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(28.dp))
-                .background(Color(0xFF141924))
-                .border(1.dp, Color(0xFF242E3F), RoundedCornerShape(28.dp))
+                .background(JarvisSurfaceDark)
+                .border(1.dp, JarvisSurfaceBorder, RoundedCornerShape(28.dp))
                 .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // (+) Tool Attachment Button
+            // (+) Tool Attachment
             Box {
                 IconButton(
                     onClick = onToggleToolsMenu,
                     modifier = Modifier.size(38.dp)
                 ) {
-                    Text("➕", fontSize = 14.sp, color = JarvisCyan)
+                    IconPlus(tint = TextSecondary, size = 18.dp)
                 }
 
                 DropdownMenu(
@@ -980,15 +993,18 @@ private fun FloatingInputBar(
                     modifier = Modifier.background(JarvisSurfaceDark)
                 ) {
                     DropdownMenuItem(
-                        text = { Text("📁 Search Local Drive Docs", color = TextPrimary, fontSize = 13.sp) },
+                        text = { Text("Search Local Drive Docs", color = TextPrimary, fontSize = 13.sp) },
+                        leadingIcon = { IconDocument(tint = JarvisCyan, size = 16.dp) },
                         onClick = { onToolSelected("Jarvis, search indexed documents on my PC drives.") }
                     )
                     DropdownMenuItem(
-                        text = { Text("⚡ Check Device Health", color = TextPrimary, fontSize = 13.sp) },
+                        text = { Text("Check Device Health", color = TextPrimary, fontSize = 13.sp) },
+                        leadingIcon = { IconActivity(tint = JarvisCyan, size = 16.dp) },
                         onClick = { onToolSelected("Jarvis, give me a full battery and performance diagnostics.") }
                     )
                     DropdownMenuItem(
-                        text = { Text("📅 Today's Calendar Agenda", color = TextPrimary, fontSize = 13.sp) },
+                        text = { Text("Today's Agenda", color = TextPrimary, fontSize = 13.sp) },
+                        leadingIcon = { IconSparkles(tint = ArcGold, size = 16.dp) },
                         onClick = { onToolSelected("Jarvis, what events are on my calendar today?") }
                     )
                 }
@@ -998,7 +1014,7 @@ private fun FloatingInputBar(
             OutlinedTextField(
                 value = textInput,
                 onValueChange = onTextChange,
-                placeholder = { Text("Ask JARVIS anything...", color = TextSecondary, fontSize = 14.sp) },
+                placeholder = { Text("Ask JARVIS...", color = TextSecondary, fontSize = 14.sp) },
                 modifier = Modifier.weight(1f),
                 maxLines = 4,
                 colors = OutlinedTextFieldDefaults.colors(
@@ -1012,7 +1028,7 @@ private fun FloatingInputBar(
                 )
             )
 
-            // Right Action: Send Button OR Voice / Headphones
+            // Right Action: Send Button OR Voice / Waveform
             if (textInput.isNotBlank()) {
                 IconButton(
                     onClick = onSend,
@@ -1021,7 +1037,7 @@ private fun FloatingInputBar(
                         .clip(CircleShape)
                         .background(JarvisCyan)
                 ) {
-                    Text("⬆", color = Color.Black, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    IconSend(tint = Color.Black, size = 16.dp)
                 }
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1029,7 +1045,10 @@ private fun FloatingInputBar(
                         onClick = onQuickVoice,
                         modifier = Modifier.size(36.dp)
                     ) {
-                        Text(if (isListening) "🎙️" else "🎤", fontSize = 16.sp)
+                        IconMicrophone(
+                            tint = if (isListening) JarvisCyan else TextSecondary,
+                            size = 18.dp
+                        )
                     }
 
                     IconButton(
@@ -1037,9 +1056,9 @@ private fun FloatingInputBar(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF1C2432))
+                            .background(JarvisSurfaceElevated)
                     ) {
-                        Text("🎧", fontSize = 15.sp)
+                        IconVoiceWaveform(tint = JarvisCyan, size = 16.dp)
                     }
                 }
             }
@@ -1048,7 +1067,7 @@ private fun FloatingInputBar(
 }
 
 /**
- * Server Configuration Dialog with Quick Presets
+ * Server Configuration Dialog
  */
 @Composable
 private fun ServerConfigDialog(
@@ -1062,15 +1081,15 @@ private fun ServerConfigDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("HOST CONNECTION", color = JarvisCyan, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold) },
+        title = { Text("Host Connection", color = TextPrimary, fontWeight = FontWeight.SemiBold) },
         text = {
             Column {
                 Text(
-                    "Select a quick network preset or enter your PC server address:",
+                    "Select a network preset or specify host address:",
                     color = TextSecondary,
                     fontSize = 12.sp
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(12.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1078,31 +1097,31 @@ private fun ServerConfigDialog(
                 ) {
                     Button(
                         onClick = { tempIp = "127.0.0.1:8000"; tempToken = "jarvis_local_token" },
-                        colors = ButtonDefaults.buttonColors(containerColor = JarvisCyan.copy(alpha = 0.2f)),
+                        colors = ButtonDefaults.buttonColors(containerColor = JarvisSurfaceElevated),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("⚡ USB", color = JarvisCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("USB", color = JarvisCyan, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
                     Button(
                         onClick = { tempIp = "192.168.1.37:8000"; tempToken = "jarvis_local_token" },
-                        colors = ButtonDefaults.buttonColors(containerColor = JarvisBlue.copy(alpha = 0.2f)),
+                        colors = ButtonDefaults.buttonColors(containerColor = JarvisSurfaceElevated),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("📶 Wi-Fi", color = JarvisBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("Wi-Fi", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
                     Button(
                         onClick = { tempIp = "192.168.137.1:8000"; tempToken = "jarvis_local_token" },
-                        colors = ButtonDefaults.buttonColors(containerColor = ArcGold.copy(alpha = 0.2f)),
+                        colors = ButtonDefaults.buttonColors(containerColor = JarvisSurfaceElevated),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("📱 Hotspot", color = ArcGold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text("Hotspot", color = ArcGold, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(14.dp))
                 OutlinedTextField(
                     value = tempIp,
                     onValueChange = { tempIp = it },
@@ -1140,12 +1159,12 @@ private fun ServerConfigDialog(
                 },
                 enabled = tempIp.isNotBlank()
             ) {
-                Text("CONNECT", color = JarvisCyan, fontWeight = FontWeight.Bold)
+                Text("Connect", color = JarvisCyan, fontWeight = FontWeight.SemiBold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("CANCEL", color = TextSecondary)
+                Text("Cancel", color = TextSecondary)
             }
         },
         containerColor = JarvisSurfaceDark

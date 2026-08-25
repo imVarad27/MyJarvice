@@ -256,10 +256,10 @@ fun SettingsScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    if (isEnrolled) "⚡ Retrain Voice Model" else "🎙️ Calibrate My Voice (3 Steps)",
+                    if (isEnrolled) "Retrain Voice Profile" else "Calibrate Voice Profile (3 Steps)",
                     color = scheme.primary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp
                 )
             }
 

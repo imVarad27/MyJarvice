@@ -2,20 +2,28 @@ package com.example.myjarvice.theme
 
 import androidx.compose.ui.graphics.Color
 
-val JarvisCyan = Color(0xFF00F0FF)
-val JarvisBlue = Color(0xFF0077FF)
-val ArcGold = Color(0xFFFFC700)
-val JarvisDarkBackground = Color(0xFF060B14)
-val JarvisSurfaceDark = Color(0xFF0F1829)
-val JarvisSurfaceBorder = Color(0xFF1B2A45)
-val TextPrimary = Color(0xFFE0F7FF)
-val TextSecondary = Color(0xFF8AA8C7)
-val GlowCyan = Color(0x3300F0FF)
+// Modern Dark Palette (Gemini & ChatGPT standards)
+val JarvisDarkBackground = Color(0xFF131314)
+val JarvisSurfaceDark = Color(0xFF1E1F20)
+val JarvisSurfaceElevated = Color(0xFF282A2C)
+val JarvisSurfaceBorder = Color(0xFF333538)
 
-// --- Added for the refreshed HUD ---
-val JarvisBgTop = Color(0xFF0A1424)        // radial glow top
-val JarvisBgBottom = Color(0xFF04070E)     // deep space bottom
-val OnlineGreen = Color(0xFF00FF88)
-val OfflineGray = Color(0xFF5A6B82)
-val UserBubbleBg = Color(0xFF10233F)       // muted blue for the user
-val AiBubbleBg = Color(0xFF0C1626)         // near-surface for JARVICE
+val TextPrimary = Color(0xFFE3E3E3)
+val TextSecondary = Color(0xFF8E918F)
+val TextTertiary = Color(0xFF5E6266)
+
+// Refined Accents
+val JarvisCyan = Color(0xFF38BDF8)
+val JarvisBlue = Color(0xFF3B82F6)
+val ArcGold = Color(0xFFF59E0B)
+val GlowCyan = Color(0x2238BDF8)
+
+val OnlineGreen = Color(0xFF10B981)
+val OfflineGray = Color(0xFF71717A)
+
+// Message Feed
+val UserBubbleBg = Color(0xFF282A2C)
+val AiBubbleBg = Color.Transparent
+
+val JarvisBgTop = Color(0xFF131314)
+val JarvisBgBottom = Color(0xFF0E0E10)
