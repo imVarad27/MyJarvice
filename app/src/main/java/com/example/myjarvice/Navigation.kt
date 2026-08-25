@@ -10,8 +10,6 @@ import com.example.myjarvice.theme.ThemeMode
 import com.example.myjarvice.ui.main.MainScreen
 import com.example.myjarvice.ui.settings.SettingsScreen
 import com.example.myjarvice.ui.splash.SplashScreen
-import com.example.myjarvice.ui.welcome.WelcomeScreen
-import com.example.myjarvice.wake.WakeEvents
 
 @Composable
 fun MainNavigation(
@@ -23,7 +21,7 @@ fun MainNavigation(
     wakeEnabled: Boolean,
     onWakeEnabled: (Boolean) -> Unit
 ) {
-    // A wake-word launch jumps straight to the chat; a normal launch shows the splash.
+    // Splash screen briefly initializes then transitions directly to Main Chat!
     val backStack = rememberNavBackStack(if (startOnChat) Main else Splash)
 
     NavDisplay(
@@ -33,31 +31,15 @@ fun MainNavigation(
             entry<Splash> {
                 SplashScreen(onFinish = {
                     backStack.clear()
-                    backStack.add(Welcome)
+                    backStack.add(Main)
                 })
             }
-            entry<Welcome> {
-                WelcomeScreen(
-                    onStartChat = { backStack.add(Main) },
-                    onVoiceMode = {
-                        // Reuses the wake-word trigger the chat screen already listens on,
-                        // so the chat opens straight into full-screen voice mode.
-                        WakeEvents.voiceTrigger.value = true
-                        backStack.add(Main)
-                    },
-                    onSettings = { backStack.add(Settings) }
-                )
-            }
             entry<Main> {
-                // Deliberately not safeDrawingPadding(): that also insets for the IME,
-                // which double-counts against the window's own resize and shoves the
-                // header off-screen. The chat screen handles the keyboard itself.
                 MainScreen(
                     onOpenSettings = { backStack.add(Settings) },
                     modifier = Modifier.systemBarsPadding()
                 )
             }
-
             entry<Settings> {
                 SettingsScreen(
                     themeMode = themeMode,
@@ -83,4 +65,3 @@ fun MainNavigation(
         }
     )
 }
-

@@ -3,22 +3,25 @@ package com.example.myjarvice.ui.main
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.myjarvice.data.ChatHistoryStore
+import com.example.myjarvice.data.ChatSession
 import com.example.myjarvice.data.ConnectionStatus
 import com.example.myjarvice.data.DeviceActionExecutor
 import com.example.myjarvice.data.DeviceContextProvider
-import com.example.myjarvice.data.JarviceMessage
 import com.example.myjarvice.data.JarviceAction
+import com.example.myjarvice.data.JarviceMessage
 import com.example.myjarvice.data.JarviceWebSocketClient
 import com.example.myjarvice.data.PendingEmail
 import com.example.myjarvice.data.SettingsStore
 import com.example.myjarvice.data.SpeechManager
 import com.example.myjarvice.data.VoiceOption
 import com.example.myjarvice.wake.WakeEvents
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -26,6 +29,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val deviceContext = DeviceContextProvider(application.applicationContext)
     val speechManager = SpeechManager(application.applicationContext)
     private val actionExecutor = DeviceActionExecutor(application.applicationContext)
+    private val historyStore = ChatHistoryStore(application.applicationContext)
 
     val connectionStatus: StateFlow<ConnectionStatus> = wsClient.connectionStatus
     val chatHistory: StateFlow<List<JarviceMessage>> = wsClient.chatHistory
@@ -39,6 +43,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val serverIp: StateFlow<String> = _serverIp.asStateFlow()
     private val _serverToken = MutableStateFlow(settings.serverToken)
     val serverToken: StateFlow<String> = _serverToken.asStateFlow()
+
+    /** Saved historical chat sessions for ChatGPT-style sidebar */
+    private val _savedSessions = MutableStateFlow<List<ChatSession>>(emptyList())
+    val savedSessions: StateFlow<List<ChatSession>> = _savedSessions.asStateFlow()
+
+    private var currentSessionId: String = UUID.randomUUID().toString()
+    private var sessionCreatedAt: Long = System.currentTimeMillis()
 
     /** Full-screen, hands-free voice mode (the ChatGPT-style orb screen). */
     private val _voiceModeActive = MutableStateFlow(false)
@@ -64,16 +75,39 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val selectedVoiceId: StateFlow<String> = speechManager.selectedVoiceId
 
     init {
+        // Load existing session history into sidebar, but start with a clean new session on start
+        _savedSessions.value = historyStore.loadAllSessions()
+
         if (_serverIp.value.isNotBlank() && _serverToken.value.isNotBlank()) {
             wsClient.connect(_serverIp.value, _serverToken.value)
+        }
+
+        // Persist messages whenever chat history changes
+        viewModelScope.launch {
+            wsClient.chatHistory.collect { messages ->
+                if (messages.isNotEmpty()) {
+                    val userMsg = messages.firstOrNull { it.sender == "USER" }
+                    val rawTitle = userMsg?.text ?: "Conversation"
+                    val cleanTitle = if (rawTitle.length > 38) rawTitle.take(38) + "..." else rawTitle
+
+                    historyStore.saveSession(
+                        ChatSession(
+                            id = currentSessionId,
+                            title = cleanTitle,
+                            createdAt = sessionCreatedAt,
+                            updatedAt = System.currentTimeMillis(),
+                            messages = messages
+                        )
+                    )
+                    _savedSessions.value = historyStore.loadAllSessions()
+                }
+            }
         }
 
         viewModelScope.launch {
             wsClient.latestResponse.collect { msg ->
                 msg?.let {
                     _isThinking.value = false
-                    // Case-insensitive so both the server's "JARVIS" and the client's
-                    // "Jarvis (Offline)" placeholder are spoken.
                     if (it.sender.startsWith("JARVIS", ignoreCase = true)) {
                         speechManager.speak(it.text)
                     }
@@ -110,17 +144,40 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun startNewChat() {
+        currentSessionId = UUID.randomUUID().toString()
+        sessionCreatedAt = System.currentTimeMillis()
+        wsClient.clearChat()
+        _savedSessions.value = historyStore.loadAllSessions()
+    }
+
+    fun loadSession(session: ChatSession) {
+        currentSessionId = session.id
+        sessionCreatedAt = session.createdAt
+        wsClient.setChatHistory(session.messages)
+    }
+
+    fun deleteSession(sessionId: String) {
+        historyStore.deleteSession(sessionId)
+        _savedSessions.value = historyStore.loadAllSessions()
+        if (currentSessionId == sessionId) {
+            startNewChat()
+        }
+    }
+
+    fun clearAllHistory() {
+        historyStore.clearAll()
+        _savedSessions.value = emptyList()
+        startNewChat()
+    }
+
     /** Single entry point for listening, so every path re-arms the same way. */
     private fun beginListening() {
         speechManager.startListening(
             onResult = { voiceText -> sendQuery(voiceText) },
             onNoResult = {
-                // Silence or an engine hiccup ended the turn. In voice mode that must not
-                // leave the mic dead, so pick it back up after a short breath.
                 viewModelScope.launch {
                     delay(RELISTEN_DELAY_MS)
-                    // Never re-open the mic while a reply is still in flight; otherwise
-                    // room noise fires a second query on top of the one being answered.
                     if (_voiceModeActive.value && !_micMuted.value &&
                         !isSpeaking.value && !isListening.value && !_isThinking.value
                     ) {
@@ -193,7 +250,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun clearChat() {
-        wsClient.clearChat()
+        startNewChat()
     }
 
     fun speak(text: String) {
@@ -206,7 +263,6 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     /** Push-to-talk from the chat screen, without entering full-screen voice mode. */
     fun toggleVoiceInput() {
-
         if (isListening.value) {
             speechManager.stopListening()
         } else {

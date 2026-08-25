@@ -231,6 +231,11 @@ class JarviceWebSocketClient {
         _latestResponse.value = null
     }
 
+    fun setChatHistory(messages: List<JarviceMessage>) {
+        _chatHistory.value = messages
+    }
+
+
     fun disconnect() {
         keepConnected = false
         reconnectJob?.cancel()

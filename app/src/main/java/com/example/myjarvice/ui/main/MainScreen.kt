@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -40,21 +41,27 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,6 +72,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -72,6 +80,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.myjarvice.data.ChatSession
 import com.example.myjarvice.data.ConnectionStatus
 import com.example.myjarvice.data.JarviceMessage
 import com.example.myjarvice.data.PendingEmail
@@ -91,6 +100,7 @@ import com.example.myjarvice.ui.voice.VoiceInfoDialog
 import com.example.myjarvice.ui.voice.VoiceModeScreen
 import com.example.myjarvice.ui.voice.VoicePickerDialog
 import com.example.myjarvice.wake.WakeWordService
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -105,6 +115,7 @@ fun MainScreen(
 
     val connectionStatus by viewModel.connectionStatus.collectAsStateWithLifecycle()
     val chatHistory by viewModel.chatHistory.collectAsStateWithLifecycle()
+    val savedSessions by viewModel.savedSessions.collectAsStateWithLifecycle()
     val isSpeaking by viewModel.isSpeaking.collectAsStateWithLifecycle()
     val isListening by viewModel.isListening.collectAsStateWithLifecycle()
     val serverIp by viewModel.serverIp.collectAsStateWithLifecycle()
@@ -117,6 +128,9 @@ fun MainScreen(
     val selectedVoiceId by viewModel.selectedVoiceId.collectAsStateWithLifecycle()
     val pendingEmail by viewModel.pendingEmail.collectAsStateWithLifecycle()
     val isThinking by viewModel.isThinking.collectAsStateWithLifecycle()
+
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val coroutineScope = rememberCoroutineScope()
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -200,98 +214,131 @@ fun MainScreen(
 
     val screenBg = Brush.verticalGradient(listOf(Color(0xFF0D121D), Color(0xFF060910)))
 
-    Box(modifier = modifier.fillMaxSize()) {
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            containerColor = JarvisDarkBackground,
-            topBar = {
-                ChatTopBar(
-                    serverIp = serverIp,
-                    connectionStatus = connectionStatus,
-                    onOpenSettings = onOpenSettings,
-                    onStatusClick = { showIpDialog = true },
-                    onNewChat = { viewModel.clearChat() },
-                    onVoiceMode = { viewModel.enterVoiceMode() }
-                )
-            }
-        ) { innerPadding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(screenBg)
-                    .padding(innerPadding)
-                    .imePadding()
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet(
+                drawerContainerColor = Color(0xFF0D131F),
+                drawerShape = RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp),
+                modifier = Modifier.width(310.dp)
             ) {
-                // Main Content Area: Hero State OR Active Chat Feed
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                ) {
-                    if (chatHistory.isEmpty()) {
-                        EmptyChatHero(
-                            onPromptSelected = { prompt ->
-                                viewModel.sendQuery(prompt)
-                            }
-                        )
-                    } else {
-                        ChatFeed(
-                            chatHistory = chatHistory,
-                            isThinking = isThinking,
-                            onCopy = { text ->
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(ClipData.newPlainText("JARVIS", text))
-                                Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
-                            },
-                            onSpeak = { text ->
-                                if (isSpeaking) viewModel.stopSpeaking() else viewModel.speak(text)
-                            },
-                            modifier = Modifier.fillMaxSize()
-                        )
+                HistoryDrawerContent(
+                    savedSessions = savedSessions,
+                    onNewChat = {
+                        coroutineScope.launch { drawerState.close() }
+                        viewModel.startNewChat()
+                    },
+                    onSelectSession = { session ->
+                        coroutineScope.launch { drawerState.close() }
+                        viewModel.loadSession(session)
+                    },
+                    onDeleteSession = { sessionId ->
+                        viewModel.deleteSession(sessionId)
+                    },
+                    onClearAllHistory = {
+                        viewModel.clearAllHistory()
+                    },
+                    onOpenSettings = {
+                        coroutineScope.launch { drawerState.close() }
+                        onOpenSettings()
                     }
-                }
-
-                // Floating ChatGPT-style Bottom Bar
-                FloatingInputBar(
-                    textInput = textInput,
-                    onTextChange = { textInput = it },
-                    isListening = isListening,
-                    showToolsMenu = showToolsMenu,
-                    onToggleToolsMenu = { showToolsMenu = !showToolsMenu },
-                    onToolSelected = { toolPrompt ->
-                        showToolsMenu = false
-                        viewModel.sendQuery(toolPrompt)
-                    },
-                    onSend = {
-                        if (textInput.isNotBlank()) {
-                            viewModel.sendQuery(textInput)
-                            textInput = ""
-                        }
-                    },
-                    onQuickVoice = { viewModel.toggleVoiceInput() },
-                    onVoiceMode = { viewModel.enterVoiceMode() }
                 )
             }
         }
+    ) {
+        Box(modifier = modifier.fillMaxSize()) {
+            Scaffold(
+                modifier = Modifier.fillMaxSize(),
+                containerColor = JarvisDarkBackground,
+                topBar = {
+                    ChatTopBar(
+                        serverIp = serverIp,
+                        connectionStatus = connectionStatus,
+                        onOpenDrawer = { coroutineScope.launch { drawerState.open() } },
+                        onStatusClick = { showIpDialog = true },
+                        onNewChat = { viewModel.startNewChat() },
+                        onVoiceMode = { viewModel.enterVoiceMode() }
+                    )
+                }
+            ) { innerPadding ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(screenBg)
+                        .padding(innerPadding)
+                        .imePadding()
+                ) {
+                    // Main Content Area: Empty Hero State OR Active Message Stream
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    ) {
+                        if (chatHistory.isEmpty()) {
+                            EmptyChatHero(
+                                onPromptSelected = { prompt ->
+                                    viewModel.sendQuery(prompt)
+                                }
+                            )
+                        } else {
+                            ChatFeed(
+                                chatHistory = chatHistory,
+                                isThinking = isThinking,
+                                onCopy = { text ->
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("JARVIS", text))
+                                    Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                                },
+                                onSpeak = { text ->
+                                    if (isSpeaking) viewModel.stopSpeaking() else viewModel.speak(text)
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
 
-        // Fullscreen ChatGPT-style Arc Reactor Voice Mode
-        AnimatedVisibility(
-            visible = voiceModeActive,
-            enter = fadeIn(animationSpec = tween(220)),
-            exit = fadeOut(animationSpec = tween(180))
-        ) {
-            VoiceModeScreen(
-                isListening = isListening,
-                isSpeaking = isSpeaking,
-                isThinking = isThinking,
-                micMuted = micMuted,
-                micLevel = micLevel,
-                onToggleMute = { viewModel.toggleMute() },
-                onClose = { viewModel.exitVoiceMode() },
-                onInfo = { showVoiceInfo = true },
-                onShare = { shareTranscript(context, viewModel.buildTranscript()) },
-                onChangeVoice = { showVoicePicker = true }
-            )
+                    // Floating ChatGPT-style Bottom Bar
+                    FloatingInputBar(
+                        textInput = textInput,
+                        onTextChange = { textInput = it },
+                        isListening = isListening,
+                        showToolsMenu = showToolsMenu,
+                        onToggleToolsMenu = { showToolsMenu = !showToolsMenu },
+                        onToolSelected = { toolPrompt ->
+                            showToolsMenu = false
+                            viewModel.sendQuery(toolPrompt)
+                        },
+                        onSend = {
+                            if (textInput.isNotBlank()) {
+                                viewModel.sendQuery(textInput)
+                                textInput = ""
+                            }
+                        },
+                        onQuickVoice = { viewModel.toggleVoiceInput() },
+                        onVoiceMode = { viewModel.enterVoiceMode() }
+                    )
+                }
+            }
+
+            // Fullscreen ChatGPT-style Arc Reactor Voice Mode
+            AnimatedVisibility(
+                visible = voiceModeActive,
+                enter = fadeIn(animationSpec = tween(220)),
+                exit = fadeOut(animationSpec = tween(180))
+            ) {
+                VoiceModeScreen(
+                    isListening = isListening,
+                    isSpeaking = isSpeaking,
+                    isThinking = isThinking,
+                    micMuted = micMuted,
+                    micLevel = micLevel,
+                    onToggleMute = { viewModel.toggleMute() },
+                    onClose = { viewModel.exitVoiceMode() },
+                    onInfo = { showVoiceInfo = true },
+                    onShare = { shareTranscript(context, viewModel.buildTranscript()) },
+                    onChangeVoice = { showVoicePicker = true }
+                )
+            }
         }
     }
 }
@@ -303,7 +350,7 @@ fun MainScreen(
 private fun ChatTopBar(
     serverIp: String,
     connectionStatus: ConnectionStatus,
-    onOpenSettings: () -> Unit,
+    onOpenDrawer: () -> Unit,
     onStatusClick: () -> Unit,
     onNewChat: () -> Unit,
     onVoiceMode: () -> Unit
@@ -316,15 +363,15 @@ private fun ChatTopBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        // Left: Settings Drawer Icon
+        // Left: History Drawer Icon (☰)
         IconButton(
-            onClick = onOpenSettings,
+            onClick = onOpenDrawer,
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
                 .background(JarvisSurfaceDark.copy(alpha = 0.6f))
         ) {
-            Text("⚙️", fontSize = 17.sp)
+            Text("☰", fontSize = 18.sp, color = JarvisCyan)
         }
 
         // Center: Model Selector Dropdown Pill
@@ -337,7 +384,7 @@ private fun ChatTopBar(
                 .padding(horizontal = 14.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val (dotColor, statusTooltip) = when (connectionStatus) {
+            val (dotColor, _) = when (connectionStatus) {
                 ConnectionStatus.CONNECTED -> OnlineGreen to "Online"
                 ConnectionStatus.CONNECTING -> ArcGold to "Connecting"
                 ConnectionStatus.DISCONNECTED -> OfflineGray to "Offline"
@@ -386,6 +433,180 @@ private fun ChatTopBar(
                     .border(1.dp, JarvisCyan.copy(alpha = 0.4f), CircleShape)
             ) {
                 Text("🎧", fontSize = 16.sp)
+            }
+        }
+    }
+}
+
+/**
+ * ChatGPT-Style Sidebar Navigation Drawer (Chat History)
+ */
+@Composable
+private fun HistoryDrawerContent(
+    savedSessions: List<ChatSession>,
+    onNewChat: () -> Unit,
+    onSelectSession: (ChatSession) -> Unit,
+    onDeleteSession: (String) -> Unit,
+    onClearAllHistory: () -> Unit,
+    onOpenSettings: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        // Drawer Header
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            JarvisArcReactor(size = 32.dp)
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(
+                    "JARVIS AI",
+                    color = JarvisCyan,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    "Conversation History",
+                    color = TextSecondary,
+                    fontSize = 11.sp
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // "➕ New Chat" Button (ChatGPT style)
+        Button(
+            onClick = onNewChat,
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF162030)),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, JarvisCyan.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Start,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("➕", fontSize = 13.sp, color = JarvisCyan)
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "New chat",
+                    color = TextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+        HorizontalDivider(color = Color(0xFF1F293B), thickness = 1.dp)
+        Spacer(Modifier.height(10.dp))
+
+        // Sessions List
+        Text(
+            "RECENT CONVERSATIONS",
+            color = TextSecondary.copy(alpha = 0.7f),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 1.sp,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
+        )
+
+        if (savedSessions.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "No saved conversations yet.\nStart asking JARVIS questions!",
+                    color = TextSecondary.copy(alpha = 0.5f),
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items(savedSessions, key = { it.id }) { session ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onSelectSession(session) }
+                            .padding(horizontal = 8.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("💬", fontSize = 13.sp)
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                session.title,
+                                color = TextPrimary,
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { onDeleteSession(session.id) },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Text("🗑️", fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        HorizontalDivider(color = Color(0xFF1F293B), thickness = 1.dp)
+        Spacer(Modifier.height(10.dp))
+
+        // Drawer Bottom Actions
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { onOpenSettings() }
+                .padding(horizontal = 8.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("⚙️", fontSize = 15.sp)
+            Spacer(Modifier.width(10.dp))
+            Text("Settings & Voice Match", color = TextPrimary, fontSize = 13.sp)
+        }
+
+        if (savedSessions.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onClearAllHistory() }
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("🧹", fontSize = 13.sp)
+                Spacer(Modifier.width(10.dp))
+                Text("Clear All History", color = Color(0xFFFF6B6B), fontSize = 12.sp)
             }
         }
     }
@@ -932,7 +1153,6 @@ private fun ServerConfigDialog(
 }
 
 private fun shareTranscript(context: Context, transcript: String) {
-
     if (transcript.isBlank()) {
         Toast.makeText(context, "Nothing to share yet.", Toast.LENGTH_SHORT).show()
         return
