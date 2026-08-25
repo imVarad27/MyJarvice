@@ -16,7 +16,9 @@ import android.speech.SpeechRecognizer
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.myjarvice.MainActivity
+import com.example.myjarvice.data.SettingsStore
 import java.util.Locale
+
 
 class WakeWordService : Service() {
 
@@ -48,10 +50,13 @@ class WakeWordService : Service() {
     }
 
     private var speechRecognizer: SpeechRecognizer? = null
+    private var audioRecorder: AudioBufferRecorder? = null
     private var isListening = false
+    private lateinit var settings: SettingsStore
 
     override fun onCreate() {
         super.onCreate()
+        settings = SettingsStore(applicationContext)
         createNotificationChannel()
     }
 
@@ -71,6 +76,8 @@ class WakeWordService : Service() {
         return START_STICKY
     }
 
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+
     private fun startWakeWordListening() {
         if (isListening || !SpeechRecognizer.isRecognitionAvailable(this)) return
 
@@ -78,17 +85,19 @@ class WakeWordService : Service() {
             speechRecognizer?.destroy()
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
                 setRecognitionListener(object : RecognitionListener {
-                    override fun onReadyForSpeech(params: Bundle?) {}
+                    override fun onReadyForSpeech(params: Bundle?) {
+                        Log.d(TAG, "Sentinel ready and listening for 'Hey Jarvis'...")
+                    }
                     override fun onBeginningOfSpeech() {}
                     override fun onRmsChanged(rmsdB: Float) {}
                     override fun onBufferReceived(buffer: ByteArray?) {}
                     override fun onEndOfSpeech() {}
                     override fun onError(error: Int) {
-                        Log.d(TAG, "Speech error code: $error. Restarting sentinel...")
-                        // Automatically restart sentinel loop on timeout or background noise
-                        if (isListening) {
+                        Log.d(TAG, "Speech sentinel error code: $error. Re-arming listener...")
+                        isListening = false
+                        handler.postDelayed({
                             startWakeWordListening()
-                        }
+                        }, 400)
                     }
 
                     override fun onResults(results: Bundle?) {
@@ -96,25 +105,19 @@ class WakeWordService : Service() {
                         if (!matches.isNullOrEmpty()) {
                             val recognized = matches[0].lowercase(Locale.getDefault())
                             Log.d(TAG, "Sentinel heard: $recognized")
-                            if (recognized.contains("jarvis") || recognized.contains("jarvice") || recognized.contains("hey jarvis")) {
-                                Log.i(TAG, "⚡ WAKE WORD DETECTED: JARVIS ⚡")
-                                broadcastWakeWordDetected()
-                            }
+                            checkAndTriggerWake(recognized)
                         }
-                        // Loop sentinel listening
-                        if (isListening) {
+                        isListening = false
+                        handler.postDelayed({
                             startWakeWordListening()
-                        }
+                        }, 200)
                     }
 
                     override fun onPartialResults(partialResults: Bundle?) {
                         val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (!matches.isNullOrEmpty()) {
                             val recognized = matches[0].lowercase(Locale.getDefault())
-                            if (recognized.contains("jarvis") || recognized.contains("jarvice")) {
-                                Log.i(TAG, "⚡ PARTIAL WAKE WORD DETECTED: JARVIS ⚡")
-                                broadcastWakeWordDetected()
-                            }
+                            checkAndTriggerWake(recognized)
                         }
                     }
 
@@ -131,24 +134,49 @@ class WakeWordService : Service() {
 
             isListening = true
             speechRecognizer?.startListening(recognizerIntent)
-            Log.d(TAG, "Jarvis Sentinel active and listening for 'Jarvis'...")
+            Log.d(TAG, "Jarvis Sentinel active and listening for 'Hey Jarvis'...")
         } catch (e: Exception) {
             Log.e(TAG, "Error starting sentinel recognizer: ${e.message}")
+            isListening = false
+        }
+    }
+
+    private fun checkAndTriggerWake(text: String) {
+        val clean = text.replace("'", "").replace(".", "").trim()
+        if (clean.contains("jarvis") || clean.contains("jarvice") || clean.contains("hey jarvis") || clean.contains("hi jarvis") || clean.contains("ok jarvis")) {
+            Log.i(TAG, "⚡ WAKE PHRASE DETECTED: '$clean' -> Launching JARVIS ⚡")
+            broadcastWakeWordDetected()
         }
     }
 
     private fun broadcastWakeWordDetected() {
         WakeEvents.voiceTrigger.value = true
-        val intent = Intent(ACTION_WAKE_WORD_DETECTED)
-        sendBroadcast(intent)
+        val broadcastIntent = Intent(ACTION_WAKE_WORD_DETECTED)
+        sendBroadcast(broadcastIntent)
+
+        // Bring JARVIS Voice HUD to the foreground
+        try {
+            val launchIntent = Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                putExtra(MainActivity.EXTRA_START_VOICE, true)
+            }
+            startActivity(launchIntent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error launching MainActivity from wake: ${e.message}")
+        }
     }
 
     private fun stopWakeWordListening() {
         isListening = false
-        speechRecognizer?.stopListening()
-        speechRecognizer?.destroy()
+        handler.removeCallbacksAndMessages(null)
+        try {
+            speechRecognizer?.stopListening()
+            speechRecognizer?.destroy()
+        } catch (ignored: Exception) {}
         speechRecognizer = null
     }
+
+
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

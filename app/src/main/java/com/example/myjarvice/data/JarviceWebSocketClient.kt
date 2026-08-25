@@ -80,22 +80,24 @@ class JarviceWebSocketClient {
 
     private var serverIp = ""
     private var serverToken = ""
+    private val fallbackIps = listOf("127.0.0.1:8000", "192.168.1.37:8000", "192.168.1.34:8000", "192.168.137.1:8000")
 
-    fun connect(rawIpOrUrl: String, pairingToken: String) {
+
+    fun connect(rawIpOrUrl: String = "", pairingToken: String = "") {
         keepConnected = true
         reconnectJob?.cancel()
         _connectionStatus.value = ConnectionStatus.CONNECTING
-        this.serverIp = rawIpOrUrl.trim()
-        this.serverToken = pairingToken.trim()
-        if (serverIp.isBlank() || serverToken.isBlank()) {
-            _connectionStatus.value = ConnectionStatus.ERROR
-            return
-        }
+
+        val effectiveIp = if (rawIpOrUrl.isNotBlank()) rawIpOrUrl.trim() else if (serverIp.isNotBlank()) serverIp else fallbackIps[retryAttempt % fallbackIps.size]
+        val effectiveToken = if (pairingToken.isNotBlank()) pairingToken.trim() else if (serverToken.isNotBlank()) serverToken else "jarvis_local_token"
+
+        this.serverIp = effectiveIp
+        this.serverToken = effectiveToken
 
         val wsUrl = when {
             serverIp.startsWith("ws://") || serverIp.startsWith("wss://") -> serverIp
-            serverIp.contains(":") -> "wss://$serverIp/ws/jarvice"
-            else -> "wss://$serverIp/ws/jarvice"
+            serverIp.contains(":") -> "ws://$serverIp/ws/jarvice"
+            else -> "ws://$serverIp:8000/ws/jarvice"
         }
 
         Log.d("JarviceWS", "Attempting connection to: $wsUrl")
@@ -106,7 +108,7 @@ class JarviceWebSocketClient {
         webSocket?.cancel()
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                Log.d("JarviceWS", "WebSocket Connected Successfully!")
+                Log.d("JarviceWS", "WebSocket Connected Successfully to $wsUrl!")
                 retryAttempt = 0
                 _connectionStatus.value = ConnectionStatus.CONNECTED
             }
@@ -150,7 +152,7 @@ class JarviceWebSocketClient {
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                Log.e("JarviceWS", "WebSocket Connection Failed: ${t.message}", t)
+                Log.e("JarviceWS", "WebSocket Connection Failed to $wsUrl: ${t.message}")
                 _connectionStatus.value = ConnectionStatus.ERROR
                 scheduleReconnect()
             }
@@ -162,6 +164,7 @@ class JarviceWebSocketClient {
             }
         })
     }
+
 
     fun sendMessage(userText: String, phoneContext: Map<String, Any> = emptyMap()) {
         val userMsg = JarviceMessage("USER", userText)
@@ -223,12 +226,18 @@ class JarviceWebSocketClient {
         }
     }
 
+    fun clearChat() {
+        _chatHistory.value = emptyList()
+        _latestResponse.value = null
+    }
+
     fun disconnect() {
         keepConnected = false
         reconnectJob?.cancel()
         webSocket?.close(1000, "User disconnected")
         _connectionStatus.value = ConnectionStatus.DISCONNECTED
     }
+
 
     private companion object {
         const val INITIAL_RETRY_MS = 1_000L

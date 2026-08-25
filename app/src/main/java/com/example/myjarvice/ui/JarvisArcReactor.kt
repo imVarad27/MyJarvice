@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.myjarvice.theme.ArcGold
 import com.example.myjarvice.theme.JarvisBlue
@@ -29,6 +30,7 @@ import com.example.myjarvice.theme.JarvisCyan
 fun JarvisArcReactor(
     isListening: Boolean = false,
     isSpeaking: Boolean = false,
+    size: Dp = 120.dp,
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "ArcReactorTransition")
@@ -54,10 +56,10 @@ fun JarvisArcReactor(
     )
 
     val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.85f,
-        targetValue = 1.15f,
+        initialValue = 0.88f,
+        targetValue = 1.12f,
         animationSpec = infiniteRepeatable(
-            animation = tween(if (isSpeaking) 600 else 2000, easing = FastOutSlowInEasing),
+            animation = tween(if (isSpeaking) 550 else if (isListening) 800 else 2000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulseScale"
@@ -65,27 +67,32 @@ fun JarvisArcReactor(
 
     val activeColor = when {
         isSpeaking -> ArcGold
-        isListening -> Color(0xFF00FF66)
+        isListening -> Color(0xFF00FF88)
         else -> JarvisCyan
     }
 
     Box(
-        modifier = modifier.size(240.dp),
+        modifier = modifier.size(size),
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val center = Offset(size.width / 2, size.height / 2)
-            val maxRadius = size.width / 2.2f
+            val center = Offset(this.size.width / 2f, this.size.height / 2f)
+            val minDim = minOf(this.size.width, this.size.height)
+            val maxRadius = minDim / 2.1f
+
+            val strokeOuter = (minDim * 0.025f).coerceAtLeast(1.5f)
+            val strokeMid = (minDim * 0.045f).coerceAtLeast(2f)
+            val strokeInner = (minDim * 0.02f).coerceAtLeast(1f)
 
             // Outer Dashed Arc Ring
             rotate(outerRotation, pivot = center) {
                 drawCircle(
-                    color = activeColor.copy(alpha = 0.4f),
+                    color = activeColor.copy(alpha = 0.45f),
                     radius = maxRadius,
                     center = center,
                     style = Stroke(
-                        width = 4.dp.toPx(),
-                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(30f, 15f), 0f)
+                        width = strokeOuter,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(minDim * 0.12f, minDim * 0.06f), 0f)
                     )
                 )
             }
@@ -95,37 +102,40 @@ fun JarvisArcReactor(
                 color = JarvisBlue.copy(alpha = 0.25f),
                 radius = maxRadius * 0.8f,
                 center = center,
-                style = Stroke(width = 8.dp.toPx())
+                style = Stroke(width = strokeMid)
             )
 
             // Inner Rotating Gear Ring
             rotate(innerRotation, pivot = center) {
                 drawCircle(
-                    color = activeColor.copy(alpha = 0.7f),
+                    color = activeColor.copy(alpha = 0.75f),
                     radius = maxRadius * 0.65f,
                     center = center,
                     style = Stroke(
-                        width = 3.dp.toPx(),
-                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(15f, 10f, 5f, 10f), 0f)
+                        width = strokeInner,
+                        pathEffect = PathEffect.dashPathEffect(
+                            floatArrayOf(minDim * 0.06f, minDim * 0.04f, minDim * 0.02f, minDim * 0.04f),
+                            0f
+                        )
                     )
                 )
             }
 
-            // Pulsing Core Glass Circle
+            // Pulsing Core Glass Aura
             drawCircle(
-                color = activeColor.copy(alpha = 0.15f * pulseScale),
-                radius = maxRadius * 0.45f * pulseScale,
+                color = activeColor.copy(alpha = 0.18f * pulseScale),
+                radius = maxRadius * 0.46f * pulseScale,
                 center = center
             )
 
             // Core Solid Center Arc Energy
             drawCircle(
-                color = activeColor,
-                radius = maxRadius * 0.25f * pulseScale,
+                color = activeColor.copy(alpha = 0.85f),
+                radius = maxRadius * 0.26f * pulseScale,
                 center = center
             )
             drawCircle(
-                color = Color.White.copy(alpha = 0.9f),
+                color = Color.White.copy(alpha = 0.95f),
                 radius = maxRadius * 0.12f * pulseScale,
                 center = center
             )

@@ -52,8 +52,12 @@ fun MainNavigation(
                 // Deliberately not safeDrawingPadding(): that also insets for the IME,
                 // which double-counts against the window's own resize and shoves the
                 // header off-screen. The chat screen handles the keyboard itself.
-                MainScreen(modifier = Modifier.systemBarsPadding())
+                MainScreen(
+                    onOpenSettings = { backStack.add(Settings) },
+                    modifier = Modifier.systemBarsPadding()
+                )
             }
+
             entry<Settings> {
                 SettingsScreen(
                     themeMode = themeMode,
@@ -62,9 +66,21 @@ fun MainNavigation(
                     onDynamicColor = onDynamicColor,
                     wakeEnabled = wakeEnabled,
                     onWakeEnabled = onWakeEnabled,
+                    onOpenVoiceMatch = { backStack.add(VoiceMatchEnrollment) },
                     onBack = { if (backStack.size > 1) backStack.removeLastOrNull() }
+                )
+            }
+            entry<VoiceMatchEnrollment> {
+                com.example.myjarvice.ui.settings.VoiceMatchEnrollmentScreen(
+                    onFinished = {
+                        if (backStack.size > 1) backStack.removeLastOrNull()
+                    },
+                    onBack = {
+                        if (backStack.size > 1) backStack.removeLastOrNull()
+                    }
                 )
             }
         }
     )
 }
+

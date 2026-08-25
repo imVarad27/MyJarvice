@@ -192,8 +192,21 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun clearChat() {
+        wsClient.clearChat()
+    }
+
+    fun speak(text: String) {
+        speechManager.speak(text)
+    }
+
+    fun stopSpeaking() {
+        speechManager.stopSpeaking()
+    }
+
     /** Push-to-talk from the chat screen, without entering full-screen voice mode. */
     fun toggleVoiceInput() {
+
         if (isListening.value) {
             speechManager.stopListening()
         } else {

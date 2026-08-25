@@ -26,13 +26,21 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.myjarvice.data.SettingsStore
 import com.example.myjarvice.theme.ThemeMode
+import kotlin.math.abs
 
 /**
  * Appearance-focused settings for this increment: theme mode + Material You.
@@ -46,8 +54,16 @@ fun SettingsScreen(
     onDynamicColor: (Boolean) -> Unit,
     wakeEnabled: Boolean,
     onWakeEnabled: (Boolean) -> Unit,
+    onOpenVoiceMatch: () -> Unit,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
+    val settingsStore = remember { SettingsStore(context) }
+    var voiceMatchEnabled by remember { mutableStateOf(settingsStore.voiceMatchEnabled) }
+    var voiceMatchThreshold by remember { mutableFloatStateOf(settingsStore.voiceMatchThreshold) }
+    var isEnrolled by remember { mutableStateOf(settingsStore.isVoiceProfileEnrolled) }
+
+
     val scheme = MaterialTheme.colorScheme
 
     Column(
@@ -161,9 +177,9 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("\"Hi Jarvis\" activation", color = scheme.onSurface, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Text("\"Hey Jarvis\" activation", color = scheme.onSurface, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                     Text(
-                        "Always-on listening, even when the app is closed",
+                        "Always-on background listening",
                         color = scheme.onSurfaceVariant,
                         fontSize = 12.sp
                     )
@@ -179,12 +195,126 @@ fun SettingsScreen(
             }
             Spacer(Modifier.height(8.dp))
             Text(
-                "Fully offline — no account needed. When you enable this, grant "
-                    + "\"display over other apps\" and disable battery optimization so Jarvis "
-                    + "can pop up on \"Hi Jarvis\".",
+                "Fully offline — no cloud audio sent. Operates locally via Vosk Sentinel.",
                 color = scheme.onSurfaceVariant,
                 fontSize = 11.sp
             )
+        }
+
+        Spacer(Modifier.height(24.dp))
+        SectionLabel("VOICE MATCH BIOMETRICS")
+        Spacer(Modifier.height(12.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(scheme.surface)
+                .border(1.dp, scheme.outline.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+                .padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Only respond to my voice", color = scheme.onSurface, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    }
+                    Text(
+                        if (isEnrolled) "Status: Profile Calibrated (Biometric Active)" else "Status: Not Calibrated",
+                        color = if (isEnrolled) com.example.myjarvice.theme.JarvisCyan else scheme.onSurfaceVariant,
+                        fontSize = 12.sp,
+                        fontWeight = if (isEnrolled) FontWeight.SemiBold else FontWeight.Normal
+                    )
+                }
+                Switch(
+                    checked = voiceMatchEnabled && isEnrolled,
+                    enabled = isEnrolled,
+                    onCheckedChange = {
+                        voiceMatchEnabled = it
+                        settingsStore.voiceMatchEnabled = it
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = scheme.onPrimary,
+                        checkedTrackColor = scheme.primary
+                    )
+                )
+            }
+
+            Spacer(Modifier.height(14.dp))
+
+            // Calibration Button
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(scheme.primary.copy(alpha = 0.15f))
+                    .border(1.dp, scheme.primary.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                    .clickable { onOpenVoiceMatch() },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    if (isEnrolled) "⚡ Retrain Voice Model" else "🎙️ Calibrate My Voice (3 Steps)",
+                    color = scheme.primary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            if (isEnrolled) {
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "Verification Sensitivity: ${if (voiceMatchThreshold < 0.70f) "Lenient" else if (voiceMatchThreshold < 0.78f) "Standard (Recommended)" else "Strict"}",
+                    color = scheme.onSurface,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        "Lenient" to 0.66f,
+                        "Standard" to 0.72f,
+                        "Strict" to 0.80f
+                    ).forEach { (label, thresh) ->
+                        val isSelected = kotlin.math.abs(voiceMatchThreshold - thresh) < 0.03f
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(36.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) scheme.primary.copy(alpha = 0.2f) else scheme.surfaceVariant.copy(alpha = 0.4f))
+                                .border(1.dp, if (isSelected) scheme.primary else scheme.outline.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                .clickable {
+                                    voiceMatchThreshold = thresh
+                                    settingsStore.voiceMatchThreshold = thresh
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                label,
+                                color = if (isSelected) scheme.primary else scheme.onSurfaceVariant,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    "Delete Voice Profile",
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.clickable {
+                        settingsStore.clearVoiceProfile()
+                        isEnrolled = false
+                        voiceMatchEnabled = false
+                    }
+                )
+            }
         }
 
         Spacer(Modifier.height(24.dp))
@@ -199,6 +329,7 @@ fun SettingsScreen(
         }
     }
 }
+
 
 @Composable
 private fun SectionLabel(text: String) {

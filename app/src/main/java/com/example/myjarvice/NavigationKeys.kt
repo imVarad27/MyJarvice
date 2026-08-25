@@ -8,3 +8,5 @@ import kotlinx.serialization.Serializable
 @Serializable data object Main : NavKey        // Chat screen
 @Serializable data object Settings : NavKey
 @Serializable data object Profile : NavKey
+@Serializable data object VoiceMatchEnrollment : NavKey
+
