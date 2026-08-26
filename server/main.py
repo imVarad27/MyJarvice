@@ -718,14 +718,15 @@ async def websocket_jarvis_endpoint(websocket: WebSocket):
                     }))
                     continue
 
-                user_text = msg.get("text", "")
-                phone_context = msg.get("context", {})
+                user_text = msg.get("query") or msg.get("text") or ""
+                phone_context = msg.get("device_context") or msg.get("context") or {}
                 if not isinstance(user_text, str) or not user_text.strip() or len(user_text) > MAX_MESSAGE_CHARS:
-                    await websocket.send_text(json.dumps({"sender": "JARVIS", "type": "ERROR", "text": "Please send a message up to 4,000 characters."}))
+                    await websocket.send_text(json.dumps({"sender": "JARVIS", "type": "ERROR", "text": "Please send a non-empty message up to 4,000 characters."}))
                     continue
                 if not isinstance(phone_context, dict):
                     phone_context = {}
-                logger.info("Received query from authenticated client (%d characters).", len(user_text))
+                logger.info("Received query from authenticated client: '%s' (%d characters).", user_text[:60], len(user_text))
+
 
                 # Run the (blocking) LLM call off the event loop so other clients aren't blocked.
                 ai_response, action, pending_email = await asyncio.to_thread(

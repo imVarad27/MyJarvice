@@ -70,8 +70,8 @@ class SpeechManager(private val context: Context) : TextToSpeech.OnInitListener 
         }
 
         tts?.language = Locale.US
-        tts?.setPitch(0.95f) // Crisp, sophisticated JARVIS tone
-        tts?.setSpeechRate(1.05f)
+        tts?.setPitch(settings.ttsPitch)
+        tts?.setSpeechRate(settings.ttsSpeechRate)
 
         // Without this the "speaking" flag latches on forever after the first
         // utterance, which strands the UI in its speaking state.
@@ -104,8 +104,6 @@ class SpeechManager(private val context: Context) : TextToSpeech.OnInitListener 
             .sortedBy { it.name }
             .map { it to prettyVoiceLabel(it) }
 
-        // Many engines expose several voices per locale with no gender hint in the name,
-        // which would render as a list of identical rows. Number the duplicates.
         val labelCounts = labelled.groupingBy { it.second }.eachCount()
         val seen = mutableMapOf<String, Int>()
 
@@ -118,6 +116,21 @@ class SpeechManager(private val context: Context) : TextToSpeech.OnInitListener 
             }
             VoiceOption(id = voice.name, label = display)
         }
+    }
+
+    fun applySpeechRate(rate: Float) {
+        settings.ttsSpeechRate = rate
+        tts?.setSpeechRate(rate)
+    }
+
+    fun applyPitch(pitch: Float) {
+        settings.ttsPitch = pitch
+        tts?.setPitch(pitch)
+    }
+
+    fun previewVoice(voiceId: String, sampleText: String = "Greetings, Sir. This is JARVIS Mark VII voice preview.") {
+        applyVoice(voiceId)
+        speak(sampleText)
     }
 
     /** Applies a voice by its engine name. Blank or unknown falls back to the engine default. */
@@ -137,6 +150,7 @@ class SpeechManager(private val context: Context) : TextToSpeech.OnInitListener 
             settings.ttsVoice = ""
         }
     }
+
 
     fun speak(text: String) {
         if (text.isBlank()) return

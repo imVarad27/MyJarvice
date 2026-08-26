@@ -131,7 +131,7 @@ class JarvisWebSocketClient {
                     val msg = JarvisMessage(sender, messageText, msgType, ts)
 
                     // Drafted email waiting for approval
-                    if (obj.has("pending_email")) {
+                    if (obj.has("pending_email") && !obj.isNull("pending_email")) {
                         val pe = obj.getJSONObject("pending_email")
                         _pendingEmail.value = PendingEmail(
                             id = pe.getString("id"),
@@ -140,6 +140,7 @@ class JarvisWebSocketClient {
                             body = pe.optString("body", "")
                         )
                     }
+
 
                     if (actionType.isNotBlank() && actionQuery.isNotBlank()) {
                         _latestAction.value = JarvisAction(
@@ -200,8 +201,11 @@ class JarvisWebSocketClient {
 
         val payload = JSONObject().apply {
             put("query", query)
+            put("text", query)
             put("device_context", JSONObject(deviceContext))
+            put("context", JSONObject(deviceContext))
         }
+
 
         val sent = webSocket?.send(payload.toString()) ?: false
         if (!sent) {

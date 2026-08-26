@@ -5,7 +5,11 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -46,6 +50,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedTextField
@@ -83,19 +88,9 @@ import com.example.myjarvice.data.ConnectionStatus
 import com.example.myjarvice.data.JarvisMessage
 import com.example.myjarvice.data.PendingEmail
 import com.example.myjarvice.data.SettingsStore
-
 import com.example.myjarvice.theme.ArcGold
-import com.example.myjarvice.theme.JarvisCyan
-import com.example.myjarvice.theme.JarvisDarkBackground
-import com.example.myjarvice.theme.JarvisSurfaceBorder
-import com.example.myjarvice.theme.JarvisSurfaceDark
-import com.example.myjarvice.theme.JarvisSurfaceElevated
 import com.example.myjarvice.theme.OfflineGray
 import com.example.myjarvice.theme.OnlineGreen
-import com.example.myjarvice.theme.TextPrimary
-import com.example.myjarvice.theme.TextSecondary
-import com.example.myjarvice.theme.TextTertiary
-import com.example.myjarvice.theme.UserBubbleBg
 import com.example.myjarvice.ui.JarvisArcReactor
 import com.example.myjarvice.ui.icons.IconActivity
 import com.example.myjarvice.ui.icons.IconCopy
@@ -117,6 +112,8 @@ import com.example.myjarvice.ui.voice.VoiceModeScreen
 import com.example.myjarvice.ui.voice.VoicePickerDialog
 import com.example.myjarvice.wake.WakeWordService
 import kotlinx.coroutines.launch
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -126,6 +123,8 @@ fun MainScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+
     val viewModel: MainScreenViewModel = viewModel {
         MainScreenViewModel(context.applicationContext as Application)
     }
@@ -176,6 +175,37 @@ fun MainScreen(
     var showVoicePicker by remember { mutableStateOf(false) }
     var showToolsMenu by remember { mutableStateOf(false) }
 
+    // File Attachment State
+    var attachedFileName by remember { mutableStateOf<String?>(null) }
+    var attachedFileContent by remember { mutableStateOf<String?>(null) }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                var fileName = "Document"
+                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (cursor.moveToFirst() && nameIndex >= 0) {
+                        fileName = cursor.getString(nameIndex)
+                    }
+                }
+                attachedFileName = fileName
+
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val reader = BufferedReader(InputStreamReader(inputStream))
+                val content = reader.readText()
+                reader.close()
+                attachedFileContent = if (content.length > 8000) content.take(8000) + "\n...[Truncated]" else content
+
+                Toast.makeText(context, "Attached: $fileName", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Attached file metadata: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     if (showIpDialog) {
         ServerConfigDialog(
             currentIp = serverIp,
@@ -202,11 +232,11 @@ fun MainScreen(
     if (currentPendingAction != null) {
         AlertDialog(
             onDismissRequest = { viewModel.resolvePendingAction(false) },
-            title = { Text("Confirm Device Action", color = TextPrimary, fontWeight = FontWeight.SemiBold) },
-            text = { Text("Allow JARVIS to ${currentPendingAction.type.lowercase().replace('_', ' ')}: ${currentPendingAction.query}?", color = TextSecondary) },
-            confirmButton = { TextButton(onClick = { viewModel.resolvePendingAction(true) }) { Text("Allow", color = JarvisCyan, fontWeight = FontWeight.SemiBold) } },
-            dismissButton = { TextButton(onClick = { viewModel.resolvePendingAction(false) }) { Text("Deny", color = TextSecondary) } },
-            containerColor = JarvisSurfaceDark
+            title = { Text("Confirm Device Action", color = scheme.onSurface, fontWeight = FontWeight.SemiBold) },
+            text = { Text("Allow JARVIS to ${currentPendingAction.type.lowercase().replace('_', ' ')}: ${currentPendingAction.query}?", color = scheme.onSurfaceVariant) },
+            confirmButton = { TextButton(onClick = { viewModel.resolvePendingAction(true) }) { Text("Allow", color = scheme.primary, fontWeight = FontWeight.SemiBold) } },
+            dismissButton = { TextButton(onClick = { viewModel.resolvePendingAction(false) }) { Text("Deny", color = scheme.onSurfaceVariant) } },
+            containerColor = scheme.surface
         )
     }
 
@@ -233,7 +263,7 @@ fun MainScreen(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
-                drawerContainerColor = JarvisSurfaceDark,
+                drawerContainerColor = scheme.surface,
                 drawerShape = RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp),
                 modifier = Modifier.width(300.dp)
             ) {
@@ -261,10 +291,10 @@ fun MainScreen(
             }
         }
     ) {
-        Box(modifier = modifier.fillMaxSize().background(JarvisDarkBackground)) {
+        Box(modifier = modifier.fillMaxSize().background(scheme.background)) {
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
-                containerColor = JarvisDarkBackground,
+                containerColor = scheme.background,
                 topBar = {
                     ChatTopBar(
                         connectionStatus = connectionStatus,
@@ -281,7 +311,7 @@ fun MainScreen(
                         .padding(innerPadding)
                         .imePadding()
                 ) {
-                    // Content Area: Empty Hero OR Chat Feed
+                    // Content Area: Empty Hero OR Active Chat Feed
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -310,7 +340,41 @@ fun MainScreen(
                         }
                     }
 
-                    // Floating Bottom Input Bar (ChatGPT / Gemini style)
+                    // Attached File Indicator Chip
+                    if (attachedFileName != null) {
+                        Row(
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(scheme.surfaceVariant)
+                                .border(1.dp, scheme.primary.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconDocument(tint = scheme.primary, size = 14.dp)
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                attachedFileName ?: "",
+                                color = scheme.onSurface,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "✕",
+                                color = scheme.onSurfaceVariant,
+                                fontSize = 14.sp,
+                                modifier = Modifier.clickable {
+                                    attachedFileName = null
+                                    attachedFileContent = null
+                                }
+                            )
+                        }
+                    }
+
+                    // Floating Bottom Input Bar
                     FloatingInputBar(
                         textInput = textInput,
                         onTextChange = { textInput = it },
@@ -321,10 +385,21 @@ fun MainScreen(
                             showToolsMenu = false
                             viewModel.sendQuery(toolPrompt)
                         },
+                        onAttachFile = {
+                            showToolsMenu = false
+                            filePickerLauncher.launch("*/*")
+                        },
                         onSend = {
-                            if (textInput.isNotBlank()) {
-                                viewModel.sendQuery(textInput)
+                            if (textInput.isNotBlank() || attachedFileContent != null) {
+                                val fullQuery = if (attachedFileName != null) {
+                                    "[Attached File: $attachedFileName]\n${attachedFileContent.orEmpty()}\n\n$textInput"
+                                } else {
+                                    textInput
+                                }
+                                viewModel.sendQuery(fullQuery)
                                 textInput = ""
+                                attachedFileName = null
+                                attachedFileContent = null
                             }
                         },
                         onQuickVoice = { viewModel.toggleVoiceInput() },
@@ -333,7 +408,7 @@ fun MainScreen(
                 }
             }
 
-            // Fullscreen Voice Mode (Gemini / ChatGPT Live style)
+            // Fullscreen Hands-free Voice Mode
             AnimatedVisibility(
                 visible = voiceModeActive,
                 enter = fadeIn(animationSpec = tween(220)),
@@ -357,7 +432,7 @@ fun MainScreen(
 }
 
 /**
- * Top App Bar (Modern Clean Standard)
+ * Top App Bar (JARVIS 1.0)
  */
 @Composable
 private fun ChatTopBar(
@@ -367,11 +442,13 @@ private fun ChatTopBar(
     onNewChat: () -> Unit,
     onVoiceMode: () -> Unit
 ) {
+    val scheme = MaterialTheme.colorScheme
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(56.dp)
-            .background(JarvisDarkBackground)
+            .background(scheme.background)
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -381,15 +458,15 @@ private fun ChatTopBar(
             onClick = onOpenDrawer,
             modifier = Modifier.size(40.dp)
         ) {
-            IconMenu(tint = TextSecondary, size = 20.dp)
+            IconMenu(tint = scheme.onSurfaceVariant, size = 20.dp)
         }
 
         // Center: Model Selector Chip
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(20.dp))
-                .background(JarvisSurfaceDark)
-                .border(1.dp, JarvisSurfaceBorder, RoundedCornerShape(20.dp))
+                .background(scheme.surface)
+                .border(1.dp, scheme.outline.copy(alpha = 0.35f), RoundedCornerShape(20.dp))
                 .clickable { onStatusClick() }
                 .padding(horizontal = 14.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -410,14 +487,14 @@ private fun ChatTopBar(
             Spacer(Modifier.width(8.dp))
             Text(
                 "JARVIS",
-                color = TextPrimary,
+                color = scheme.onSurface,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold
             )
             Spacer(Modifier.width(4.dp))
             Text(
-                "4.0",
-                color = TextTertiary,
+                "1.0",
+                color = scheme.onSurfaceVariant,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Normal
             )
@@ -432,7 +509,7 @@ private fun ChatTopBar(
                 onClick = onNewChat,
                 modifier = Modifier.size(38.dp)
             ) {
-                IconNewChat(tint = TextSecondary, size = 20.dp)
+                IconNewChat(tint = scheme.onSurfaceVariant, size = 20.dp)
             }
 
             IconButton(
@@ -440,9 +517,9 @@ private fun ChatTopBar(
                 modifier = Modifier
                     .size(38.dp)
                     .clip(CircleShape)
-                    .background(JarvisSurfaceElevated)
+                    .background(scheme.surfaceVariant)
             ) {
-                IconVoiceWaveform(tint = JarvisCyan, size = 18.dp)
+                IconVoiceWaveform(tint = scheme.primary, size = 18.dp)
             }
         }
     }
@@ -460,6 +537,8 @@ private fun HistoryDrawerContent(
     onClearAllHistory: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
+    val scheme = MaterialTheme.colorScheme
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -468,22 +547,22 @@ private fun HistoryDrawerContent(
         // "+ New chat" Button
         Button(
             onClick = onNewChat,
-            colors = ButtonDefaults.buttonColors(containerColor = JarvisSurfaceElevated),
+            colors = ButtonDefaults.buttonColors(containerColor = scheme.surfaceVariant),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, JarvisSurfaceBorder, RoundedCornerShape(12.dp))
+                .border(1.dp, scheme.outline.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Start,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                IconPlus(tint = TextPrimary, size = 16.dp)
+                IconPlus(tint = scheme.onSurface, size = 16.dp)
                 Spacer(Modifier.width(10.dp))
                 Text(
                     "New chat",
-                    color = TextPrimary,
+                    color = scheme.onSurface,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -494,7 +573,7 @@ private fun HistoryDrawerContent(
 
         Text(
             "Recent",
-            color = TextSecondary,
+            color = scheme.onSurfaceVariant,
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -509,7 +588,7 @@ private fun HistoryDrawerContent(
             ) {
                 Text(
                     "No conversation history",
-                    color = TextTertiary,
+                    color = scheme.onSurfaceVariant.copy(alpha = 0.6f),
                     fontSize = 13.sp
                 )
             }
@@ -534,11 +613,11 @@ private fun HistoryDrawerContent(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.weight(1f)
                         ) {
-                            IconMessage(tint = TextTertiary, size = 16.dp)
+                            IconMessage(tint = scheme.onSurfaceVariant, size = 16.dp)
                             Spacer(Modifier.width(10.dp))
                             Text(
                                 session.title,
-                                color = TextPrimary,
+                                color = scheme.onSurface,
                                 fontSize = 13.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -549,14 +628,14 @@ private fun HistoryDrawerContent(
                             onClick = { onDeleteSession(session.id) },
                             modifier = Modifier.size(28.dp)
                         ) {
-                            IconTrash(tint = TextTertiary, size = 14.dp)
+                            IconTrash(tint = scheme.onSurfaceVariant, size = 14.dp)
                         }
                     }
                 }
             }
         }
 
-        HorizontalDivider(color = JarvisSurfaceBorder, thickness = 1.dp)
+        HorizontalDivider(color = scheme.outline.copy(alpha = 0.25f), thickness = 1.dp)
         Spacer(Modifier.height(10.dp))
 
         // Bottom Actions: Settings & Clear History
@@ -568,9 +647,9 @@ private fun HistoryDrawerContent(
                 .padding(horizontal = 10.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconSettings(tint = TextSecondary, size = 18.dp)
+            IconSettings(tint = scheme.onSurfaceVariant, size = 18.dp)
             Spacer(Modifier.width(12.dp))
-            Text("Settings", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text("Settings", color = scheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         }
 
         if (savedSessions.isNotEmpty()) {
@@ -591,12 +670,13 @@ private fun HistoryDrawerContent(
 }
 
 /**
- * Empty Chat State Hero (Gemini & ChatGPT Standards)
+ * Empty Chat State Hero (JARVIS 1.0)
  */
 @Composable
 private fun EmptyChatHero(
     onPromptSelected: (String) -> Unit
 ) {
+    val scheme = MaterialTheme.colorScheme
     val greeting = remember {
         val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         when {
@@ -624,7 +704,7 @@ private fun EmptyChatHero(
 
         Text(
             greeting,
-            color = TextPrimary,
+            color = scheme.onBackground,
             fontSize = 24.sp,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center
@@ -634,7 +714,7 @@ private fun EmptyChatHero(
 
         Text(
             "How can I assist your workflow today?",
-            color = TextSecondary,
+            color = scheme.onSurfaceVariant,
             fontSize = 14.sp,
             textAlign = TextAlign.Center
         )
@@ -647,7 +727,7 @@ private fun EmptyChatHero(
                 title = "Device Health",
                 desc = "Run diagnostics & battery telemetry",
                 prompt = "Jarvis, run a complete device health and battery check.",
-                icon = { IconActivity(tint = JarvisCyan, size = 18.dp) }
+                icon = { IconActivity(tint = scheme.primary, size = 18.dp) }
             ),
             PromptCardItem(
                 title = "Local Document RAG",
@@ -704,11 +784,13 @@ private fun PromptSuggestionCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val scheme = MaterialTheme.colorScheme
+
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(JarvisSurfaceDark)
-            .border(1.dp, JarvisSurfaceBorder, RoundedCornerShape(16.dp))
+            .background(scheme.surface)
+            .border(1.dp, scheme.outline.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
             .padding(14.dp)
     ) {
@@ -716,7 +798,7 @@ private fun PromptSuggestionCard(
             modifier = Modifier
                 .size(32.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(JarvisSurfaceElevated),
+                .background(scheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
             item.icon()
@@ -726,14 +808,14 @@ private fun PromptSuggestionCard(
 
         Text(
             item.title,
-            color = TextPrimary,
+            color = scheme.onSurface,
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold
         )
         Spacer(Modifier.height(2.dp))
         Text(
             item.desc,
-            color = TextSecondary,
+            color = scheme.onSurfaceVariant,
             fontSize = 11.sp,
             lineHeight = 15.sp,
             maxLines = 2,
@@ -743,7 +825,7 @@ private fun PromptSuggestionCard(
 }
 
 /**
- * Message Feed (Gemini / ChatGPT Clean Reading Flow)
+ * Message Feed (Dynamic Theme Adaptive)
  */
 @Composable
 private fun ChatFeed(
@@ -788,6 +870,8 @@ private fun ChatFeed(
 
 @Composable
 private fun UserMessageBubble(msg: JarvisMessage) {
+    val scheme = MaterialTheme.colorScheme
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.End
@@ -796,12 +880,12 @@ private fun UserMessageBubble(msg: JarvisMessage) {
             modifier = Modifier
                 .widthIn(max = 290.dp)
                 .clip(RoundedCornerShape(18.dp))
-                .background(UserBubbleBg)
+                .background(scheme.surfaceVariant)
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
             Text(
                 msg.text,
-                color = TextPrimary,
+                color = scheme.onSurface,
                 fontSize = 14.sp,
                 lineHeight = 20.sp
             )
@@ -815,6 +899,7 @@ private fun JarvisMessageBubble(
     onCopy: () -> Unit,
     onSpeak: () -> Unit
 ) {
+    val scheme = MaterialTheme.colorScheme
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -826,7 +911,7 @@ private fun JarvisMessageBubble(
                 .padding(top = 2.dp)
                 .size(24.dp)
                 .clip(CircleShape)
-                .background(JarvisSurfaceDark),
+                .background(scheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
             JarvisArcReactor(size = 18.dp)
@@ -842,13 +927,13 @@ private fun JarvisMessageBubble(
             ) {
                 Text(
                     "JARVIS",
-                    color = TextPrimary,
+                    color = scheme.onSurface,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    "4.0",
-                    color = TextTertiary,
+                    "1.0",
+                    color = scheme.onSurfaceVariant,
                     fontSize = 11.sp
                 )
             }
@@ -858,7 +943,7 @@ private fun JarvisMessageBubble(
             // Body text
             Text(
                 msg.text,
-                color = TextPrimary,
+                color = scheme.onSurface,
                 fontSize = 14.sp,
                 lineHeight = 22.sp
             )
@@ -877,9 +962,9 @@ private fun JarvisMessageBubble(
                         .padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconCopy(tint = TextSecondary, size = 14.dp)
+                    IconCopy(tint = scheme.onSurfaceVariant, size = 14.dp)
                     Spacer(Modifier.width(4.dp))
-                    Text("Copy", color = TextSecondary, fontSize = 11.sp)
+                    Text("Copy", color = scheme.onSurfaceVariant, fontSize = 11.sp)
                 }
 
                 Row(
@@ -889,16 +974,16 @@ private fun JarvisMessageBubble(
                         .padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconSpeaker(tint = TextSecondary, size = 14.dp)
+                    IconSpeaker(tint = scheme.onSurfaceVariant, size = 14.dp)
                     Spacer(Modifier.width(4.dp))
-                    Text("Listen", color = TextSecondary, fontSize = 11.sp)
+                    Text("Listen", color = scheme.onSurfaceVariant, fontSize = 11.sp)
                 }
 
                 val time = formatTimestamp(msg.timestamp)
                 if (time.isNotBlank()) {
                     Text(
                         time,
-                        color = TextTertiary,
+                        color = scheme.onSurfaceVariant.copy(alpha = 0.6f),
                         fontSize = 11.sp
                     )
                 }
@@ -909,6 +994,8 @@ private fun JarvisMessageBubble(
 
 @Composable
 private fun ThinkingIndicator() {
+    val scheme = MaterialTheme.colorScheme
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Start,
@@ -918,7 +1005,7 @@ private fun ThinkingIndicator() {
             modifier = Modifier
                 .size(24.dp)
                 .clip(CircleShape)
-                .background(JarvisSurfaceDark),
+                .background(scheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
             JarvisArcReactor(size = 18.dp, isSpeaking = true)
@@ -937,13 +1024,13 @@ private fun ThinkingIndicator() {
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(12.dp))
-                .background(JarvisSurfaceDark)
+                .background(scheme.surfaceVariant)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 "Thinking...",
-                color = JarvisCyan.copy(alpha = alpha),
+                color = scheme.primary.copy(alpha = alpha),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -962,10 +1049,13 @@ private fun FloatingInputBar(
     showToolsMenu: Boolean,
     onToggleToolsMenu: () -> Unit,
     onToolSelected: (String) -> Unit,
+    onAttachFile: () -> Unit,
     onSend: () -> Unit,
     onQuickVoice: () -> Unit,
     onVoiceMode: () -> Unit
 ) {
+    val scheme = MaterialTheme.colorScheme
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -975,8 +1065,8 @@ private fun FloatingInputBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(28.dp))
-                .background(JarvisSurfaceDark)
-                .border(1.dp, JarvisSurfaceBorder, RoundedCornerShape(28.dp))
+                .background(scheme.surface)
+                .border(1.dp, scheme.outline.copy(alpha = 0.35f), RoundedCornerShape(28.dp))
                 .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -986,26 +1076,31 @@ private fun FloatingInputBar(
                     onClick = onToggleToolsMenu,
                     modifier = Modifier.size(38.dp)
                 ) {
-                    IconPlus(tint = TextSecondary, size = 18.dp)
+                    IconPlus(tint = scheme.onSurfaceVariant, size = 18.dp)
                 }
 
                 DropdownMenu(
                     expanded = showToolsMenu,
                     onDismissRequest = onToggleToolsMenu,
-                    modifier = Modifier.background(JarvisSurfaceDark)
+                    modifier = Modifier.background(scheme.surface)
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Search Local Drive Docs", color = TextPrimary, fontSize = 13.sp) },
-                        leadingIcon = { IconDocument(tint = JarvisCyan, size = 16.dp) },
+                        text = { Text("Attach Document / Code", color = scheme.onSurface, fontSize = 13.sp) },
+                        leadingIcon = { IconDocument(tint = scheme.primary, size = 16.dp) },
+                        onClick = onAttachFile
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Search Local Drive Docs", color = scheme.onSurface, fontSize = 13.sp) },
+                        leadingIcon = { IconDocument(tint = scheme.primary, size = 16.dp) },
                         onClick = { onToolSelected("Jarvis, search indexed documents on my PC drives.") }
                     )
                     DropdownMenuItem(
-                        text = { Text("Check Device Health", color = TextPrimary, fontSize = 13.sp) },
-                        leadingIcon = { IconActivity(tint = JarvisCyan, size = 16.dp) },
+                        text = { Text("Check Device Health", color = scheme.onSurface, fontSize = 13.sp) },
+                        leadingIcon = { IconActivity(tint = scheme.primary, size = 16.dp) },
                         onClick = { onToolSelected("Jarvis, give me a full battery and performance diagnostics.") }
                     )
                     DropdownMenuItem(
-                        text = { Text("Today's Agenda", color = TextPrimary, fontSize = 13.sp) },
+                        text = { Text("Today's Agenda", color = scheme.onSurface, fontSize = 13.sp) },
                         leadingIcon = { IconSparkles(tint = ArcGold, size = 16.dp) },
                         onClick = { onToolSelected("Jarvis, what events are on my calendar today?") }
                     )
@@ -1016,15 +1111,15 @@ private fun FloatingInputBar(
             OutlinedTextField(
                 value = textInput,
                 onValueChange = onTextChange,
-                placeholder = { Text("Ask JARVIS...", color = TextSecondary, fontSize = 14.sp) },
+                placeholder = { Text("Ask JARVIS...", color = scheme.onSurfaceVariant, fontSize = 14.sp) },
                 modifier = Modifier.weight(1f),
                 maxLines = 4,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Color.Transparent,
                     unfocusedBorderColor = Color.Transparent,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary,
-                    cursorColor = JarvisCyan,
+                    focusedTextColor = scheme.onSurface,
+                    unfocusedTextColor = scheme.onSurface,
+                    cursorColor = scheme.primary,
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent
                 )
@@ -1037,9 +1132,9 @@ private fun FloatingInputBar(
                     modifier = Modifier
                         .size(38.dp)
                         .clip(CircleShape)
-                        .background(JarvisCyan)
+                        .background(scheme.primary)
                 ) {
-                    IconSend(tint = Color.Black, size = 16.dp)
+                    IconSend(tint = scheme.onPrimary, size = 16.dp)
                 }
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1048,7 +1143,7 @@ private fun FloatingInputBar(
                         modifier = Modifier.size(36.dp)
                     ) {
                         IconMicrophone(
-                            tint = if (isListening) JarvisCyan else TextSecondary,
+                            tint = if (isListening) scheme.primary else scheme.onSurfaceVariant,
                             size = 18.dp
                         )
                     }
@@ -1058,9 +1153,9 @@ private fun FloatingInputBar(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(JarvisSurfaceElevated)
+                            .background(scheme.surfaceVariant)
                     ) {
-                        IconVoiceWaveform(tint = JarvisCyan, size = 16.dp)
+                        IconVoiceWaveform(tint = scheme.primary, size = 16.dp)
                     }
                 }
             }
@@ -1078,17 +1173,18 @@ private fun ServerConfigDialog(
     onConnect: (String, String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val scheme = MaterialTheme.colorScheme
     var tempIp by remember { mutableStateOf(if (currentIp.isBlank()) "127.0.0.1:8000" else currentIp) }
     var tempToken by remember { mutableStateOf(if (currentToken.isBlank()) "jarvis_local_token" else currentToken) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Host Connection", color = TextPrimary, fontWeight = FontWeight.SemiBold) },
+        title = { Text("Host Connection", color = scheme.onSurface, fontWeight = FontWeight.SemiBold) },
         text = {
             Column {
                 Text(
                     "Select a network preset or specify host address:",
-                    color = TextSecondary,
+                    color = scheme.onSurfaceVariant,
                     fontSize = 12.sp
                 )
                 Spacer(Modifier.height(12.dp))
@@ -1099,23 +1195,23 @@ private fun ServerConfigDialog(
                 ) {
                     Button(
                         onClick = { tempIp = "127.0.0.1:8000"; tempToken = "jarvis_local_token" },
-                        colors = ButtonDefaults.buttonColors(containerColor = JarvisSurfaceElevated),
+                        colors = ButtonDefaults.buttonColors(containerColor = scheme.surfaceVariant),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("USB", color = JarvisCyan, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        Text("USB", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
                     Button(
                         onClick = { tempIp = "192.168.1.37:8000"; tempToken = "jarvis_local_token" },
-                        colors = ButtonDefaults.buttonColors(containerColor = JarvisSurfaceElevated),
+                        colors = ButtonDefaults.buttonColors(containerColor = scheme.surfaceVariant),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Wi-Fi", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Wi-Fi", color = scheme.onSurface, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
                     Button(
                         onClick = { tempIp = "192.168.137.1:8000"; tempToken = "jarvis_local_token" },
-                        colors = ButtonDefaults.buttonColors(containerColor = JarvisSurfaceElevated),
+                        colors = ButtonDefaults.buttonColors(containerColor = scheme.surfaceVariant),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
@@ -1127,13 +1223,11 @@ private fun ServerConfigDialog(
                 OutlinedTextField(
                     value = tempIp,
                     onValueChange = { tempIp = it },
-                    label = { Text("Server Host / IP", color = TextSecondary, fontSize = 12.sp) },
+                    label = { Text("Server Host / IP") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = JarvisCyan,
-                        unfocusedBorderColor = JarvisSurfaceBorder,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
+                        focusedBorderColor = scheme.primary,
+                        unfocusedBorderColor = scheme.outline.copy(alpha = 0.4f)
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1141,13 +1235,11 @@ private fun ServerConfigDialog(
                 OutlinedTextField(
                     value = tempToken,
                     onValueChange = { tempToken = it },
-                    label = { Text("Pairing Token", color = TextSecondary, fontSize = 12.sp) },
+                    label = { Text("Pairing Token") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = JarvisCyan,
-                        unfocusedBorderColor = JarvisSurfaceBorder,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
+                        focusedBorderColor = scheme.primary,
+                        unfocusedBorderColor = scheme.outline.copy(alpha = 0.4f)
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1161,15 +1253,15 @@ private fun ServerConfigDialog(
                 },
                 enabled = tempIp.isNotBlank()
             ) {
-                Text("Connect", color = JarvisCyan, fontWeight = FontWeight.SemiBold)
+                Text("Connect", color = scheme.primary, fontWeight = FontWeight.SemiBold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = TextSecondary)
+                Text("Cancel", color = scheme.onSurfaceVariant)
             }
         },
-        containerColor = JarvisSurfaceDark
+        containerColor = scheme.surface
     )
 }
 

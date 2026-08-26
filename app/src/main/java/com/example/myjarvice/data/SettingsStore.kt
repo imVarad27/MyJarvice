@@ -3,13 +3,6 @@ package com.example.myjarvice.data
 import android.content.Context
 import com.example.myjarvice.theme.ThemeMode
 
-/**
- * Lightweight persistence for app-level preferences, backed by SharedPreferences.
- *
- * Kept intentionally dependency-free (no DataStore) for the current app size —
- * this is the "pragmatic architecture" choice. If preferences grow or need
- * reactive flows across processes, migrate to DataStore.
- */
 class SettingsStore(context: Context) {
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -26,13 +19,6 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_DYNAMIC, false)
         set(value) {
             prefs.edit().putBoolean(KEY_DYNAMIC, value).apply()
-        }
-
-    /** Picovoice access key for the "Hi Jarvis" wake word (from console.picovoice.ai). */
-    var picovoiceKey: String
-        get() = prefs.getString(KEY_PICOVOICE, "") ?: ""
-        set(value) {
-            prefs.edit().putString(KEY_PICOVOICE, value.trim()).apply()
         }
 
     var wakeWordEnabled: Boolean
@@ -53,16 +39,42 @@ class SettingsStore(context: Context) {
         get() = prefs.getString(KEY_SERVER_TOKEN, DEFAULT_SERVER_TOKEN) ?: DEFAULT_SERVER_TOKEN
         set(value) { prefs.edit().putString(KEY_SERVER_TOKEN, value.trim()).apply() }
 
-
     /**
-     * Name of the TTS voice chosen in voice mode's "Change Voice" sheet.
-     * Empty means "whatever the engine defaults to".
+     * Name of the TTS voice chosen in settings or voice mode.
      */
     var ttsVoice: String
         get() = prefs.getString(KEY_TTS_VOICE, "") ?: ""
         set(value) {
             prefs.edit().putString(KEY_TTS_VOICE, value).apply()
         }
+
+    var ttsSpeechRate: Float
+        get() = prefs.getFloat(KEY_TTS_SPEECH_RATE, 1.0f)
+        set(value) { prefs.edit().putFloat(KEY_TTS_SPEECH_RATE, value).apply() }
+
+    var ttsPitch: Float
+        get() = prefs.getFloat(KEY_TTS_PITCH, 1.0f)
+        set(value) { prefs.edit().putFloat(KEY_TTS_PITCH, value).apply() }
+
+    var autoSpeakReplies: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_SPEAK, true)
+        set(value) { prefs.edit().putBoolean(KEY_AUTO_SPEAK, value).apply() }
+
+    var userName: String
+        get() = prefs.getString(KEY_USER_NAME, "Sir") ?: "Sir"
+        set(value) { prefs.edit().putString(KEY_USER_NAME, value.trim()).apply() }
+
+    var aiPersonality: String
+        get() = prefs.getString(KEY_AI_PERSONALITY, "Iron Man JARVIS") ?: "Iron Man JARVIS"
+        set(value) { prefs.edit().putString(KEY_AI_PERSONALITY, value).apply() }
+
+    var modelName: String
+        get() = prefs.getString(KEY_MODEL_NAME, "gemma4-e4b") ?: "gemma4-e4b"
+        set(value) { prefs.edit().putString(KEY_MODEL_NAME, value).apply() }
+
+    var temperature: Float
+        get() = prefs.getFloat(KEY_TEMPERATURE, 0.7f)
+        set(value) { prefs.edit().putFloat(KEY_TEMPERATURE, value).apply() }
 
     /**
      * Voice Match: Restricts wake-word activation exclusively to the enrolled user's voice.
@@ -112,22 +124,27 @@ class SettingsStore(context: Context) {
     }
 
     companion object {
-        /** Matches the client default; overridden as soon as the user sets an address. */
         const val DEFAULT_SERVER_IP = "127.0.0.1:8000"
         const val DEFAULT_SERVER_TOKEN = "jarvis_local_token"
 
-        private const val PREFS_NAME = "jarvic_settings"
+        private const val PREFS_NAME = "jarvis_settings"
         private const val KEY_SERVER_IP = "server_ip"
         private const val KEY_SERVER_TOKEN = "server_token"
         private const val KEY_THEME = "theme_mode"
 
         private const val KEY_DYNAMIC = "dynamic_color"
-        private const val KEY_PICOVOICE = "picovoice_key"
         private const val KEY_WAKE = "wake_word_enabled"
         private const val KEY_TTS_VOICE = "tts_voice"
+        private const val KEY_TTS_SPEECH_RATE = "tts_speech_rate"
+        private const val KEY_TTS_PITCH = "tts_pitch"
+        private const val KEY_AUTO_SPEAK = "auto_speak"
+        private const val KEY_USER_NAME = "user_name"
+        private const val KEY_AI_PERSONALITY = "ai_personality"
+        private const val KEY_MODEL_NAME = "model_name"
+        private const val KEY_TEMPERATURE = "temperature"
+
         private const val KEY_VOICE_MATCH_ENABLED = "voice_match_enabled"
         private const val KEY_VOICE_MATCH_THRESHOLD = "voice_match_threshold"
         private const val KEY_MASTER_VOICEPRINT = "master_voiceprint_vector"
     }
 }
-
