@@ -125,15 +125,11 @@ class JarvisWebSocketClient {
                     val sender = obj.optString("sender", "JARVIS")
                     Log.d("JarvisWS", "Message received: $text")
 
-                    val actionType = obj.optString("action", "")
-                    val actionQuery = obj.optString("target", "")
-
                     val msgType = obj.optString("type", "RESPONSE")
                     val messageText = obj.optString("text", "")
                     val ts = obj.optString("timestamp", "")
                     val imagePayload = if (obj.has("image") && !obj.isNull("image")) obj.getString("image") else null
                     val msg = JarvisMessage(sender, messageText, msgType, ts, imagePayload)
-
 
                     // Drafted email waiting for approval
                     if (obj.has("pending_email") && !obj.isNull("pending_email")) {
@@ -146,14 +142,23 @@ class JarvisWebSocketClient {
                         )
                     }
 
-
-                    if (actionType.isNotBlank() && actionQuery.isNotBlank()) {
-                        _latestAction.value = JarvisAction(
-                            id = ts.ifBlank { System.currentTimeMillis().toString() },
-                            type = actionType,
-                            query = actionQuery
-                        )
+                    // Directive Action sent by server: {"type": "OPEN_APP", "query": "camera"}
+                    if (obj.has("action") && !obj.isNull("action")) {
+                        val actionObj = obj.optJSONObject("action")
+                        if (actionObj != null) {
+                            val aType = actionObj.optString("type", "")
+                            val aQuery = actionObj.optString("query", "")
+                            if (aType.isNotBlank() && aQuery.isNotBlank()) {
+                                Log.i("JarvisWS", "Action parsed from server: $aType -> $aQuery")
+                                _latestAction.value = JarvisAction(
+                                    id = ts.ifBlank { System.currentTimeMillis().toString() },
+                                    type = aType,
+                                    query = aQuery
+                                )
+                            }
+                        }
                     }
+
 
                     _latestResponse.value = msg
                     _chatHistory.value = _chatHistory.value + msg

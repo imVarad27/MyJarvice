@@ -220,9 +220,9 @@ def maybe_run_action(user_text: str) -> Optional[str]:
     return None
 
 
-# --- Phone actions the Android app executes locally (Phase 3) --------------
-CALL_RE = re.compile(r"^\s*(?:please\s+)?(?:call|phone|dial|ring)\s+(?:up\s+)?(.+)$", re.IGNORECASE)
-OPEN_RE = re.compile(r"^\s*(?:please\s+)?(?:open|launch|start|go to)\s+(?:the\s+)?(.+)$", re.IGNORECASE)
+# --- Phone actions the Android app executes locally --------------
+CALL_RE = re.compile(r"\b(?:call|phone|dial|ring)\s+(?:up\s+)?(.+)$", re.IGNORECASE)
+OPEN_RE = re.compile(r"\b(?:open|launch|start|opening|go to)\s+(?:the\s+)?(.+)$", re.IGNORECASE)
 
 # Navigation is checked before OPEN_RE because "open maps and route to X" starts with
 # "open" but is a navigation request, not a request to launch an app.
@@ -247,7 +247,7 @@ def _clean_destination(text: str) -> str:
 
 def _clean_target(text: str) -> str:
     text = text.strip().rstrip("?.!")
-    text = re.sub(r"\b(please|now|for me|app|application)\b", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\b(please|now|for me|app|application|the)\b", "", text, flags=re.IGNORECASE)
     return text.strip()
 
 
@@ -260,40 +260,51 @@ def detect_device_action(user_text: str) -> Optional[Dict[str, str]]:
     """Returns a directive {type, query} for the app to execute on the phone,
     or None. 'call me X' is intentionally excluded — that sets the user's name."""
     low = user_text.strip().lower()
+    low = re.sub(r"^(?:hey\s+)?(?:jarvis|jarvice)[,:\s]*", "", low).strip()
+
     if low.startswith("call me") or low.startswith("call my"):
         return None
 
-    if FLASHLIGHT_RE.search(user_text):
+    # Camera intent
+    if any(k in low for k in ["open camera", "opening camera", "launch camera", "take a picture", "take a photo", "open the camera", "camera app"]):
+        return {"type": "OPEN_APP", "query": "camera"}
+
+    # Maps intent
+    if any(k in low for k in ["open maps", "opening maps", "open google maps", "launch maps", "show maps", "open the maps", "maps app"]):
+        return {"type": "OPEN_APP", "query": "maps"}
+
+    if FLASHLIGHT_RE.search(low):
         action_state = "OFF" if "off" in low else "ON"
         return {"type": "FLASHLIGHT", "query": action_state}
 
-    if ALARM_RE.search(user_text):
+    if ALARM_RE.search(low):
         return {"type": "SET_ALARM", "query": user_text}
 
-    if WHATSAPP_RE.search(user_text):
+    if WHATSAPP_RE.search(low):
         msg_content = user_text
         if "saying" in low:
             msg_content = user_text.split("saying", 1)[1].strip()
         return {"type": "WHATSAPP", "query": msg_content}
 
-    m = NAVIGATE_RE.search(user_text)
+    m = NAVIGATE_RE.search(low)
     if m:
         destination = _clean_destination(m.group(1))
         if destination:
             return {"type": "NAVIGATE", "query": destination}
 
-    m = CALL_RE.match(user_text)
+    m = CALL_RE.search(low)
     if m:
         target = _clean_target(m.group(1))
         if target:
             return {"type": "CALL", "query": target}
 
-    m = OPEN_RE.match(user_text)
+    m = OPEN_RE.search(low)
     if m:
         target = _clean_target(m.group(1))
         if target:
             return {"type": "OPEN_APP", "query": target}
     return None
+
 
 
 # ==========================================================================

@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.provider.AlarmClock
 import android.provider.ContactsContract
 import android.provider.MediaStore
 import android.provider.Settings
@@ -15,13 +16,12 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 
 /**
- * Executes phone-side directives from the JARVIC server (Phase 3): opening apps
- * and placing calls. All launches use FLAG_ACTIVITY_NEW_TASK because they may be
- * started from a non-Activity context.
+ * Executes phone-side directives from the JARVIS server: opening apps,
+ * launching camera, navigation, placing calls, flashlight, alarms.
  */
 class DeviceActionExecutor(private val context: Context) {
 
-    /** Common voice-name → package aliases for reliability when label matching is ambiguous. */
+    /** Common voice-name → package aliases for reliability. */
     private val appAliases = mapOf(
         "whatsapp" to "com.whatsapp",
         "instagram" to "com.instagram.android",
@@ -34,7 +34,10 @@ class DeviceActionExecutor(private val context: Context) {
         "telegram" to "org.telegram.messenger",
         "facebook" to "com.facebook.katana",
         "messenger" to "com.facebook.orca",
-        "play store" to "com.android.vending"
+        "play store" to "com.android.vending",
+        "calculator" to "com.google.android.calculator",
+        "photos" to "com.google.android.apps.photos",
+        "gallery" to "com.coloros.gallery3d"
     )
 
     fun execute(action: JarvisAction) {
@@ -49,6 +52,99 @@ class DeviceActionExecutor(private val context: Context) {
             "WHATSAPP" -> sendWhatsAppMessage(action.query)
             else -> Log.w(TAG, "Unknown action type: ${action.type}")
         }
+    }
+
+    // --- Camera -----------------------------------------------------------
+    private fun openCamera() {
+        val pm = context.packageManager
+        Log.i(TAG, "Triggering camera launch sequence...")
+
+        // 1. Try standard camera capture intents
+        val standardIntents = listOf(
+            Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA),
+            Intent(MediaStore.ACTION_IMAGE_CAPTURE),
+            Intent("android.media.action.STILL_IMAGE_CAMERA_SECURE")
+        )
+        for (intent in standardIntents) {
+            try {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (intent.resolveActivity(pm) != null) {
+                    context.startActivity(intent)
+                    Log.i(TAG, "Camera launched via standard intent: ${intent.action}")
+                    return
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Standard camera intent failed: ${e.message}")
+            }
+        }
+
+        // 2. Try OEM Camera package launch intents (Realme / Oppo / AOSP / Google)
+        val cameraPkgs = listOf(
+            "com.oplus.camera",
+            "com.oppo.camera",
+            "com.realme.camera",
+            "com.android.camera",
+            "com.google.android.GoogleCamera",
+            "com.sec.android.app.camera"
+        )
+        for (pkg in cameraPkgs) {
+            val launchIntent = pm.getLaunchIntentForPackage(pkg)
+            if (launchIntent != null) {
+                launch(launchIntent)
+                return
+            }
+        }
+
+        // 3. Fallback direct intent launch
+        launch(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA))
+    }
+
+    // --- Maps & Navigation ------------------------------------------------
+    private fun openMaps(destination: String = "") {
+        val target = destination.trim()
+        val pm = context.packageManager
+
+        if (target.isNotBlank()) {
+            val encoded = Uri.encode(target)
+            val candidates = listOf(
+                Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$encoded")).setPackage(MAPS_PACKAGE),
+                Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$encoded")),
+                Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$encoded")).setPackage(MAPS_PACKAGE),
+                Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$encoded"))
+            )
+            for (intent in candidates) {
+                try {
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    if (intent.resolveActivity(pm) != null) {
+                        context.startActivity(intent)
+                        return
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Navigation candidate failed: ${e.message}")
+                }
+            }
+            launch(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$encoded")))
+            return
+        }
+
+        // Open Maps app directly
+        val mapsIntent = pm.getLaunchIntentForPackage(MAPS_PACKAGE)
+        if (mapsIntent != null) {
+            launch(mapsIntent)
+            return
+        }
+
+        // Fallback geo intent
+        val geoIntent = Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q="))
+        if (geoIntent.resolveActivity(pm) != null) {
+            launch(geoIntent)
+            return
+        }
+        launch(Intent(Intent.ACTION_VIEW, Uri.parse("https://maps.google.com")))
+    }
+
+    private fun navigateTo(destination: String) {
+        openMaps(destination)
     }
 
     // --- Flashlight --------------------------------------------------------
@@ -80,11 +176,11 @@ class DeviceActionExecutor(private val context: Context) {
             val finalHour = if (isPm && hour < 12) hour + 12 else if (!isPm && hour == 12) 0 else hour
             val minute = Regex(""":(\d{2})""").find(timeQuery)?.groupValues?.get(1)?.toIntOrNull() ?: 0
 
-            val intent = Intent(android.provider.AlarmClock.ACTION_SET_ALARM).apply {
-                putExtra(android.provider.AlarmClock.EXTRA_HOUR, finalHour)
-                putExtra(android.provider.AlarmClock.EXTRA_MINUTES, minute)
-                putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, "JARVIS Alarm")
-                putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, false)
+            val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
+                putExtra(AlarmClock.EXTRA_HOUR, finalHour)
+                putExtra(AlarmClock.EXTRA_MINUTES, minute)
+                putExtra(AlarmClock.EXTRA_MESSAGE, "JARVIS Alarm")
+                putExtra(AlarmClock.EXTRA_SKIP_UI, false)
             }
             launch(intent)
         } catch (e: Exception) {
@@ -107,45 +203,29 @@ class DeviceActionExecutor(private val context: Context) {
         }
     }
 
-    // --- Navigate ---------------------------------------------------------
-    /**
-     * Starts turn-by-turn navigation to [destination] from wherever the phone is.
-     *
-     * This needs no Maps API key and no billing account: `google.navigation:` is a
-     * plain intent handled by the installed Maps app, which does the routing itself.
-     * A key would only be required to compute routes inside our own process.
-     */
-    private fun navigateTo(destination: String) {
-        val target = destination.trim()
-        if (target.isBlank()) return
-        val encoded = Uri.encode(target)
-
-        // Turn-by-turn in Google Maps, then plain map search, then any maps handler.
-        val candidates = listOf(
-            Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$encoded"))
-                .setPackage(MAPS_PACKAGE),
-            Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$encoded"))
-                .setPackage(MAPS_PACKAGE),
-            Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$encoded"))
-        )
-
-        for (intent in candidates) {
-            if (intent.resolveActivity(context.packageManager) != null) {
-                Log.i(TAG, "Navigating to '$target' via ${intent.data}")
-                launch(intent)
-                return
-            }
-        }
-        toast("No maps app available to navigate to \"$target\"")
-    }
-
     // --- Open app ---------------------------------------------------------
     private fun openApp(rawQuery: String) {
         val q = rawQuery.trim().lowercase()
         if (q.isBlank()) return
         val pm = context.packageManager
 
-        // 1) Known alias package
+        // 1) Specialized System Targets
+        when {
+            q == "camera" || q.contains("camera") || q.contains("photo") || q.contains("picture") -> {
+                openCamera()
+                return
+            }
+            q == "maps" || q.contains("maps") || q.contains("google maps") -> {
+                openMaps()
+                return
+            }
+            q == "settings" -> {
+                launch(Intent(Settings.ACTION_SETTINGS))
+                return
+            }
+        }
+
+        // 2) Known alias package
         appAliases[q]?.let { pkg ->
             val intent = pm.getLaunchIntentForPackage(pkg)
             if (intent != null) {
@@ -154,21 +234,19 @@ class DeviceActionExecutor(private val context: Context) {
             Log.w(TAG, "Alias '$q' -> $pkg but that package is not installed")
         }
 
-        // 2) System destinations without a normal launcher entry
-        when (q) {
-            "settings" -> { launch(Intent(Settings.ACTION_SETTINGS)); return }
-            "camera" -> { launch(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)); return }
-        }
-
         // 3) Fuzzy-match against installed launchable apps by label
-        val main = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        val apps = pm.queryIntentActivities(main, 0)
-        val match = apps.firstOrNull { it.loadLabel(pm).toString().lowercase().contains(q) }
-        if (match != null) {
-            pm.getLaunchIntentForPackage(match.activityInfo.packageName)?.let { launch(it); return }
+        try {
+            val main = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            val apps = pm.queryIntentActivities(main, 0)
+            val match = apps.firstOrNull { it.loadLabel(pm).toString().lowercase().contains(q) }
+            if (match != null) {
+                pm.getLaunchIntentForPackage(match.activityInfo.packageName)?.let { launch(it); return }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Query intent activities error: ${e.message}")
         }
 
-        Log.w(TAG, "No installed app matched '$q' (searched ${apps.size} launchable apps)")
+        Log.w(TAG, "No installed app matched '$q'")
         toast("Couldn't find an app called \"$rawQuery\"")
     }
 
@@ -177,7 +255,6 @@ class DeviceActionExecutor(private val context: Context) {
         val query = rawQuery.trim()
         if (query.isBlank()) return
 
-        // A raw phone number (mostly digits) is dialed directly; otherwise resolve a contact.
         val digits = query.filter { it.isDigit() || it == '+' }
         val looksLikeNumber = query.none { it.isLetter() } && digits.count { it.isDigit() } >= 3
         val number = if (looksLikeNumber) digits else resolveContactNumber(query)
@@ -191,7 +268,6 @@ class DeviceActionExecutor(private val context: Context) {
             context, Manifest.permission.CALL_PHONE
         ) == PackageManager.PERMISSION_GRANTED
 
-        // With permission → place the call directly; otherwise open the dialer pre-filled.
         val intent = Intent(
             if (canCallDirectly) Intent.ACTION_CALL else Intent.ACTION_DIAL,
             Uri.parse("tel:$number")
@@ -241,5 +317,4 @@ class DeviceActionExecutor(private val context: Context) {
         const val TAG = "JarvisAction"
         const val MAPS_PACKAGE = "com.google.android.apps.maps"
     }
-
 }

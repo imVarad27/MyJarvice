@@ -120,9 +120,17 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         // Execute phone actions (call / open app) the server directs.
         viewModelScope.launch {
             wsClient.latestAction.collect { action ->
-                action?.let { _pendingAction.value = it }
+                action?.let {
+                    if (it.type.equals("CALL", ignoreCase = true)) {
+                        _pendingAction.value = it
+                    } else {
+                        // Safe actions (open app, camera, maps, flashlight, alarm, whatsapp) execute immediately
+                        actionExecutor.execute(it)
+                    }
+                }
             }
         }
+
 
         // When opened by the "Jarvis" wake word, drop straight into voice mode.
         viewModelScope.launch {
