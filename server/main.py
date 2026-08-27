@@ -592,7 +592,7 @@ def detect_pc_action(user_text: str) -> Optional[Tuple[str, Optional[str]]]:
     t = user_text.lower().strip()
 
     # 1. Desktop Screenshot
-    if any(k in t for k in ["screenshot", "screen shot", "capture screen", "capture desktop", "show my pc screen", "show desktop", "host screen", "pc display", "pc screen"]):
+    if any(k in t for k in ["screenshot", "screen shot", "capture screen", "capture desktop", "show my pc screen", "show desktop", "host screen", "pc display", "pc screen", "take a screenshot", "take screenshot"]):
         b64 = pc_controller.capture_desktop_screenshot()
         if b64:
             return "Capturing current display of your host workstation now, Sir.", b64
@@ -639,14 +639,19 @@ def detect_pc_action(user_text: str) -> Optional[Tuple[str, Optional[str]]]:
             res = pc_controller.control_media("playpause")
         return res, None
 
-    # 6. Launch PC App
-    if any(t.startswith(prefix) for prefix in ["open on pc", "launch on pc", "start on pc", "open on my pc", "launch on my pc", "run on pc"]) or ("on my pc" in t and any(k in t for k in ["open", "launch", "start"])):
-        app_query = re.sub(r"\b(open|launch|start|run|on|my|pc|computer|host|the|app|program)\b", "", t).strip()
+    # 6. Launch PC App / PC Camera
+    is_pc_specified = any(target in t for target in ["on pc", "on my pc", "on computer", "on my computer", "on laptop", "on host", "on workstation", "pc camera", "pc chrome", "pc terminal", "pc vscode", "pc notepad", "pc spotify"])
+    if is_pc_specified or any(t.startswith(prefix) for prefix in ["open on pc", "launch on pc", "start on pc", "open on my pc", "launch on my pc", "run on pc", "launch pc"]):
+        if "camera" in t or "webcam" in t:
+            res = pc_controller.launch_pc_application("camera")
+            return res, None
+        app_query = re.sub(r"\b(open|launch|start|run|on|my|pc|computer|laptop|host|workstation|the|app|program)\b", "", t).strip()
         if app_query:
             res = pc_controller.launch_pc_application(app_query)
             return res, None
 
     return None
+
 
 
 def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[Dict[str, str]]) -> Tuple[str, Optional[Dict[str, Any]], Optional[Dict[str, Any]], Optional[str]]:

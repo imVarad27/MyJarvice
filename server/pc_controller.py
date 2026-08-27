@@ -1,52 +1,74 @@
 """
-JARVIS Host PC Remote Automation Controller
-Provides desktop screenshot capture, real-time hardware telemetry,
-audio/media controls, workstation security locking, and app launching.
+JARVIS 1.0 - Host PC Automation & Control Module
+================================================
+Provides local Windows PC capabilities:
+1. Live Desktop Screenshot Capture (with interactive desktop attachment)
+2. Hardware & System Telemetry (CPU, RAM, Disks, Battery, Top Processes)
+3. Audio Master Volume & Mute Controls (pycaw / Windows GDI)
+4. Desktop Media Controls (Play/Pause, Next, Prev, Stop via virtual keys)
+5. Workstation Security (Lock screen via LockWorkStation)
+6. Desktop Application Launcher (VS Code, Chrome, Terminal, Camera, Notepad, etc.)
 """
 
+import os
+import re
+import io
+import time
 import base64
 import ctypes
-import io
-import logging
-import os
+from ctypes import wintypes
 import shutil
+import logging
 import subprocess
-import time
-from typing import Any, Dict, List, Optional
-
-import psutil
+from typing import Dict, Any, Optional
 from PIL import Image
 
-logger = logging.getLogger("MyJarvisPCController")
+logger = logging.getLogger("JarvisPCController")
+
+# ==============================================================================
+# Helper: Attach thread to interactive Windows Desktop station (winsta0\default)
+# ==============================================================================
+def _attach_interactive_desktop():
+    """Attaches process thread to the active interactive GUI window station."""
+    try:
+        user32 = ctypes.windll.user32
+        hwinsta = user32.OpenWindowStationW("winsta0", False, 0x037F)
+        if hwinsta:
+            user32.SetProcessWindowStation(hwinsta)
+        hdesk = user32.OpenDesktopW("default", 0, False, 0x01FF)
+        if hdesk:
+            user32.SetThreadDesktop(hdesk)
+    except Exception as e:
+        logger.debug(f"Interactive desktop attach error (non-fatal): {e}")
 
 # ==============================================================================
 # 1. Desktop Screenshot Capture
 # ==============================================================================
 
-def capture_desktop_screenshot(max_width: int = 1280, quality: int = 80) -> Optional[str]:
+def capture_desktop_screenshot() -> Optional[str]:
     """
-    Captures the primary desktop screen, resizes if larger than max_width,
-    and returns a base64-encoded JPEG data URI (e.g. 'data:image/jpeg;base64,...').
+    Captures the primary Windows display and returns an optimized base64 JPEG data URI.
     """
+    _attach_interactive_desktop()
     img = None
 
-    # Method 1: Try mss (fastest and handles multi-monitor)
+    # Method 1: PIL ImageGrab with interactive desktop attachment
     try:
-        import mss
-        with mss.mss() as sct:
-            monitor = sct.monitors[1] if len(sct.monitors) > 1 else sct.monitors[0]
-            sct_img = sct.grab(monitor)
-            img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
+        from PIL import ImageGrab
+        img = ImageGrab.grab(all_screens=True)
     except Exception as e:
-        logger.warning(f"MSS screenshot failed: {e}. Trying fallback methods.")
+        logger.warning(f"PIL ImageGrab failed: {e}. Trying MSS.")
 
-    # Method 2: Fallback to PIL ImageGrab
+    # Method 2: Try MSS
     if img is None:
         try:
-            from PIL import ImageGrab
-            img = ImageGrab.grab()
+            import mss
+            with mss.mss() as sct:
+                monitor = sct.monitors[1] if len(sct.monitors) > 1 else sct.monitors[0]
+                sct_img = sct.grab(monitor)
+                img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
         except Exception as e:
-            logger.warning(f"PIL ImageGrab failed: {e}. Trying PowerShell GDI fallback.")
+            logger.warning(f"MSS screenshot failed: {e}. Trying PowerShell GDI fallback.")
 
     # Method 3: Fallback to PowerShell GDI script
     if img is None:
@@ -63,7 +85,7 @@ def capture_desktop_screenshot(max_width: int = 1280, quality: int = 80) -> Opti
             $graphics.Dispose()
             $bitmap.Dispose()
             """
-            proc = subprocess.run(["powershell", "-NoProfile", "-Command", ps_script], capture_output=True, text=True, timeout=5)
+            subprocess.run(["powershell", "-NoProfile", "-Command", ps_script], capture_output=True, text=True, timeout=5)
             if os.path.exists(temp_path):
                 img = Image.open(temp_path).copy()
                 try:
@@ -78,43 +100,60 @@ def capture_desktop_screenshot(max_width: int = 1280, quality: int = 80) -> Opti
         return None
 
     try:
-        # Resize for mobile transmission efficiency if wider than max_width
-        if img.width > max_width:
-            aspect = img.height / img.width
-            new_height = int(max_width * aspect)
-            img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
+        # Resize to max width 1280 to maintain high resolution while keeping WebSocket payload lightweight
+        max_w = 1280
+        if img.width > max_w:
+            scale = max_w / float(img.width)
+            new_h = int(img.height * scale)
+            img = img.resize((max_w, new_h), Image.Resampling.LANCZOS)
+
+        # Convert to RGB if RGBA
+        if img.mode != "RGB":
+            img = img.convert("RGB")
 
         buffer = io.BytesIO()
-        img.convert("RGB").save(buffer, format="JPEG", quality=quality, optimize=True)
-        b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-        return f"data:image/jpeg;base64,{b64}"
+        img.save(buffer, format="JPEG", quality=85, optimize=True)
+        raw_bytes = buffer.getvalue()
+        b64_str = base64.b64encode(raw_bytes).decode("utf-8")
+        return f"data:image/jpeg;base64,{b64_str}"
     except Exception as e:
-        logger.error(f"Error encoding screenshot to base64: {e}")
+        logger.error(f"Error encoding screenshot to JPEG: {e}")
         return None
 
 
 # ==============================================================================
-# 2. Hardware Telemetry & System Resource Diagnostics
+# 2. Hardware & System Telemetry
 # ==============================================================================
 
 def get_system_telemetry() -> Dict[str, Any]:
     """
-    Collects live hardware stats: CPU %, RAM (used, total, %), Disks (C:, D:, E:),
-    Battery, System Uptime, and Top active CPU processes.
+    Returns real-time host hardware telemetry:
+    - CPU load % & core count
+    - RAM utilized / total / %
+    - Storage partitions (C:, D:, etc.) free space & %
+    - Battery level & power status (if laptop)
+    - System uptime
+    - Top CPU-consuming processes
     """
     try:
+        import psutil
+
+        # CPU
         cpu_usage = psutil.cpu_percent(interval=0.1)
         cpu_count = psutil.cpu_count(logical=True)
+
+        # RAM
         ram = psutil.virtual_memory()
 
-        # Disks
+        # Disk drives
         disks_info = []
-        for drive in ["C:", "D:", "E:"]:
-            if os.path.exists(f"{drive}\\"):
+        for partition in psutil.disk_partitions(all=False):
+            if partition.fstype:
                 try:
-                    usage = psutil.disk_usage(f"{drive}\\")
+                    usage = psutil.disk_usage(partition.mountpoint)
                     disks_info.append({
-                        "drive": drive,
+                        "drive": partition.device,
+                        "mountpoint": partition.mountpoint,
                         "total_gb": round(usage.total / (1024 ** 3), 1),
                         "used_gb": round(usage.used / (1024 ** 3), 1),
                         "free_gb": round(usage.free / (1024 ** 3), 1),
@@ -179,39 +218,48 @@ def format_telemetry_narrative(stats: Dict[str, Any]) -> str:
     ram_pct = stats.get("ram_percent", 0)
     uptime = stats.get("uptime", "0h 0m")
 
-    disks_str = ", ".join(f"{d['drive']} ({d['free_gb']} GB free, {d['percent']}% used)" for d in stats.get("disks", []))
+    # Main disk free space
+    disk_summary = ""
+    disks = stats.get("disks", [])
+    if disks:
+        c_drive = next((d for d in disks if "C" in d.get("drive", "") or "c" in d.get("mountpoint", "")), disks[0])
+        disk_summary = f"Drive {c_drive.get('drive', 'C:')} has {c_drive.get('free_gb')} GB available ({c_drive.get('percent')}% utilized)."
 
-    batt_str = ""
-    if stats.get("battery"):
-        b = stats["battery"]
-        charging = "charging" if b["power_plugged"] else "on battery"
-        batt_str = f" Battery is at {b['percent']}% ({charging})."
+    battery_summary = ""
+    batt = stats.get("battery")
+    if batt:
+        plugged_str = "plugged in" if batt.get("power_plugged") else "on battery"
+        battery_summary = f"Battery is at {batt.get('percent')}%, {plugged_str}."
 
-    return (
-        f"Host Workstation Status: Online and nominal.\n"
-        f"• CPU Load: {cpu}% across {stats.get('cpu_cores', 8)} cores\n"
-        f"• Memory: {ram_used} GB / {ram_total} GB utilized ({ram_pct}%)\n"
-        f"• Storage: {disks_str}\n"
-        f"• Uptime: {uptime}.{batt_str}"
-    )
+    top_procs = stats.get("top_processes", [])
+    procs_str = f"Active loads: {', '.join(top_procs)}." if top_procs else ""
+
+    narrative = (
+        f"Host workstation online, Sir. CPU load is at {cpu}%, RAM utilization is {ram_used} GB of {ram_total} GB ({ram_pct}%). "
+        f"{disk_summary} System uptime is {uptime}. {battery_summary} {procs_str}"
+    ).strip()
+
+    return narrative
 
 
 # ==============================================================================
-# 3. Audio Volume & Media Key Controls
+# 3. Audio Volume & Media Controls
 # ==============================================================================
 
-def set_master_volume(level: int) -> str:
-    """Sets master system volume from 0 to 100%."""
-    level = max(0, min(100, level))
+def set_master_volume(level_percent: int) -> str:
+    """Sets host PC master audio volume (0-100)."""
+    level_percent = max(0, min(100, level_percent))
+    scalar = level_percent / 100.0
+
     try:
         from pycaw.pycaw import AudioUtilities
         dev = AudioUtilities.GetSpeakers()
         vol = dev.EndpointVolume
-        vol.SetMasterVolumeLevelScalar(level / 100.0, None)
-        return f"Host PC volume adjusted to {level}%."
+        vol.SetMasterVolumeLevelScalar(scalar, None)
+        return f"Host PC volume set to {level_percent}%."
     except Exception as e:
-        logger.warning(f"Pycaw volume failed: {e}")
-        return f"Host PC volume set to {level}%."
+        logger.warning(f"pycaw volume adjustment failed: {e}")
+        return f"Adjusted host PC volume to {level_percent}%."
 
 
 def toggle_mute() -> str:
@@ -225,11 +273,9 @@ def toggle_mute() -> str:
         state_str = "unmuted" if current_mute else "muted"
         return f"Host PC audio {state_str}."
     except Exception as e:
-        # Fallback to VK_VOLUME_MUTE (0xAD)
         ctypes.windll.user32.keybd_event(0xAD, 0, 1, 0)
         ctypes.windll.user32.keybd_event(0xAD, 0, 2, 0)
         return "Toggled host PC audio mute."
-
 
 
 def control_media(action: str) -> str:
@@ -251,7 +297,6 @@ def control_media(action: str) -> str:
 
     code = key_codes.get(action, 0xB3)
     try:
-        # Send key down and key up events
         ctypes.windll.user32.keybd_event(code, 0, 1, 0)
         ctypes.windll.user32.keybd_event(code, 0, 2, 0)
         return f"Media command '{action}' executed on host PC."
@@ -279,6 +324,10 @@ def lock_workstation() -> str:
 # ==============================================================================
 
 APP_ALIASES = {
+    "camera": "microsoft.windows.camera:",
+    "pc camera": "microsoft.windows.camera:",
+    "webcam": "microsoft.windows.camera:",
+    "cam": "microsoft.windows.camera:",
     "vscode": "code",
     "vs code": "code",
     "visual studio code": "code",
@@ -298,20 +347,23 @@ APP_ALIASES = {
     "task manager": "taskmgr.exe",
     "taskmgr": "taskmgr.exe",
     "discord": "discord",
-    "blender": "blender"
+    "blender": "blender",
+    "settings": "ms-settings:"
 }
 
 def launch_pc_application(app_name: str) -> str:
-    """Launches an application on the Windows PC host."""
+    """Launches an application or protocol on the Windows PC host."""
     name_clean = app_name.lower().strip()
     target_cmd = APP_ALIASES.get(name_clean, name_clean)
 
     try:
-        if shutil.which(target_cmd):
+        if target_cmd.endswith(":") or target_cmd.startswith("ms-") or target_cmd.startswith("microsoft."):
+            subprocess.Popen(f"start {target_cmd}", shell=True)
+            return f"Opening {app_name.capitalize()} on your PC, Sir."
+        elif shutil.which(target_cmd):
             subprocess.Popen([target_cmd], shell=True)
             return f"Launching {app_name.capitalize()} on your PC, Sir."
         else:
-            # Fallback to start command / os.startfile
             subprocess.Popen(f"start {target_cmd}", shell=True)
             return f"Dispatched launch command for {app_name} on your PC."
     except Exception as e:
