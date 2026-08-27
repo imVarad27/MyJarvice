@@ -5,8 +5,11 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.util.Base64
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -19,6 +22,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -71,6 +75,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -78,6 +84,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -201,7 +209,7 @@ fun MainScreen(
 
                 Toast.makeText(context, "Attached: $fileName", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
-                Toast.makeText(context, "Attached file metadata: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Attached file: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -670,7 +678,7 @@ private fun HistoryDrawerContent(
 }
 
 /**
- * Empty Chat State Hero (JARVIS 1.0)
+ * Empty Chat State Hero (JARVIS 1.0 with PC Remote Automation Shortcuts)
  */
 @Composable
 private fun EmptyChatHero(
@@ -713,38 +721,38 @@ private fun EmptyChatHero(
         Spacer(Modifier.height(6.dp))
 
         Text(
-            "How can I assist your workflow today?",
+            "How can I assist your workstation and workflow today?",
             color = scheme.onSurfaceVariant,
             fontSize = 14.sp,
             textAlign = TextAlign.Center
         )
 
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(28.dp))
 
         // Professional 2x2 Suggestion Cards
         val promptCards = listOf(
             PromptCardItem(
-                title = "Device Health",
-                desc = "Run diagnostics & battery telemetry",
-                prompt = "Jarvis, run a complete device health and battery check.",
-                icon = { IconActivity(tint = scheme.primary, size = 18.dp) }
+                title = "Host PC Screen",
+                desc = "Live desktop screenshot capture",
+                prompt = "Jarvis, capture host PC screenshot.",
+                icon = { IconDocument(tint = scheme.primary, size = 18.dp) }
+            ),
+            PromptCardItem(
+                title = "PC Hardware Telemetry",
+                desc = "CPU, RAM & storage capacity",
+                prompt = "Jarvis, what are my PC hardware stats (CPU, RAM, Disks)?",
+                icon = { IconActivity(tint = Color(0xFF60A5FA), size = 18.dp) }
             ),
             PromptCardItem(
                 title = "Local Document RAG",
-                desc = "Query indexed files across drives",
+                desc = "Query indexed PC drive files",
                 prompt = "Jarvis, search my local indexed files for recent project documents.",
-                icon = { IconDocument(tint = Color(0xFF60A5FA), size = 18.dp) }
+                icon = { IconDocument(tint = Color(0xFF34D399), size = 18.dp) }
             ),
             PromptCardItem(
-                title = "Compose Message",
-                desc = "Draft team updates & emails",
-                prompt = "Jarvis, draft a polite status update email to the team.",
-                icon = { IconMail(tint = Color(0xFF34D399), size = 18.dp) }
-            ),
-            PromptCardItem(
-                title = "AI Architecture",
-                desc = "Explain models & algorithms",
-                prompt = "Jarvis, explain modern transformer multi-head attention simply.",
+                title = "Lock Workstation",
+                desc = "Instantly secure host PC",
+                prompt = "Jarvis, lock my host PC workstation.",
                 icon = { IconSparkles(tint = ArcGold, size = 18.dp) }
             )
         )
@@ -825,7 +833,7 @@ private fun PromptSuggestionCard(
 }
 
 /**
- * Message Feed (Dynamic Theme Adaptive)
+ * Message Feed (Dynamic Theme Adaptive with Screenshot Cards)
  */
 @Composable
 private fun ChatFeed(
@@ -900,6 +908,7 @@ private fun JarvisMessageBubble(
     onSpeak: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
+    var showFullscreenImage by remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -948,6 +957,62 @@ private fun JarvisMessageBubble(
                 lineHeight = 22.sp
             )
 
+            // Desktop Screenshot / Image Rendering
+            if (!msg.image.isNullOrBlank()) {
+                val bitmap: Bitmap? = remember(msg.image) {
+                    try {
+                        val rawBase64 = msg.image.substringAfter("base64,")
+                        val bytes = Base64.decode(rawBase64, Base64.DEFAULT)
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+
+                if (bitmap != null) {
+                    Spacer(Modifier.height(10.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(scheme.surfaceVariant)
+                            .border(1.dp, scheme.primary.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                            .clickable { showFullscreenImage = true }
+                            .padding(6.dp)
+                    ) {
+                        Column {
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = "Host PC Screenshot",
+                                contentScale = ContentScale.FillWidth,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    "🖥️ Host PC Screen • Tap to expand",
+                                    color = scheme.primary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
+                    if (showFullscreenImage) {
+                        FullscreenImageDialog(
+                            bitmap = bitmap,
+                            onDismiss = { showFullscreenImage = false }
+                        )
+                    }
+                }
+            }
+
             Spacer(Modifier.height(8.dp))
 
             // Action Toolbar (Copy, Speak, Timestamp)
@@ -986,6 +1051,61 @@ private fun JarvisMessageBubble(
                         color = scheme.onSurfaceVariant.copy(alpha = 0.6f),
                         fontSize = 11.sp
                     )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Fullscreen Interactive Image Dialog
+ */
+@Composable
+private fun FullscreenImageDialog(
+    bitmap: Bitmap,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.95f))
+        ) {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "Fullscreen Host Screenshot",
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                contentScale = ContentScale.Fit
+            )
+
+            // Top Bar with Close Action
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Host PC Display Capture",
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.25f))
+                ) {
+                    Text("✕", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -1039,7 +1159,7 @@ private fun ThinkingIndicator() {
 }
 
 /**
- * Floating Bottom Input Bar (ChatGPT / Gemini Pill Standard)
+ * Floating Bottom Input Bar (ChatGPT / Gemini Pill with Host PC Tools)
  */
 @Composable
 private fun FloatingInputBar(
@@ -1085,24 +1205,34 @@ private fun FloatingInputBar(
                     modifier = Modifier.background(scheme.surface)
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Attach Document / Code", color = scheme.onSurface, fontSize = 13.sp) },
+                        text = { Text("Host PC Screenshot", color = scheme.onSurface, fontSize = 13.sp) },
                         leadingIcon = { IconDocument(tint = scheme.primary, size = 16.dp) },
+                        onClick = { onToolSelected("Jarvis, capture host PC screenshot.") }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Host PC Hardware Stats", color = scheme.onSurface, fontSize = 13.sp) },
+                        leadingIcon = { IconActivity(tint = scheme.primary, size = 16.dp) },
+                        onClick = { onToolSelected("Jarvis, what are my PC hardware stats (CPU, RAM, Disks)?") }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Lock Host Workstation", color = scheme.onSurface, fontSize = 13.sp) },
+                        leadingIcon = { IconSparkles(tint = ArcGold, size = 16.dp) },
+                        onClick = { onToolSelected("Jarvis, lock my host PC workstation.") }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("PC Media Play/Pause", color = scheme.onSurface, fontSize = 13.sp) },
+                        leadingIcon = { IconVoiceWaveform(tint = scheme.primary, size = 16.dp) },
+                        onClick = { onToolSelected("Jarvis, toggle media play/pause on my PC.") }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Attach Document / Code", color = scheme.onSurface, fontSize = 13.sp) },
+                        leadingIcon = { IconDocument(tint = Color(0xFF34D399), size = 16.dp) },
                         onClick = onAttachFile
                     )
                     DropdownMenuItem(
                         text = { Text("Search Local Drive Docs", color = scheme.onSurface, fontSize = 13.sp) },
                         leadingIcon = { IconDocument(tint = scheme.primary, size = 16.dp) },
                         onClick = { onToolSelected("Jarvis, search indexed documents on my PC drives.") }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Check Device Health", color = scheme.onSurface, fontSize = 13.sp) },
-                        leadingIcon = { IconActivity(tint = scheme.primary, size = 16.dp) },
-                        onClick = { onToolSelected("Jarvis, give me a full battery and performance diagnostics.") }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Today's Agenda", color = scheme.onSurface, fontSize = 13.sp) },
-                        leadingIcon = { IconSparkles(tint = ArcGold, size = 16.dp) },
-                        onClick = { onToolSelected("Jarvis, what events are on my calendar today?") }
                     )
                 }
             }
@@ -1111,7 +1241,7 @@ private fun FloatingInputBar(
             OutlinedTextField(
                 value = textInput,
                 onValueChange = onTextChange,
-                placeholder = { Text("Ask JARVIS...", color = scheme.onSurfaceVariant, fontSize = 14.sp) },
+                placeholder = { Text("Ask JARVIS or control PC...", color = scheme.onSurfaceVariant, fontSize = 14.sp) },
                 modifier = Modifier.weight(1f),
                 maxLines = 4,
                 colors = OutlinedTextFieldDefaults.colors(
@@ -1202,11 +1332,12 @@ private fun ServerConfigDialog(
                         Text("USB", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
                     Button(
-                        onClick = { tempIp = "192.168.1.37:8000"; tempToken = "jarvis_local_token" },
+                        onClick = { tempIp = "192.168.1.35:8000"; tempToken = "jarvis_local_token" },
                         colors = ButtonDefaults.buttonColors(containerColor = scheme.surfaceVariant),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
+
                         Text("Wi-Fi", color = scheme.onSurface, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
                     Button(

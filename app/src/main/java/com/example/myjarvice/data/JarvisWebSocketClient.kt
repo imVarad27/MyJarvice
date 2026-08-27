@@ -28,8 +28,10 @@ data class JarvisMessage(
     val sender: String,
     val text: String,
     val type: String = "RESPONSE",
-    val timestamp: String = ""
+    val timestamp: String = "",
+    val image: String? = null
 )
+
 
 /** An email Jarvis has drafted and is holding until the user approves it. */
 data class PendingEmail(
@@ -84,7 +86,8 @@ class JarvisWebSocketClient {
 
     private var serverIp = ""
     private var serverToken = ""
-    private val fallbackIps = listOf("127.0.0.1:8000", "192.168.1.37:8000", "192.168.1.34:8000", "192.168.137.1:8000")
+    private val fallbackIps = listOf("127.0.0.1:8000", "192.168.1.35:8000", "192.168.1.37:8000", "192.168.1.34:8000", "192.168.137.1:8000")
+
 
     fun connect(rawIpOrUrl: String = "", pairingToken: String = "") {
         keepConnected = true
@@ -128,7 +131,9 @@ class JarvisWebSocketClient {
                     val msgType = obj.optString("type", "RESPONSE")
                     val messageText = obj.optString("text", "")
                     val ts = obj.optString("timestamp", "")
-                    val msg = JarvisMessage(sender, messageText, msgType, ts)
+                    val imagePayload = if (obj.has("image") && !obj.isNull("image")) obj.getString("image") else null
+                    val msg = JarvisMessage(sender, messageText, msgType, ts, imagePayload)
+
 
                     // Drafted email waiting for approval
                     if (obj.has("pending_email") && !obj.isNull("pending_email")) {

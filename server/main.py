@@ -11,9 +11,11 @@ import urllib.request
 import urllib.error
 import uuid as uuid_lib
 from email.message import EmailMessage
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, status
 from rag_engine import query_personal_documents
+import pc_controller
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("MyJarvisServer")
@@ -571,21 +573,92 @@ def build_email_draft(user_text: str, address: str) -> tuple:
     )
 
 
-def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[Dict[str, str]]):
-    """Returns (reply_text, action, pending_email); the latter two may be None."""
+def detect_pc_action(user_text: str) -> Optional[Tuple[str, Optional[str]]]:
+    """
+    Detects if user requested a Host PC action.
+    Returns (reply_text, base64_image_or_None) if handled, or None if not a PC action.
+    """
+    t = user_text.lower().strip()
+
+    # 1. Desktop Screenshot
+    if any(k in t for k in ["screenshot", "screen shot", "capture screen", "capture desktop", "show my pc screen", "show desktop", "host screen", "pc display", "pc screen"]):
+        b64 = pc_controller.capture_desktop_screenshot()
+        if b64:
+            return "Capturing current display of your host workstation now, Sir.", b64
+        return "I attempted to capture the host display, Sir, but the display buffer was momentarily inaccessible.", None
+
+    # 2. System Telemetry / Resource Monitor
+    if any(k in t for k in ["cpu", "ram", "memory", "specs", "system stats", "telemetry", "hardware", "pc status", "disk space", "storage", "pc health", "workstation status"]) and any(k in t for k in ["pc", "system", "computer", "host", "stats", "load", "drive", "drives", "health"]):
+        stats = pc_controller.get_system_telemetry()
+        narrative = pc_controller.format_telemetry_narrative(stats)
+        return narrative, None
+
+    # 3. Lock Workstation
+    if "lock" in t and any(k in t for k in ["pc", "computer", "workstation", "screen", "system", "desktop"]):
+        res = pc_controller.lock_workstation()
+        return res, None
+
+    # 4. Volume / Mute
+    if "mute" in t and any(k in t for k in ["pc", "computer", "audio", "sound", "host", "speakers"]):
+        res = pc_controller.toggle_mute()
+        return res, None
+
+    if "volume" in t and any(k in t for k in ["pc", "computer", "host", "speakers"]):
+        nums = re.findall(r"\b\d+\b", t)
+        if nums:
+            target_vol = int(nums[0])
+            res = pc_controller.set_master_volume(target_vol)
+            return res, None
+        if "up" in t or "increase" in t or "raise" in t:
+            res = pc_controller.set_master_volume(75)
+            return res, None
+        if "down" in t or "lower" in t or "decrease" in t:
+            res = pc_controller.set_master_volume(25)
+            return res, None
+
+    # 5. Media Player Controls
+    if any(k in t for k in ["play", "pause", "resume", "next track", "previous track", "stop music", "skip song", "next song"]) and any(k in t for k in ["pc", "spotify", "media", "music", "song", "track"]):
+        if "next" in t or "skip" in t:
+            res = pc_controller.control_media("next")
+        elif "prev" in t or "back" in t:
+            res = pc_controller.control_media("prev")
+        elif "stop" in t:
+            res = pc_controller.control_media("stop")
+        else:
+            res = pc_controller.control_media("playpause")
+        return res, None
+
+    # 6. Launch PC App
+    if any(t.startswith(prefix) for prefix in ["open on pc", "launch on pc", "start on pc", "open on my pc", "launch on my pc", "run on pc"]) or ("on my pc" in t and any(k in t for k in ["open", "launch", "start"])):
+        app_query = re.sub(r"\b(open|launch|start|run|on|my|pc|computer|host|the|app|program)\b", "", t).strip()
+        if app_query:
+            res = pc_controller.launch_pc_application(app_query)
+            return res, None
+
+    return None
+
+
+def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[Dict[str, str]]) -> Tuple[str, Optional[Dict[str, Any]], Optional[Dict[str, Any]], Optional[str]]:
+    """Returns (reply_text, action, pending_email, image_payload); action/pending_email/image_payload may be None."""
     name_set = maybe_store_name(user_text)
     user_name = get_user_name()
     address = user_name if user_name else "Sir"
+
+    # Host PC Remote Automation check
+    pc_res = detect_pc_action(user_text)
+    if pc_res:
+        reply_txt, img_b64 = pc_res
+        return reply_txt, None, None, img_b64
 
     # "Alex's email is ..." — save it before anything else so the same sentence can
     # also be used to address a message.
     saved_contact = maybe_store_contact_email(user_text)
     if saved_contact and not detect_email_intent(user_text):
-        return f"Noted, {address}. I'll remember {saved_contact}.", None, None
+        return f"Noted, {address}. I'll remember {saved_contact}.", None, None, None
 
     if detect_email_intent(user_text):
         reply_text, pending = build_email_draft(user_text, address)
-        return reply_text, None, pending
+        return reply_text, None, pending, None
 
     # Phone actions are handled deterministically and returned immediately (no LLM
     # round-trip) so "call Mom" or "open WhatsApp" fire instantly and reliably.
@@ -600,7 +673,7 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
             text = f"Starting navigation to {target}, {address}."
         else:
             text = f"Right away, {address}."
-        return text, device_action, None
+        return text, device_action, None, None
 
     stored = maybe_store_memory(user_text)
     action_note = maybe_run_action(user_text)
@@ -640,7 +713,8 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
     reply = call_ollama(messages)
     if reply is None:
         reply = fallback_reply(user_text, address, stored, name_set, action_note)
-    return clean_reply(reply), None, None
+    return clean_reply(reply), None, None, None
+
 
 
 def handle_email_verdict(verdict: Dict[str, Any]) -> str:
@@ -729,7 +803,7 @@ async def websocket_jarvis_endpoint(websocket: WebSocket):
 
 
                 # Run the (blocking) LLM call off the event loop so other clients aren't blocked.
-                ai_response, action, pending_email = await asyncio.to_thread(
+                ai_response, action, pending_email, image_payload = await asyncio.to_thread(
                     generate_reply, user_text, phone_context, history
                 )
 
@@ -742,9 +816,11 @@ async def websocket_jarvis_endpoint(websocket: WebSocket):
                     "text": ai_response,
                     "action": action,          # {"type": "CALL"|"OPEN_APP", "query": "..."} or null
                     "pending_email": pending_email,   # draft awaiting approval, or null
+                    "image": image_payload,           # Base64 desktop screenshot or null
                     "iot_status": IOT_DEVICES,
                     "timestamp": datetime.datetime.now().isoformat(),
                 }))
+
             except json.JSONDecodeError:
                 await websocket.send_text(json.dumps({
                     "sender": "JARVIS",

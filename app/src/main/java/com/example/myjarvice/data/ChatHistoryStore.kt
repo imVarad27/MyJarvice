@@ -40,15 +40,18 @@ class ChatHistoryStore(context: Context) {
 
                 for (j in 0 until msgArray.length()) {
                     val msgObj = msgArray.getJSONObject(j)
+                    val img = if (msgObj.has("image") && !msgObj.isNull("image")) msgObj.getString("image") else null
                     messages.add(
                         JarvisMessage(
                             sender = msgObj.optString("sender", "USER"),
                             text = msgObj.optString("text", ""),
                             type = msgObj.optString("type", "RESPONSE"),
-                            timestamp = msgObj.optString("timestamp", "")
+                            timestamp = msgObj.optString("timestamp", ""),
+                            image = img
                         )
                     )
                 }
+
 
 
                 sessions.add(
@@ -122,8 +125,12 @@ class ChatHistoryStore(context: Context) {
                         put("text", msg.text)
                         put("type", msg.type)
                         put("timestamp", msg.timestamp)
+                        if (msg.image != null) {
+                            put("image", msg.image)
+                        }
                     }
                     msgArray.put(msgObj)
+
                 }
                 put("messages", msgArray)
             }
