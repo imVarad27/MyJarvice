@@ -13,8 +13,9 @@ import uuid as uuid_lib
 from email.message import EmailMessage
 from typing import Dict, Any, List, Optional, Tuple
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, status
-from rag_engine import query_personal_documents
+from rag_engine import rag_engine, query_personal_documents
 import pc_controller
+
 
 
 logging.basicConfig(level=logging.INFO)
@@ -714,11 +715,26 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
     if stored:
         context_block += f"\n\nYou just saved a new fact to memory: '{stored}'. Briefly confirm you'll remember it."
 
-    low_text = user_text.lower()
-    if any(k in low_text for k in ["doc", "docs", "document", "pdf", "file", "notes", "protocol", "search", "read"]):
+    low_text = user_text.lower().strip()
+
+    # On-demand RAG codebase & document re-indexing
+    if any(k in low_text for k in ["reindex", "re-index", "index pc", "refresh index", "index my files", "index codebase", "scan my files", "rescan pc"]):
+        index_res = rag_engine.index_all()
+        files_cnt = index_res.get("total_files", rag_engine.total_indexed_files)
+        chunks_cnt = index_res.get("total_chunks", rag_engine.total_indexed_chunks)
+        dur = index_res.get("duration_secs", 0.1)
+        return f"Host PC indexing completed in {dur} seconds, {address}. {files_cnt} local project and document files ({chunks_cnt} code segments) are indexed for semantic retrieval.", None, None, None
+
+    # Codebase & Document Semantic RAG Retrieval
+    if any(k in low_text for k in ["code", "function", "file", "files", "project", "doc", "docs", "document", "pdf", "notes", "protocol", "search", "read", "where is", "how is", "implementation", "class", "method", "variable", "folder", "module", "android"]):
         doc_context = query_personal_documents(user_text)
         if doc_context:
-            context_block += f"\n\n[Retrieved Personal Documents Context]:\n{doc_context}"
+            context_block += (
+                f"\n\n[Retrieved Excerpts from User's Local PC Codebase & Documents]:\n"
+                f"{doc_context}\n\n"
+                "INSTRUCTION: Use the above local file excerpts to directly and accurately answer the user's question. "
+                "Explicitly mention the relevant file names and line numbers where appropriate."
+            )
 
     messages: List[Dict[str, str]] = [
         {"role": "system", "content": JARVIS_SYSTEM_PROMPT + "\n" + context_block}
@@ -730,6 +746,7 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
     if reply is None:
         reply = fallback_reply(user_text, address, stored, name_set, action_note)
     return clean_reply(reply), None, None, None
+
 
 
 
@@ -847,8 +864,10 @@ async def websocket_jarvis_endpoint(websocket: WebSocket):
         logger.info("Jarvice Android Client disconnected.")
 
 
-# Initialise persistent memory at import time (works under uvicorn reload too).
+# Initialise persistent memory and start background RAG codebase indexing
 init_db()
+rag_engine.start_background_indexing()
+
 
 
 if __name__ == "__main__":

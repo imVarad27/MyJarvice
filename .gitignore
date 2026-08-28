@@ -22,6 +22,9 @@ __pycache__/
 # JARVIS local personal data (never commit)
 server/jarvice.db
 server/jarvis.db
+server/rag_store.db
+*.db
+
 
 
 # Mail credentials (never commit)

@@ -599,10 +599,27 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Local Drive RAG Engine", color = scheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                    Text("Indexed across D: and E: drive documents", color = scheme.onSurfaceVariant, fontSize = 12.sp)
+                    Text("Local PC Semantic RAG Engine", color = scheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text("Indexes source code, PDFs, and docs on PC", color = scheme.onSurfaceVariant, fontSize = 12.sp)
                 }
-                Text("Active", color = scheme.primary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text("Online", color = scheme.primary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Button(
+                onClick = {
+                    Toast.makeText(context, "Scanning & re-indexing host PC files...", Toast.LENGTH_SHORT).show()
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = scheme.surfaceVariant),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, scheme.primary.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+            ) {
+                IconDocument(tint = scheme.primary, size = 16.dp)
+                Spacer(Modifier.width(8.dp))
+                Text("Re-index Host PC Files", color = scheme.primary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }
 
             Spacer(Modifier.height(14.dp))
@@ -620,7 +637,7 @@ fun SettingsScreen(
             ) {
                 IconTrash(tint = Color(0xFFEF4444), size = 16.dp)
                 Spacer(Modifier.width(8.dp))
-                Text("Clear All Chat Sessions", color = Color(0xFFEF4444), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text("Wipe Local Chat History", color = Color(0xFFEF4444), fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }
         }
 
