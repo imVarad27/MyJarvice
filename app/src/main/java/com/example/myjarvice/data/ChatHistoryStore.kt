@@ -41,16 +41,33 @@ class ChatHistoryStore(context: Context) {
                 for (j in 0 until msgArray.length()) {
                     val msgObj = msgArray.getJSONObject(j)
                     val img = if (msgObj.has("image") && !msgObj.isNull("image")) msgObj.getString("image") else null
+                    val sourcesList = mutableListOf<WebSource>()
+                    if (msgObj.has("sources") && !msgObj.isNull("sources")) {
+                        val srcArray = msgObj.getJSONArray("sources")
+                        for (k in 0 until srcArray.length()) {
+                            val sObj = srcArray.getJSONObject(k)
+                            sourcesList.add(
+                                WebSource(
+                                    title = sObj.optString("title", ""),
+                                    url = sObj.optString("url", ""),
+                                    domain = sObj.optString("domain", "web")
+                                )
+                            )
+                        }
+                    }
+
                     messages.add(
                         JarvisMessage(
                             sender = msgObj.optString("sender", "USER"),
                             text = msgObj.optString("text", ""),
                             type = msgObj.optString("type", "RESPONSE"),
                             timestamp = msgObj.optString("timestamp", ""),
-                            image = img
+                            image = img,
+                            sources = sourcesList
                         )
                     )
                 }
+
 
 
 
@@ -128,8 +145,22 @@ class ChatHistoryStore(context: Context) {
                         if (msg.image != null) {
                             put("image", msg.image)
                         }
+                        if (msg.sources.isNotEmpty()) {
+                            val srcArray = JSONArray()
+                            for (s in msg.sources) {
+                                srcArray.put(
+                                    JSONObject().apply {
+                                        put("title", s.title)
+                                        put("url", s.url)
+                                        put("domain", s.domain)
+                                    }
+                                )
+                            }
+                            put("sources", srcArray)
+                        }
                     }
                     msgArray.put(msgObj)
+
 
                 }
                 put("messages", msgArray)

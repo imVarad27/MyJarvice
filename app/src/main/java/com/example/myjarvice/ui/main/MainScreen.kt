@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -78,7 +79,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -96,6 +96,7 @@ import com.example.myjarvice.data.ConnectionStatus
 import com.example.myjarvice.data.JarvisMessage
 import com.example.myjarvice.data.PendingEmail
 import com.example.myjarvice.data.SettingsStore
+import com.example.myjarvice.data.WebSource
 import com.example.myjarvice.theme.ArcGold
 import com.example.myjarvice.theme.OfflineGray
 import com.example.myjarvice.theme.OnlineGreen
@@ -103,7 +104,6 @@ import com.example.myjarvice.ui.JarvisArcReactor
 import com.example.myjarvice.ui.icons.IconActivity
 import com.example.myjarvice.ui.icons.IconCopy
 import com.example.myjarvice.ui.icons.IconDocument
-import com.example.myjarvice.ui.icons.IconMail
 import com.example.myjarvice.ui.icons.IconMenu
 import com.example.myjarvice.ui.icons.IconMessage
 import com.example.myjarvice.ui.icons.IconMicrophone
@@ -678,7 +678,7 @@ private fun HistoryDrawerContent(
 }
 
 /**
- * Empty Chat State Hero (JARVIS 1.0 with PC Remote Automation Shortcuts)
+ * Empty Chat State Hero (JARVIS 1.0 with PC Automation & Web Search Shortcuts)
  */
 @Composable
 private fun EmptyChatHero(
@@ -701,7 +701,6 @@ private fun EmptyChatHero(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Delicate Precision Arc Reactor Emblem
         JarvisArcReactor(
             size = 72.dp,
             isListening = false,
@@ -721,7 +720,7 @@ private fun EmptyChatHero(
         Spacer(Modifier.height(6.dp))
 
         Text(
-            "How can I assist your workstation and workflow today?",
+            "How can I assist your workstation, web queries, and workflow today?",
             color = scheme.onSurfaceVariant,
             fontSize = 14.sp,
             textAlign = TextAlign.Center
@@ -732,28 +731,28 @@ private fun EmptyChatHero(
         // Professional 2x2 Suggestion Cards
         val promptCards = listOf(
             PromptCardItem(
+                title = "Live Web & News",
+                desc = "Real-time AI headlines & web lookup",
+                prompt = "Jarvis, what is the latest AI technology news today?",
+                icon = { IconSparkles(tint = Color(0xFF38BDF8), size = 18.dp) }
+            ),
+            PromptCardItem(
+                title = "Live Weather Forecast",
+                desc = "Instant city weather & climate",
+                prompt = "Jarvis, what is the live weather forecast for Pune today?",
+                icon = { IconActivity(tint = ArcGold, size = 18.dp) }
+            ),
+            PromptCardItem(
                 title = "Host PC Screen",
                 desc = "Live desktop screenshot capture",
                 prompt = "Jarvis, capture host PC screenshot.",
                 icon = { IconDocument(tint = scheme.primary, size = 18.dp) }
             ),
             PromptCardItem(
-                title = "PC Hardware Telemetry",
-                desc = "CPU, RAM & storage capacity",
-                prompt = "Jarvis, what are my PC hardware stats (CPU, RAM, Disks)?",
-                icon = { IconActivity(tint = Color(0xFF60A5FA), size = 18.dp) }
-            ),
-            PromptCardItem(
-                title = "Local Document RAG",
-                desc = "Query indexed PC drive files",
-                prompt = "Jarvis, search my local indexed files for recent project documents.",
+                title = "Codebase & Doc RAG",
+                desc = "Search indexed project files",
+                prompt = "Jarvis, where in the project do we handle device actions like camera and maps?",
                 icon = { IconDocument(tint = Color(0xFF34D399), size = 18.dp) }
-            ),
-            PromptCardItem(
-                title = "Lock Workstation",
-                desc = "Instantly secure host PC",
-                prompt = "Jarvis, lock my host PC workstation.",
-                icon = { IconSparkles(tint = ArcGold, size = 18.dp) }
             )
         )
 
@@ -833,7 +832,7 @@ private fun PromptSuggestionCard(
 }
 
 /**
- * Message Feed (Dynamic Theme Adaptive with Screenshot Cards)
+ * Message Feed (Adaptive Theme with Live Web Sources & Screenshot Cards)
  */
 @Composable
 private fun ChatFeed(
@@ -908,6 +907,7 @@ private fun JarvisMessageBubble(
     onSpeak: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
+    val context = LocalContext.current
     var showFullscreenImage by remember { mutableStateOf(false) }
 
     Row(
@@ -1009,6 +1009,64 @@ private fun JarvisMessageBubble(
                             bitmap = bitmap,
                             onDismiss = { showFullscreenImage = false }
                         )
+                    }
+                }
+            }
+
+            // Live Web Sources Row (Clickable citation chips)
+            if (msg.sources.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(scheme.surfaceVariant.copy(alpha = 0.5f))
+                        .border(1.dp, scheme.outline.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "🌐 Sources & Live Grounding",
+                            color = scheme.primary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(msg.sources) { src ->
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(scheme.surface)
+                                    .border(1.dp, scheme.primary.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        if (src.url.isNotBlank()) {
+                                            try {
+                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(src.url))
+                                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                context.startActivity(intent)
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "Could not open source link", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    src.domain.ifBlank { "source" },
+                                    color = scheme.onSurface,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text("↗", color = scheme.primary, fontSize = 10.sp)
+                            }
+                        }
                     }
                 }
             }
@@ -1159,7 +1217,7 @@ private fun ThinkingIndicator() {
 }
 
 /**
- * Floating Bottom Input Bar (ChatGPT / Gemini Pill with Host PC Tools)
+ * Floating Bottom Input Bar (with Host PC & Web Search Tools)
  */
 @Composable
 private fun FloatingInputBar(
@@ -1205,6 +1263,16 @@ private fun FloatingInputBar(
                     modifier = Modifier.background(scheme.surface)
                 ) {
                     DropdownMenuItem(
+                        text = { Text("Search Web & Live News", color = scheme.onSurface, fontSize = 13.sp) },
+                        leadingIcon = { IconSparkles(tint = Color(0xFF38BDF8), size = 16.dp) },
+                        onClick = { onToolSelected("Jarvis, search the web for the latest artificial intelligence news.") }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Live Weather Forecast", color = scheme.onSurface, fontSize = 13.sp) },
+                        leadingIcon = { IconActivity(tint = ArcGold, size = 16.dp) },
+                        onClick = { onToolSelected("Jarvis, what is the live weather forecast for Pune today?") }
+                    )
+                    DropdownMenuItem(
                         text = { Text("Host PC Screenshot", color = scheme.onSurface, fontSize = 13.sp) },
                         leadingIcon = { IconDocument(tint = scheme.primary, size = 16.dp) },
                         onClick = { onToolSelected("Jarvis, capture host PC screenshot.") }
@@ -1220,19 +1288,14 @@ private fun FloatingInputBar(
                         onClick = { onToolSelected("Jarvis, lock my host PC workstation.") }
                     )
                     DropdownMenuItem(
-                        text = { Text("PC Media Play/Pause", color = scheme.onSurface, fontSize = 13.sp) },
-                        leadingIcon = { IconVoiceWaveform(tint = scheme.primary, size = 16.dp) },
-                        onClick = { onToolSelected("Jarvis, toggle media play/pause on my PC.") }
+                        text = { Text("Search PC Code & Docs", color = scheme.onSurface, fontSize = 13.sp) },
+                        leadingIcon = { IconDocument(tint = Color(0xFF34D399), size = 16.dp) },
+                        onClick = { onToolSelected("Jarvis, search indexed files on my PC drives.") }
                     )
                     DropdownMenuItem(
                         text = { Text("Attach Document / Code", color = scheme.onSurface, fontSize = 13.sp) },
-                        leadingIcon = { IconDocument(tint = Color(0xFF34D399), size = 16.dp) },
-                        onClick = onAttachFile
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Search Local Drive Docs", color = scheme.onSurface, fontSize = 13.sp) },
                         leadingIcon = { IconDocument(tint = scheme.primary, size = 16.dp) },
-                        onClick = { onToolSelected("Jarvis, search indexed documents on my PC drives.") }
+                        onClick = onAttachFile
                     )
                 }
             }
@@ -1241,7 +1304,7 @@ private fun FloatingInputBar(
             OutlinedTextField(
                 value = textInput,
                 onValueChange = onTextChange,
-                placeholder = { Text("Ask JARVIS or control PC...", color = scheme.onSurfaceVariant, fontSize = 14.sp) },
+                placeholder = { Text("Ask JARVIS, search web, or control PC...", color = scheme.onSurfaceVariant, fontSize = 14.sp) },
                 modifier = Modifier.weight(1f),
                 maxLines = 4,
                 colors = OutlinedTextFieldDefaults.colors(
@@ -1337,7 +1400,6 @@ private fun ServerConfigDialog(
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-
                         Text("Wi-Fi", color = scheme.onSurface, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
                     Button(

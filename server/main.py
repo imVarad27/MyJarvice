@@ -15,6 +15,8 @@ from typing import Dict, Any, List, Optional, Tuple
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, status
 from rag_engine import rag_engine, query_personal_documents
 import pc_controller
+import web_search
+
 
 
 
@@ -655,27 +657,28 @@ def detect_pc_action(user_text: str) -> Optional[Tuple[str, Optional[str]]]:
 
 
 
-def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[Dict[str, str]]) -> Tuple[str, Optional[Dict[str, Any]], Optional[Dict[str, Any]], Optional[str]]:
-    """Returns (reply_text, action, pending_email, image_payload); action/pending_email/image_payload may be None."""
+def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[Dict[str, str]]) -> Tuple[str, Optional[Dict[str, Any]], Optional[Dict[str, Any]], Optional[str], List[Dict[str, str]]]:
+    """Returns (reply_text, action, pending_email, image_payload, web_sources); action/pending_email/image_payload may be None."""
     name_set = maybe_store_name(user_text)
     user_name = get_user_name()
     address = user_name if user_name else "Sir"
+    web_sources: List[Dict[str, str]] = []
 
     # Host PC Remote Automation check
     pc_res = detect_pc_action(user_text)
     if pc_res:
         reply_txt, img_b64 = pc_res
-        return reply_txt, None, None, img_b64
+        return reply_txt, None, None, img_b64, []
 
     # "Alex's email is ..." — save it before anything else so the same sentence can
     # also be used to address a message.
     saved_contact = maybe_store_contact_email(user_text)
     if saved_contact and not detect_email_intent(user_text):
-        return f"Noted, {address}. I'll remember {saved_contact}.", None, None, None
+        return f"Noted, {address}. I'll remember {saved_contact}.", None, None, None, []
 
     if detect_email_intent(user_text):
         reply_text, pending = build_email_draft(user_text, address)
-        return reply_text, None, pending, None
+        return reply_text, None, pending, None, []
 
     # Phone actions are handled deterministically and returned immediately (no LLM
     # round-trip) so "call Mom" or "open WhatsApp" fire instantly and reliably.
@@ -690,7 +693,7 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
             text = f"Starting navigation to {target}, {address}."
         else:
             text = f"Right away, {address}."
-        return text, device_action, None, None
+        return text, device_action, None, None, []
 
     stored = maybe_store_memory(user_text)
     action_note = maybe_run_action(user_text)
@@ -717,16 +720,16 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
 
     low_text = user_text.lower().strip()
 
-    # On-demand RAG codebase & document re-indexing
+    # 1. On-demand RAG codebase & document re-indexing
     if any(k in low_text for k in ["reindex", "re-index", "index pc", "refresh index", "index my files", "index codebase", "scan my files", "rescan pc"]):
         index_res = rag_engine.index_all()
         files_cnt = index_res.get("total_files", rag_engine.total_indexed_files)
         chunks_cnt = index_res.get("total_chunks", rag_engine.total_indexed_chunks)
         dur = index_res.get("duration_secs", 0.1)
-        return f"Host PC indexing completed in {dur} seconds, {address}. {files_cnt} local project and document files ({chunks_cnt} code segments) are indexed for semantic retrieval.", None, None, None
+        return f"Host PC indexing completed in {dur} seconds, {address}. {files_cnt} local project and document files ({chunks_cnt} code segments) are indexed for semantic retrieval.", None, None, None, []
 
-    # Codebase & Document Semantic RAG Retrieval
-    if any(k in low_text for k in ["code", "function", "file", "files", "project", "doc", "docs", "document", "pdf", "notes", "protocol", "search", "read", "where is", "how is", "implementation", "class", "method", "variable", "folder", "module", "android"]):
+    # 2. Codebase & Document Semantic RAG Retrieval
+    if any(k in low_text for k in ["code", "function", "file", "files", "project", "doc", "docs", "document", "pdf", "notes", "protocol", "search pc", "read file", "where is", "how is", "implementation", "class", "method", "variable", "folder", "module", "android"]):
         doc_context = query_personal_documents(user_text)
         if doc_context:
             context_block += (
@@ -734,6 +737,25 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
                 f"{doc_context}\n\n"
                 "INSTRUCTION: Use the above local file excerpts to directly and accurately answer the user's question. "
                 "Explicitly mention the relevant file names and line numbers where appropriate."
+            )
+
+    # 3. Live Web Search & Real-Time Knowledge Grounding
+    is_web_query = any(k in low_text for k in [
+        "weather", "temperature", "forecast", "rain", "humidity", "climate",
+        "news", "headline", "headlines", "latest on", "breaking news",
+        "bitcoin", "btc", "ethereum", "crypto", "price of", "stock price",
+        "search the web", "search online", "look up", "google", "who is",
+        "who was", "what is", "tell me about", "history of", "latest"
+    ]) and not any(k in low_text for k in ["my pc", "on pc", "in my code", "my project", "screenshot", "lock pc", "camera on pc"])
+
+    if is_web_query:
+        web_res = web_search.search_web(user_text)
+        if web_res and web_res.evidence_text:
+            web_sources = web_res.sources
+            context_block += (
+                f"\n\n[Live Real-Time Web Evidence]:\n"
+                f"{web_res.evidence_text}\n\n"
+                "INSTRUCTION: Use the above real-time live web evidence to answer the user's question accurately with up-to-date facts."
             )
 
     messages: List[Dict[str, str]] = [
@@ -745,7 +767,8 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
     reply = call_ollama(messages)
     if reply is None:
         reply = fallback_reply(user_text, address, stored, name_set, action_note)
-    return clean_reply(reply), None, None, None
+    return clean_reply(reply), None, None, None, web_sources
+
 
 
 
@@ -836,7 +859,7 @@ async def websocket_jarvis_endpoint(websocket: WebSocket):
 
 
                 # Run the (blocking) LLM call off the event loop so other clients aren't blocked.
-                ai_response, action, pending_email, image_payload = await asyncio.to_thread(
+                ai_response, action, pending_email, image_payload, web_sources = await asyncio.to_thread(
                     generate_reply, user_text, phone_context, history
                 )
 
@@ -850,9 +873,11 @@ async def websocket_jarvis_endpoint(websocket: WebSocket):
                     "action": action,          # {"type": "CALL"|"OPEN_APP", "query": "..."} or null
                     "pending_email": pending_email,   # draft awaiting approval, or null
                     "image": image_payload,           # Base64 desktop screenshot or null
+                    "web_sources": web_sources,       # List of {"title": "...", "url": "...", "domain": "..."}
                     "iot_status": IOT_DEVICES,
                     "timestamp": datetime.datetime.now().isoformat(),
                 }))
+
 
             except json.JSONDecodeError:
                 await websocket.send_text(json.dumps({

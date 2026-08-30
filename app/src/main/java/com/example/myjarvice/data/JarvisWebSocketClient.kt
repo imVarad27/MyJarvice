@@ -24,13 +24,21 @@ enum class ConnectionStatus {
     ERROR
 }
 
+data class WebSource(
+    val title: String = "",
+    val url: String = "",
+    val domain: String = "web"
+)
+
 data class JarvisMessage(
     val sender: String,
     val text: String,
     val type: String = "RESPONSE",
     val timestamp: String = "",
-    val image: String? = null
+    val image: String? = null,
+    val sources: List<WebSource> = emptyList()
 )
+
 
 
 /** An email Jarvis has drafted and is holding until the user approves it. */
@@ -129,7 +137,24 @@ class JarvisWebSocketClient {
                     val messageText = obj.optString("text", "")
                     val ts = obj.optString("timestamp", "")
                     val imagePayload = if (obj.has("image") && !obj.isNull("image")) obj.getString("image") else null
-                    val msg = JarvisMessage(sender, messageText, msgType, ts, imagePayload)
+
+                    val sourcesList = mutableListOf<WebSource>()
+                    if (obj.has("web_sources") && !obj.isNull("web_sources")) {
+                        val arr = obj.getJSONArray("web_sources")
+                        for (k in 0 until arr.length()) {
+                            val item = arr.getJSONObject(k)
+                            sourcesList.add(
+                                WebSource(
+                                    title = item.optString("title", ""),
+                                    url = item.optString("url", ""),
+                                    domain = item.optString("domain", "web")
+                                )
+                            )
+                        }
+                    }
+
+                    val msg = JarvisMessage(sender, messageText, msgType, ts, imagePayload, sourcesList)
+
 
                     // Drafted email waiting for approval
                     if (obj.has("pending_email") && !obj.isNull("pending_email")) {
