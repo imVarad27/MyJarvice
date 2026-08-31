@@ -731,16 +731,16 @@ private fun EmptyChatHero(
         // Professional 2x2 Suggestion Cards
         val promptCards = listOf(
             PromptCardItem(
-                title = "Live Web & News",
-                desc = "Real-time AI headlines & web lookup",
-                prompt = "Jarvis, what is the latest AI technology news today?",
-                icon = { IconSparkles(tint = Color(0xFF38BDF8), size = 18.dp) }
+                title = "Executive Briefing",
+                desc = "Weather, PC status & news briefing",
+                prompt = "Jarvis, give me my executive morning briefing.",
+                icon = { IconSparkles(tint = ArcGold, size = 18.dp) }
             ),
             PromptCardItem(
-                title = "Live Weather Forecast",
-                desc = "Instant city weather & climate",
-                prompt = "Jarvis, what is the live weather forecast for Pune today?",
-                icon = { IconActivity(tint = ArcGold, size = 18.dp) }
+                title = "Smart Reminder",
+                desc = "Schedule tasks & alarm alerts",
+                prompt = "Jarvis, remind me to check the deployment in 15 minutes.",
+                icon = { IconActivity(tint = Color(0xFF60A5FA), size = 18.dp) }
             ),
             PromptCardItem(
                 title = "Host PC Screen",
@@ -755,6 +755,7 @@ private fun EmptyChatHero(
                 icon = { IconDocument(tint = Color(0xFF34D399), size = 18.dp) }
             )
         )
+
 
         Column(
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -1263,6 +1264,16 @@ private fun FloatingInputBar(
                     modifier = Modifier.background(scheme.surface)
                 ) {
                     DropdownMenuItem(
+                        text = { Text("Executive Daily Briefing", color = scheme.onSurface, fontSize = 13.sp) },
+                        leadingIcon = { IconSparkles(tint = ArcGold, size = 16.dp) },
+                        onClick = { onToolSelected("Jarvis, give me my executive morning briefing.") }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("View Active Reminders", color = scheme.onSurface, fontSize = 13.sp) },
+                        leadingIcon = { IconActivity(tint = Color(0xFF60A5FA), size = 16.dp) },
+                        onClick = { onToolSelected("Jarvis, what are my active reminders?") }
+                    )
+                    DropdownMenuItem(
                         text = { Text("Search Web & Live News", color = scheme.onSurface, fontSize = 13.sp) },
                         leadingIcon = { IconSparkles(tint = Color(0xFF38BDF8), size = 16.dp) },
                         onClick = { onToolSelected("Jarvis, search the web for the latest artificial intelligence news.") }
@@ -1298,6 +1309,7 @@ private fun FloatingInputBar(
                         onClick = onAttachFile
                     )
                 }
+
             }
 
             // Text Input Field

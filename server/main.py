@@ -16,6 +16,9 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, status
 from rag_engine import rag_engine, query_personal_documents
 import pc_controller
 import web_search
+import scheduler
+import routine_briefing
+
 
 
 
@@ -720,7 +723,45 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
 
     low_text = user_text.lower().strip()
 
-    # 1. On-demand RAG codebase & document re-indexing
+    # 1. Executive Morning & Daily Briefing Routine
+    if any(k in low_text for k in ["good morning", "morning briefing", "daily briefing", "executive briefing", "what's my update", "daily update", "morning routine", "give me a briefing"]):
+        briefing_data = routine_briefing.compile_briefing_context(user_name)
+        briefing_messages = [
+            {"role": "system", "content": JARVIS_SYSTEM_PROMPT},
+            {"role": "user", "content": briefing_data["context_prompt"]}
+        ]
+        briefing_reply = call_ollama(briefing_messages)
+        if not briefing_reply:
+            briefing_reply = f"Good morning, {address}. All systems are nominal and ready for your command."
+        return clean_reply(briefing_reply), None, None, None, briefing_data["sources"]
+
+    # 2. Smart Reminder Management
+    # 2a. Set a new reminder
+    if any(k in low_text for k in ["remind me", "set a reminder", "set reminder", "create reminder"]):
+        parsed = scheduler.parse_reminder_text(user_text)
+        if parsed:
+            task, due_dt = parsed
+            rem = scheduler.add_reminder(task, due_dt)
+            now_dt = datetime.datetime.now()
+            time_diff = due_dt - now_dt
+            mins = int(time_diff.total_seconds() / 60)
+            if mins > 0:
+                due_desc = f"in {mins} minute{'s' if mins > 1 else ''} ({due_dt.strftime('%I:%M %p')})"
+            else:
+                due_desc = f"at {due_dt.strftime('%I:%M %p')}"
+            return f"I have scheduled that reminder for you, {address}: '{task}' due {due_desc}.", None, None, None, []
+
+    # 2b. List active reminders / Agenda
+    if any(k in low_text for k in ["what are my reminders", "show reminders", "list reminders", "my reminders", "what's on my agenda", "my agenda", "show agenda"]):
+        summary = scheduler.format_reminders_summary()
+        return summary, None, None, None, []
+
+    # 2c. Clear reminders
+    if any(k in low_text for k in ["clear my reminders", "clear reminders", "delete reminders", "remove all reminders"]):
+        cnt = scheduler.clear_all_reminders()
+        return f"All {cnt} scheduled reminders have been cleared from your agenda, {address}.", None, None, None, []
+
+    # 3. On-demand RAG codebase & document re-indexing
     if any(k in low_text for k in ["reindex", "re-index", "index pc", "refresh index", "index my files", "index codebase", "scan my files", "rescan pc"]):
         index_res = rag_engine.index_all()
         files_cnt = index_res.get("total_files", rag_engine.total_indexed_files)
@@ -728,7 +769,7 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
         dur = index_res.get("duration_secs", 0.1)
         return f"Host PC indexing completed in {dur} seconds, {address}. {files_cnt} local project and document files ({chunks_cnt} code segments) are indexed for semantic retrieval.", None, None, None, []
 
-    # 2. Codebase & Document Semantic RAG Retrieval
+    # 4. Codebase & Document Semantic RAG Retrieval
     if any(k in low_text for k in ["code", "function", "file", "files", "project", "doc", "docs", "document", "pdf", "notes", "protocol", "search pc", "read file", "where is", "how is", "implementation", "class", "method", "variable", "folder", "module", "android"]):
         doc_context = query_personal_documents(user_text)
         if doc_context:
@@ -738,6 +779,7 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
                 "INSTRUCTION: Use the above local file excerpts to directly and accurately answer the user's question. "
                 "Explicitly mention the relevant file names and line numbers where appropriate."
             )
+
 
     # 3. Live Web Search & Real-Time Knowledge Grounding
     is_web_query = any(k in low_text for k in [
@@ -805,6 +847,9 @@ def get_root():
     return {"status": "JARVIS Host Server Online", "time": datetime.datetime.now().isoformat()}
 
 
+CONNECTED_WEBSOCKETS: List[WebSocket] = []
+
+
 @app.websocket("/ws/jarvis")
 @app.websocket("/ws/jarvice")
 async def websocket_jarvis_endpoint(websocket: WebSocket):
@@ -817,9 +862,8 @@ async def websocket_jarvis_endpoint(websocket: WebSocket):
         return
 
     await websocket.accept()
+    CONNECTED_WEBSOCKETS.append(websocket)
     logger.info("✅ Jarvis Android Client connected successfully over WebSocket.")
-
-
 
     history: List[Dict[str, str]] = []  # per-connection conversation memory
 
@@ -887,12 +931,33 @@ async def websocket_jarvis_endpoint(websocket: WebSocket):
                 }))
     except WebSocketDisconnect:
         logger.info("Jarvice Android Client disconnected.")
+    finally:
+        if websocket in CONNECTED_WEBSOCKETS:
+            CONNECTED_WEBSOCKETS.remove(websocket)
 
 
-# Initialise persistent memory and start background RAG codebase indexing
+# Initialise persistent memory, scheduler, and background RAG codebase indexing
 init_db()
+scheduler.init_scheduler_db()
 rag_engine.start_background_indexing()
 
+# Start background reminder alert watcher
+def _on_reminder_alert(item: Dict[str, Any]):
+    logger.info("🚨 Alert due: %s", item)
+    payload = json.dumps({
+        "sender": "JARVIS",
+        "type": "REMINDER_ALERT",
+        "text": f"Sir, scheduled reminder alert: '{item['task']}'.",
+        "timestamp": datetime.datetime.now().isoformat(),
+    })
+    for ws in list(CONNECTED_WEBSOCKETS):
+        try:
+            asyncio.run(ws.send_text(payload))
+        except Exception:
+            pass
+
+scheduler.scheduler_sentinel.alert_callback = _on_reminder_alert
+scheduler.scheduler_sentinel.start()
 
 
 if __name__ == "__main__":
@@ -910,3 +975,4 @@ if __name__ == "__main__":
         ssl_certfile=certfile or None,
         ssl_keyfile=keyfile or None,
     )
+
