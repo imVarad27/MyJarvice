@@ -93,6 +93,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myjarvice.data.ChatSession
 import com.example.myjarvice.data.ConnectionStatus
+import com.example.myjarvice.data.FileTransferManager
 import com.example.myjarvice.data.JarvisMessage
 import com.example.myjarvice.data.PendingEmail
 import com.example.myjarvice.data.SettingsStore
@@ -101,6 +102,8 @@ import com.example.myjarvice.theme.ArcGold
 import com.example.myjarvice.theme.OfflineGray
 import com.example.myjarvice.theme.OnlineGreen
 import com.example.myjarvice.ui.JarvisArcReactor
+import com.example.myjarvice.ui.files.PcExplorerDialog
+
 import com.example.myjarvice.ui.icons.IconActivity
 import com.example.myjarvice.ui.icons.IconCopy
 import com.example.myjarvice.ui.icons.IconDocument
@@ -182,6 +185,28 @@ fun MainScreen(
     var showVoiceInfo by remember { mutableStateOf(false) }
     var showVoicePicker by remember { mutableStateOf(false) }
     var showToolsMenu by remember { mutableStateOf(false) }
+    var showPcExplorer by remember { mutableStateOf(false) }
+
+    val fileDropLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            Toast.makeText(context, "Sending file to host PC...", Toast.LENGTH_SHORT).show()
+            coroutineScope.launch {
+                val res = FileTransferManager.uploadFileToPc(
+                    context = context,
+                    uri = uri,
+                    serverIp = serverIp,
+                    token = serverToken
+                )
+                res.onSuccess { msg ->
+                    Toast.makeText(context, "✅ $msg", Toast.LENGTH_LONG).show()
+                }.onFailure { err ->
+                    Toast.makeText(context, "Upload failed: ${err.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 
     // File Attachment State
     var attachedFileName by remember { mutableStateOf<String?>(null) }
@@ -214,7 +239,19 @@ fun MainScreen(
         }
     }
 
+    if (showPcExplorer) {
+        PcExplorerDialog(
+            serverIp = serverIp,
+            token = serverToken,
+            onDismiss = { showPcExplorer = false },
+            onAskJarvisAboutFile = { fileName, filePath ->
+                viewModel.sendQuery("Jarvis, what is in the file $fileName at $filePath?")
+            }
+        )
+    }
+
     if (showIpDialog) {
+
         ServerConfigDialog(
             currentIp = serverIp,
             currentToken = serverToken,
@@ -397,7 +434,16 @@ fun MainScreen(
                             showToolsMenu = false
                             filePickerLauncher.launch("*/*")
                         },
+                        onSendFileToPc = {
+                            showToolsMenu = false
+                            fileDropLauncher.launch("*/*")
+                        },
+                        onOpenPcExplorer = {
+                            showToolsMenu = false
+                            showPcExplorer = true
+                        },
                         onSend = {
+
                             if (textInput.isNotBlank() || attachedFileContent != null) {
                                 val fullQuery = if (attachedFileName != null) {
                                     "[Attached File: $attachedFileName]\n${attachedFileContent.orEmpty()}\n\n$textInput"
@@ -1229,6 +1275,8 @@ private fun FloatingInputBar(
     onToggleToolsMenu: () -> Unit,
     onToolSelected: (String) -> Unit,
     onAttachFile: () -> Unit,
+    onSendFileToPc: () -> Unit,
+    onOpenPcExplorer: () -> Unit,
     onSend: () -> Unit,
     onQuickVoice: () -> Unit,
     onVoiceMode: () -> Unit
@@ -1263,6 +1311,16 @@ private fun FloatingInputBar(
                     onDismissRequest = onToggleToolsMenu,
                     modifier = Modifier.background(scheme.surface)
                 ) {
+                    DropdownMenuItem(
+                        text = { Text("Send File to PC (AirDrop)", color = scheme.onSurface, fontSize = 13.sp) },
+                        leadingIcon = { IconDocument(tint = Color(0xFF38BDF8), size = 16.dp) },
+                        onClick = onSendFileToPc
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Browse PC File Explorer", color = scheme.onSurface, fontSize = 13.sp) },
+                        leadingIcon = { IconDocument(tint = scheme.primary, size = 16.dp) },
+                        onClick = onOpenPcExplorer
+                    )
                     DropdownMenuItem(
                         text = { Text("Executive Daily Briefing", color = scheme.onSurface, fontSize = 13.sp) },
                         leadingIcon = { IconSparkles(tint = ArcGold, size = 16.dp) },
@@ -1304,11 +1362,12 @@ private fun FloatingInputBar(
                         onClick = { onToolSelected("Jarvis, search indexed files on my PC drives.") }
                     )
                     DropdownMenuItem(
-                        text = { Text("Attach Document / Code", color = scheme.onSurface, fontSize = 13.sp) },
-                        leadingIcon = { IconDocument(tint = scheme.primary, size = 16.dp) },
+                        text = { Text("Attach Document to Chat", color = scheme.onSurface, fontSize = 13.sp) },
+                        leadingIcon = { IconDocument(tint = scheme.onSurfaceVariant, size = 16.dp) },
                         onClick = onAttachFile
                     )
                 }
+
 
             }
 

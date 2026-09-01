@@ -12,12 +12,15 @@ import urllib.error
 import uuid as uuid_lib
 from email.message import EmailMessage
 from typing import Dict, Any, List, Optional, Tuple
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, status
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, status, UploadFile, File, Form, Query, HTTPException, Body
+from fastapi.responses import FileResponse, JSONResponse
 from rag_engine import rag_engine, query_personal_documents
 import pc_controller
 import web_search
 import scheduler
 import routine_briefing
+import file_manager
+
 
 
 
@@ -723,7 +726,25 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
 
     low_text = user_text.lower().strip()
 
+    # PC File & Folder Quick Open via Voice
+    if any(k in low_text for k in ["open downloads", "open my downloads", "show downloads", "open drop folder", "open downloads on pc", "open downloads on my pc"]):
+        file_manager.open_path_on_pc(file_manager.get_preset_paths()["downloads"])
+        return f"Opening your Downloads and JarvisDrop folder on your host PC now, {address}.", None, None, None, []
+
+    if any(k in low_text for k in ["open documents on pc", "open my documents"]):
+        file_manager.open_path_on_pc(file_manager.get_preset_paths()["documents"])
+        return f"Opening your Documents directory on host PC, {address}.", None, None, None, []
+
+    if any(k in low_text for k in ["open desktop on pc", "open my desktop"]):
+        file_manager.open_path_on_pc(file_manager.get_preset_paths()["desktop"])
+        return f"Opening Desktop on your host PC, {address}.", None, None, None, []
+
+    if any(k in low_text for k in ["open projects on pc", "open project folder"]):
+        file_manager.open_path_on_pc(file_manager.get_preset_paths()["projects"])
+        return f"Opening project workspace on host PC, {address}.", None, None, None, []
+
     # 1. Executive Morning & Daily Briefing Routine
+
     if any(k in low_text for k in ["good morning", "morning briefing", "daily briefing", "executive briefing", "what's my update", "daily update", "morning routine", "give me a briefing"]):
         briefing_data = routine_briefing.compile_briefing_context(user_name)
         briefing_messages = [
@@ -847,7 +868,45 @@ def get_root():
     return {"status": "JARVIS Host Server Online", "time": datetime.datetime.now().isoformat()}
 
 
+# --- File Transfer & Remote Explorer REST Endpoints ---
+@app.post("/api/files/upload")
+async def api_upload_file(file: UploadFile = File(...), destination: Optional[str] = Form(None)):
+    """Receives uploaded files from phone and saves to Downloads/JarvisDrop."""
+    try:
+        content = await file.read()
+        res = file_manager.save_uploaded_file(content, file.filename or "drop_file.bin", destination)
+        return JSONResponse(content=res)
+    except Exception as e:
+        logger.error("Upload failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/files/browse")
+def api_browse_files(path: Optional[str] = Query(None), preset: Optional[str] = Query(None)):
+    """Browses directories and presets on the host PC."""
+    return file_manager.browse_directory(path=path, preset=preset)
+
+
+@app.get("/api/files/download")
+def api_download_file(path: str = Query(...)):
+    """Streams a file from the host PC to the phone."""
+    if not os.path.exists(path) or os.path.isdir(path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(path=path, filename=os.path.basename(path))
+
+
+@app.post("/api/files/open")
+def api_open_file(payload: Dict[str, Any] = Body(...)):
+    """Launches a file or folder on the host PC."""
+    target_path = payload.get("path", "")
+    if not target_path:
+        raise HTTPException(status_code=400, detail="Path is required")
+    res = file_manager.open_path_on_pc(target_path)
+    return res
+
+
 CONNECTED_WEBSOCKETS: List[WebSocket] = []
+
 
 
 @app.websocket("/ws/jarvis")
