@@ -94,7 +94,8 @@ class JarvisWebSocketClient {
 
     private var serverIp = ""
     private var serverToken = ""
-    private val fallbackIps = listOf("127.0.0.1:8000", "192.168.1.35:8000", "192.168.1.37:8000", "192.168.1.34:8000", "192.168.137.1:8000")
+    private val fallbackIps = listOf("192.168.1.39:8000", "127.0.0.1:8000", "192.168.1.35:8000", "192.168.137.1:8000")
+
 
 
     fun connect(rawIpOrUrl: String = "", pairingToken: String = "") {
@@ -252,6 +253,12 @@ class JarvisWebSocketClient {
             _chatHistory.value = _chatHistory.value + offlineMsg
             _latestResponse.value = offlineMsg
         }
+    }
+
+    /** Adds a message produced locally by the on-device inference engine. */
+    fun addLocalMessage(message: JarvisMessage) {
+        _latestResponse.value = message
+        _chatHistory.value = _chatHistory.value + message
     }
 
     /**

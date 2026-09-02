@@ -12,15 +12,18 @@ import com.example.myjarvice.data.JarvisAction
 import com.example.myjarvice.data.JarvisMessage
 import com.example.myjarvice.data.JarvisWebSocketClient
 import com.example.myjarvice.data.PendingEmail
+import com.example.myjarvice.data.OnDeviceInferenceEngine
 import com.example.myjarvice.data.SettingsStore
 import com.example.myjarvice.data.SpeechManager
 import com.example.myjarvice.data.VoiceOption
 import com.example.myjarvice.wake.WakeEvents
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
@@ -30,6 +33,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val speechManager = SpeechManager(application.applicationContext)
     private val actionExecutor = DeviceActionExecutor(application.applicationContext)
     private val historyStore = ChatHistoryStore(application.applicationContext)
+    private val onDeviceEngine = OnDeviceInferenceEngine(application.applicationContext)
 
     val connectionStatus: StateFlow<ConnectionStatus> = wsClient.connectionStatus
     val chatHistory: StateFlow<List<JarvisMessage>> = wsClient.chatHistory
@@ -252,10 +256,54 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun sendQuery(text: String) {
-        if (text.isNotBlank()) {
-            _isThinking.value = true
+        if (text.isBlank()) return
+
+        _isThinking.value = true
+        if (!settings.onDeviceInferenceEnabled) {
             val ctx = deviceContext.getDeviceContext()
             wsClient.sendMessage(text, ctx)
+            return
+        }
+
+        val userMessage = JarvisMessage(
+            sender = "USER",
+            text = text,
+            type = "QUERY",
+            timestamp = timestampNow()
+        )
+        wsClient.addLocalMessage(userMessage)
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.Default) {
+                onDeviceEngine.generate(
+                    modelPath = settings.onDeviceModelPath,
+                    query = text,
+                    chatHistory = chatHistory.value.dropLast(1),
+                    personality = settings.aiPersonality,
+                    temperature = settings.temperature
+                )
+            }
+            _isThinking.value = false
+            result.fold(
+                onSuccess = { reply ->
+                    wsClient.addLocalMessage(
+                        JarvisMessage(
+                            sender = "JARVIS (On-device)",
+                            text = reply,
+                            timestamp = timestampNow()
+                        )
+                    )
+                },
+                onFailure = { error ->
+                    wsClient.addLocalMessage(
+                        JarvisMessage(
+                            sender = "JARVIS (On-device)",
+                            text = error.message ?: "On-device inference failed.",
+                            type = "ERROR",
+                            timestamp = timestampNow()
+                        )
+                    )
+                }
+            )
         }
     }
 
@@ -284,9 +332,15 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         super.onCleared()
         wsClient.disconnect()
         speechManager.shutdown()
+        onDeviceEngine.close()
     }
 
     private companion object {
         const val RELISTEN_DELAY_MS = 700L
+
+        fun timestampNow(): String = java.text.SimpleDateFormat(
+            "yyyy-MM-dd'T'HH:mm:ss",
+            java.util.Locale.getDefault()
+        ).format(java.util.Date())
     }
 }

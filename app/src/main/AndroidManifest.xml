@@ -62,6 +62,10 @@
         android:windowSoftInputMode="adjustNothing"
 
         android:theme="@style/Theme.MyJarvice">
+        <!-- Optional vendor libraries used by LiteRT-LM's GPU backend. -->
+        <uses-native-library android:name="libvndksupport.so" android:required="false" />
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

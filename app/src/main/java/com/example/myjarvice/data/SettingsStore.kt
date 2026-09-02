@@ -76,6 +76,16 @@ class SettingsStore(context: Context) {
         get() = prefs.getFloat(KEY_TEMPERATURE, 0.7f)
         set(value) { prefs.edit().putFloat(KEY_TEMPERATURE, value).apply() }
 
+    /** When enabled, chat replies are generated entirely on this Android device. */
+    var onDeviceInferenceEnabled: Boolean
+        get() = prefs.getBoolean(KEY_ON_DEVICE_INFERENCE, false)
+        set(value) { prefs.edit().putBoolean(KEY_ON_DEVICE_INFERENCE, value).apply() }
+
+    /** App-private absolute path to the user-imported LiteRT-LM model file. */
+    var onDeviceModelPath: String
+        get() = prefs.getString(KEY_ON_DEVICE_MODEL_PATH, "") ?: ""
+        set(value) { prefs.edit().putString(KEY_ON_DEVICE_MODEL_PATH, value.trim()).apply() }
+
     /**
      * Voice Match: Restricts wake-word activation exclusively to the enrolled user's voice.
      */
@@ -142,6 +152,8 @@ class SettingsStore(context: Context) {
         private const val KEY_AI_PERSONALITY = "ai_personality"
         private const val KEY_MODEL_NAME = "model_name"
         private const val KEY_TEMPERATURE = "temperature"
+        private const val KEY_ON_DEVICE_INFERENCE = "on_device_inference"
+        private const val KEY_ON_DEVICE_MODEL_PATH = "on_device_model_path"
 
         private const val KEY_VOICE_MATCH_ENABLED = "voice_match_enabled"
         private const val KEY_VOICE_MATCH_THRESHOLD = "voice_match_threshold"

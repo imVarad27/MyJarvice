@@ -87,4 +87,14 @@ dependencies {
 
   // Wake-word detection ("Hi Jarvis") — offline, no API key
   implementation(libs.vosk.android)
+
+  // On-device LLM inference. Models are downloaded/imported after installation,
+  // rather than being bundled into the APK.
+  implementation("com.google.ai.edge.litertlm:litertlm-android:0.17.0-alpha1")
+
+  // LiteRT-LM 0.17 is compiled against the newer SendChannel default-method ABI.
+  // Keep both Android and core coroutines on that version so streaming completion
+  // does not call a missing close$default method on older runtimes.
+  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 }

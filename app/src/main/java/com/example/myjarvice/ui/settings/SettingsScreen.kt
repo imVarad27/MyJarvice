@@ -2,6 +2,8 @@ package com.example.myjarvice.ui.settings
 
 import android.os.Build
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -41,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,6 +68,10 @@ import com.example.myjarvice.ui.icons.IconSparkles
 import com.example.myjarvice.ui.icons.IconSpeaker
 import com.example.myjarvice.ui.icons.IconTrash
 import com.example.myjarvice.ui.icons.IconVoiceWaveform
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 import kotlin.math.abs
 
 @Composable
@@ -91,6 +98,14 @@ fun SettingsScreen(
     var aiPersonality by remember { mutableStateOf(settingsStore.aiPersonality) }
     var modelName by remember { mutableStateOf(settingsStore.modelName) }
     var temperature by remember { mutableFloatStateOf(settingsStore.temperature) }
+    var onDeviceInference by remember { mutableStateOf(settingsStore.onDeviceInferenceEnabled) }
+    var onDeviceModelPath by remember { mutableStateOf(settingsStore.onDeviceModelPath) }
+    val transferredModelPath = remember {
+        File(context.filesDir, "models/jarvis-on-device.litertlm")
+            .takeIf { it.isFile }
+            ?.absolutePath
+            .orEmpty()
+    }
     var serverIp by remember { mutableStateOf(settingsStore.serverIp) }
     var serverToken by remember { mutableStateOf(settingsStore.serverToken) }
 
@@ -100,6 +115,32 @@ fun SettingsScreen(
 
     var showVoiceDropdown by remember { mutableStateOf(false) }
     var showPersonalityDropdown by remember { mutableStateOf(false) }
+
+    val coroutineScope = rememberCoroutineScope()
+    val modelImportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        coroutineScope.launch {
+            val outcome = withContext(Dispatchers.IO) {
+                runCatching {
+                    val modelDir = File(context.filesDir, "models").apply { mkdirs() }
+                    val destination = File(modelDir, "jarvis-on-device.litertlm")
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        destination.outputStream().use { output -> input.copyTo(output) }
+                    } ?: error("Unable to open the selected model")
+                    destination.absolutePath
+                }
+            }
+            outcome.onSuccess { path ->
+                onDeviceModelPath = path
+                settingsStore.onDeviceModelPath = path
+                Toast.makeText(context, "On-device model imported", Toast.LENGTH_SHORT).show()
+            }.onFailure { error ->
+                Toast.makeText(context, "Model import failed: ${error.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     val scheme = MaterialTheme.colorScheme
 
@@ -542,6 +583,67 @@ fun SettingsScreen(
                 steps = 10,
                 colors = SliderDefaults.colors(thumbColor = scheme.primary, activeTrackColor = scheme.primary)
             )
+
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider(color = scheme.outline.copy(alpha = 0.2f))
+            Spacer(Modifier.height(12.dp))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Run AI on this phone", color = scheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        if (onDeviceModelPath.isBlank() && transferredModelPath.isBlank()) {
+                            "Import a LiteRT-LM .litertlm model first"
+                        } else {
+                            "Private, offline inference • host server optional"
+                        },
+                        color = scheme.onSurfaceVariant,
+                        fontSize = 12.sp
+                    )
+                }
+                Switch(
+                    checked = onDeviceInference,
+                    onCheckedChange = {
+                        onDeviceInference = it
+                        settingsStore.onDeviceInferenceEnabled = it
+                    },
+                    colors = SwitchDefaults.colors(checkedThumbColor = scheme.onPrimary, checkedTrackColor = scheme.primary)
+                )
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Button(
+                // Some Android document providers classify .litertlm as an unknown
+                // type. Request every type so the imported model remains visible.
+                onClick = { modelImportLauncher.launch(arrayOf("*/*")) },
+                colors = ButtonDefaults.buttonColors(containerColor = scheme.surfaceVariant),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, scheme.primary.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+            ) {
+                IconDocument(tint = scheme.primary, size = 16.dp)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (onDeviceModelPath.isBlank() && transferredModelPath.isBlank()) "Import LiteRT-LM Model" else "Replace On-device Model",
+                    color = scheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp
+                )
+            }
+            val displayedModelPath = onDeviceModelPath.ifBlank { transferredModelPath }
+            if (displayedModelPath.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Installed: ${File(displayedModelPath).name}",
+                    color = scheme.primary,
+                    fontSize = 12.sp
+                )
+            }
         }
 
         Spacer(Modifier.height(24.dp))

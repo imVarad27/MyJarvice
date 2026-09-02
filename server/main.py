@@ -1029,9 +1029,10 @@ if __name__ == "__main__":
         raise RuntimeError("Set both JARVICE_TLS_CERT and JARVICE_TLS_KEY, or neither.")
     uvicorn.run(
         app,
-        host=os.environ.get("JARVICE_HOST", "127.0.0.1"),
+        host=os.environ.get("JARVICE_HOST", "0.0.0.0"),
         port=int(os.environ.get("JARVICE_PORT", "8000")),
         ssl_certfile=certfile or None,
         ssl_keyfile=keyfile or None,
     )
+
 

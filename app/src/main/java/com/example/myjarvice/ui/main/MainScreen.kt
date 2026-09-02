@@ -1466,13 +1466,14 @@ private fun ServerConfigDialog(
                         Text("USB", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
                     Button(
-                        onClick = { tempIp = "192.168.1.35:8000"; tempToken = "jarvis_local_token" },
+                        onClick = { tempIp = "192.168.1.39:8000"; tempToken = "jarvis_local_token" },
                         colors = ButtonDefaults.buttonColors(containerColor = scheme.surfaceVariant),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
                         Text("Wi-Fi", color = scheme.onSurface, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
+
                     Button(
                         onClick = { tempIp = "192.168.137.1:8000"; tempToken = "jarvis_local_token" },
                         colors = ButtonDefaults.buttonColors(containerColor = scheme.surfaceVariant),
