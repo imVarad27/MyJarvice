@@ -36,8 +36,11 @@ data class JarvisMessage(
     val type: String = "RESPONSE",
     val timestamp: String = "",
     val image: String? = null,
-    val sources: List<WebSource> = emptyList()
+    val sources: List<WebSource> = emptyList(),
+    val audioB64: String? = null,
+    val voiceId: String? = null
 )
+
 
 
 
@@ -154,7 +157,10 @@ class JarvisWebSocketClient {
                         }
                     }
 
-                    val msg = JarvisMessage(sender, messageText, msgType, ts, imagePayload, sourcesList)
+                    val audioB64 = if (obj.has("audio_b64") && !obj.isNull("audio_b64")) obj.getString("audio_b64") else null
+                    val voiceId = if (obj.has("voice_id") && !obj.isNull("voice_id")) obj.getString("voice_id") else null
+
+                    val msg = JarvisMessage(sender, messageText, msgType, ts, imagePayload, sourcesList, audioB64, voiceId)
 
 
                     // Drafted email waiting for approval
@@ -226,7 +232,7 @@ class JarvisWebSocketClient {
         }
     }
 
-    fun sendMessage(query: String, deviceContext: Map<String, Any> = emptyMap()) {
+    fun sendMessage(query: String, voiceId: String = "jarvis_classic", deviceContext: Map<String, Any> = emptyMap()) {
         val userMsg = JarvisMessage(
             sender = "USER",
             text = query,
@@ -238,9 +244,11 @@ class JarvisWebSocketClient {
         val payload = JSONObject().apply {
             put("query", query)
             put("text", query)
+            put("voice_id", voiceId)
             put("device_context", JSONObject(deviceContext))
             put("context", JSONObject(deviceContext))
         }
+
 
 
         val sent = webSocket?.send(payload.toString()) ?: false

@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myjarvice.data.ChatHistoryStore
 import com.example.myjarvice.data.SettingsStore
+import com.example.myjarvice.data.SmartMode
 import com.example.myjarvice.data.SpeechManager
 import com.example.myjarvice.theme.ArcGold
 import com.example.myjarvice.theme.JarvisCyan
@@ -98,7 +99,7 @@ fun SettingsScreen(
     var aiPersonality by remember { mutableStateOf(settingsStore.aiPersonality) }
     var modelName by remember { mutableStateOf(settingsStore.modelName) }
     var temperature by remember { mutableFloatStateOf(settingsStore.temperature) }
-    var onDeviceInference by remember { mutableStateOf(settingsStore.onDeviceInferenceEnabled) }
+    var smartMode by remember { mutableStateOf(settingsStore.smartMode) }
     var onDeviceModelPath by remember { mutableStateOf(settingsStore.onDeviceModelPath) }
     val transferredModelPath = remember {
         File(context.filesDir, "models/jarvis-on-device.litertlm")
@@ -588,31 +589,37 @@ fun SettingsScreen(
             HorizontalDivider(color = scheme.outline.copy(alpha = 0.2f))
             Spacer(Modifier.height(12.dp))
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Run AI on this phone", color = scheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                    Text(
-                        if (onDeviceModelPath.isBlank() && transferredModelPath.isBlank()) {
-                            "Import a LiteRT-LM .litertlm model first"
-                        } else {
-                            "Private, offline inference • host server optional"
+            Text("Smart Mode", color = scheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                when (smartMode) {
+                    SmartMode.FAST_ON_DEVICE -> "Fast & private: uses the model stored on this phone"
+                    SmartMode.STRONG_HOST -> "Strong: always uses your connected PC/server model"
+                    SmartMode.AUTO -> "Automatic: uses PC when connected, otherwise your phone model"
+                },
+                color = scheme.onSurfaceVariant,
+                fontSize = 12.sp
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                listOf(
+                    SmartMode.FAST_ON_DEVICE to "Fast",
+                    SmartMode.STRONG_HOST to "Strong",
+                    SmartMode.AUTO to "Auto"
+                ).forEach { (mode, label) ->
+                    Button(
+                        onClick = {
+                            smartMode = mode
+                            settingsStore.smartMode = mode
                         },
-                        color = scheme.onSurfaceVariant,
-                        fontSize = 12.sp
-                    )
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (smartMode == mode) scheme.primary else scheme.surfaceVariant,
+                            contentColor = if (smartMode == mode) scheme.onPrimary else scheme.primary
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) { Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
                 }
-                Switch(
-                    checked = onDeviceInference,
-                    onCheckedChange = {
-                        onDeviceInference = it
-                        settingsStore.onDeviceInferenceEnabled = it
-                    },
-                    colors = SwitchDefaults.colors(checkedThumbColor = scheme.onPrimary, checkedTrackColor = scheme.primary)
-                )
             }
 
             Spacer(Modifier.height(10.dp))

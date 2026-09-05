@@ -20,6 +20,8 @@ import web_search
 import scheduler
 import routine_briefing
 import file_manager
+import neural_voice
+
 
 
 
@@ -953,18 +955,27 @@ async def websocket_jarvis_endpoint(websocket: WebSocket):
 
                 user_text = msg.get("query") or msg.get("text") or ""
                 phone_context = msg.get("device_context") or msg.get("context") or {}
+                voice_id = msg.get("voice_id") or "jarvis_classic"
                 if not isinstance(user_text, str) or not user_text.strip() or len(user_text) > MAX_MESSAGE_CHARS:
                     await websocket.send_text(json.dumps({"sender": "JARVIS", "type": "ERROR", "text": "Please send a non-empty message up to 4,000 characters."}))
                     continue
                 if not isinstance(phone_context, dict):
                     phone_context = {}
-                logger.info("Received query from authenticated client: '%s' (%d characters).", user_text[:60], len(user_text))
+                logger.info("Received query from authenticated client: '%s' (%d characters) with voice '%s'.", user_text[:60], len(user_text), voice_id)
 
 
                 # Run the (blocking) LLM call off the event loop so other clients aren't blocked.
                 ai_response, action, pending_email, image_payload, web_sources = await asyncio.to_thread(
                     generate_reply, user_text, phone_context, history
                 )
+
+                # Synthesize high-fidelity neural speech audio
+                audio_b64 = None
+                if voice_id != "native_android":
+                    try:
+                        audio_b64 = await neural_voice.synthesize_speech_async(ai_response, voice_id=voice_id)
+                    except Exception as ve:
+                        logger.warning("Voice synthesis skipped: %s", ve)
 
                 history.append({"role": "user", "content": user_text})
                 history.append({"role": "assistant", "content": ai_response})
@@ -973,6 +984,8 @@ async def websocket_jarvis_endpoint(websocket: WebSocket):
                     "sender": "JARVIS",
                     "type": "ACTION" if action else "RESPONSE",
                     "text": ai_response,
+                    "audio_b64": audio_b64,
+                    "voice_id": voice_id,
                     "action": action,          # {"type": "CALL"|"OPEN_APP", "query": "..."} or null
                     "pending_email": pending_email,   # draft awaiting approval, or null
                     "image": image_payload,           # Base64 desktop screenshot or null
@@ -995,18 +1008,28 @@ async def websocket_jarvis_endpoint(websocket: WebSocket):
             CONNECTED_WEBSOCKETS.remove(websocket)
 
 
-# Initialise persistent memory, scheduler, and background RAG codebase indexing
+# Initialise persistent memory, scheduler, RAG codebase indexing, and neural voice pre-caching
 init_db()
 scheduler.init_scheduler_db()
 rag_engine.start_background_indexing()
+neural_voice.pre_cache_common_phrases()
 
 # Start background reminder alert watcher
 def _on_reminder_alert(item: Dict[str, Any]):
     logger.info("🚨 Alert due: %s", item)
+    alert_text = f"Sir, scheduled reminder alert: '{item['task']}'."
+    alert_audio = None
+    try:
+        alert_audio = asyncio.run(neural_voice.synthesize_speech_async(alert_text, "jarvis_classic"))
+    except Exception:
+        pass
+
     payload = json.dumps({
         "sender": "JARVIS",
         "type": "REMINDER_ALERT",
-        "text": f"Sir, scheduled reminder alert: '{item['task']}'.",
+        "text": alert_text,
+        "audio_b64": alert_audio,
+        "voice_id": "jarvis_classic",
         "timestamp": datetime.datetime.now().isoformat(),
     })
     for ws in list(CONNECTED_WEBSOCKETS):
@@ -1017,6 +1040,7 @@ def _on_reminder_alert(item: Dict[str, Any]):
 
 scheduler.scheduler_sentinel.alert_callback = _on_reminder_alert
 scheduler.scheduler_sentinel.start()
+
 
 
 if __name__ == "__main__":

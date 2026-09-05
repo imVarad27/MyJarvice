@@ -3,6 +3,8 @@ package com.example.myjarvice.ui.main
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.myjarvice.audio.JarvisSoundFx
+import com.example.myjarvice.audio.NeuralAudioPlayer
 import com.example.myjarvice.data.ChatHistoryStore
 import com.example.myjarvice.data.ChatSession
 import com.example.myjarvice.data.ConnectionStatus
@@ -15,15 +17,20 @@ import com.example.myjarvice.data.PendingEmail
 import com.example.myjarvice.data.OnDeviceInferenceEngine
 import com.example.myjarvice.data.SettingsStore
 import com.example.myjarvice.data.SpeechManager
+import com.example.myjarvice.data.SmartMode
 import com.example.myjarvice.data.VoiceOption
 import com.example.myjarvice.wake.WakeEvents
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.UUID
 
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
@@ -31,14 +38,19 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val wsClient = JarvisWebSocketClient()
     val deviceContext = DeviceContextProvider(application.applicationContext)
     val speechManager = SpeechManager(application.applicationContext)
+    val neuralAudioPlayer = NeuralAudioPlayer(application.applicationContext)
     private val actionExecutor = DeviceActionExecutor(application.applicationContext)
     private val historyStore = ChatHistoryStore(application.applicationContext)
     private val onDeviceEngine = OnDeviceInferenceEngine(application.applicationContext)
 
     val connectionStatus: StateFlow<ConnectionStatus> = wsClient.connectionStatus
     val chatHistory: StateFlow<List<JarvisMessage>> = wsClient.chatHistory
-    val isSpeaking: StateFlow<Boolean> = speechManager.isSpeaking
+
+    val isSpeaking: StateFlow<Boolean> = combine(speechManager.isSpeaking, neuralAudioPlayer.isSpeaking) { s1, s2 -> s1 || s2 }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     val isListening: StateFlow<Boolean> = speechManager.isListening
+
 
 
     private val settings = SettingsStore(application.applicationContext)
@@ -76,7 +88,10 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val pendingAction: StateFlow<JarvisAction?> = _pendingAction.asStateFlow()
 
 
-    val micLevel: StateFlow<Float> = speechManager.micLevel
+    val micLevel: StateFlow<Float> = combine(speechManager.micLevel, neuralAudioPlayer.audioLevel) { m, n ->
+        if (n > 0.05f) n else m
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, 0f)
+
     val voices: StateFlow<List<VoiceOption>> = speechManager.voices
     val selectedVoiceId: StateFlow<String> = speechManager.selectedVoiceId
 
@@ -115,7 +130,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 msg?.let {
                     _isThinking.value = false
                     if (it.sender.startsWith("JARVIS", ignoreCase = true)) {
-                        speechManager.speak(it.text)
+                        if (!it.audioB64.isNullOrBlank()) {
+                            speechManager.stopSpeaking()
+                            neuralAudioPlayer.playBase64Audio(it.audioB64)
+                        } else {
+                            neuralAudioPlayer.stop()
+                            speechManager.speak(it.text)
+                        }
                     }
                 }
             }
@@ -130,6 +151,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                     } else {
                         // Safe actions (open app, camera, maps, flashlight, alarm, whatsapp) execute immediately
                         actionExecutor.execute(it)
+                        viewModelScope.launch { JarvisSoundFx.playSuccessChime() }
                     }
                 }
             }
@@ -148,7 +170,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
         // Hands-free turn taking: once JARVICE finishes speaking, listen again.
         viewModelScope.launch {
-            speechManager.isSpeaking.collect { speaking ->
+            isSpeaking.collect { speaking ->
                 if (!speaking && _voiceModeActive.value && !_micMuted.value &&
                     !isListening.value && !_isThinking.value
                 ) {
@@ -205,6 +227,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     fun enterVoiceMode() {
         _voiceModeActive.value = true
         _micMuted.value = false
+        viewModelScope.launch { JarvisSoundFx.playWakeChime() }
         if (!isListening.value && !isSpeaking.value) {
             beginListening()
         }
@@ -213,6 +236,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     fun exitVoiceMode() {
         _voiceModeActive.value = false
         _isThinking.value = false
+        neuralAudioPlayer.stop()
         speechManager.stopListening()
         speechManager.stopSpeaking()
     }
@@ -236,7 +260,10 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     fun resolvePendingAction(approved: Boolean) {
         val action = _pendingAction.value ?: return
         _pendingAction.value = null
-        if (approved) actionExecutor.execute(action)
+        if (approved) {
+            actionExecutor.execute(action)
+            viewModelScope.launch { JarvisSoundFx.playSuccessChime() }
+        }
     }
 
     /** Plain-text transcript for voice mode's share action. */
@@ -259,11 +286,19 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         if (text.isBlank()) return
 
         _isThinking.value = true
-        if (!settings.onDeviceInferenceEnabled) {
+        val useOnDevice = when (settings.smartMode) {
+            SmartMode.FAST_ON_DEVICE -> true
+            SmartMode.STRONG_HOST -> false
+            // Prefer the stronger host when it is reachable; retain a private,
+            // offline path whenever the host is unavailable.
+            SmartMode.AUTO -> connectionStatus.value != ConnectionStatus.CONNECTED && hasOnDeviceModel()
+        }
+        if (!useOnDevice) {
             val ctx = deviceContext.getDeviceContext()
-            wsClient.sendMessage(text, ctx)
+            wsClient.sendMessage(text, voiceId = selectedVoiceId.value, deviceContext = ctx)
             return
         }
+
 
         val userMessage = JarvisMessage(
             sender = "USER",
@@ -343,4 +378,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             java.util.Locale.getDefault()
         ).format(java.util.Date())
     }
+
+    private fun hasOnDeviceModel(): Boolean =
+        File(settings.onDeviceModelPath).isFile ||
+            File(getApplication<Application>().filesDir, "models/jarvis-on-device.litertlm").isFile
 }

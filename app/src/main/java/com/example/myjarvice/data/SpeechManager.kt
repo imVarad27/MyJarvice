@@ -97,6 +97,13 @@ class SpeechManager(private val context: Context) : TextToSpeech.OnInitListener 
     }
 
     private fun loadVoices() {
+        val neuralOptions = listOf(
+            VoiceOption(id = "jarvis_classic", label = "🎩 JARVIS Classic (Paul Bettany British Neural)"),
+            VoiceOption(id = "jarvis_alfie", label = "🇬🇧 JARVIS Alfie (British Dynamic Neural)"),
+            VoiceOption(id = "friday", label = "🦾 FRIDAY (Irish Female Neural)"),
+            VoiceOption(id = "edith", label = "⚡ EDITH (American Crisp Neural)")
+        )
+
         val available = runCatching { tts?.voices.orEmpty() }.getOrDefault(emptySet())
         val labelled = available
             .filter { it.locale.language == Locale.ENGLISH.language }
@@ -107,16 +114,19 @@ class SpeechManager(private val context: Context) : TextToSpeech.OnInitListener 
         val labelCounts = labelled.groupingBy { it.second }.eachCount()
         val seen = mutableMapOf<String, Int>()
 
-        _voices.value = labelled.map { (voice, label) ->
+        val systemVoices = labelled.map { (voice, label) ->
             val display = if (labelCounts.getValue(label) > 1) {
                 val n = seen.merge(label, 1, Int::plus) ?: 1
-                "$label · Voice $n"
+                "🔊 $label · Voice $n"
             } else {
-                label
+                "🔊 $label"
             }
             VoiceOption(id = voice.name, label = display)
         }
+
+        _voices.value = neuralOptions + systemVoices
     }
+
 
     fun applySpeechRate(rate: Float) {
         settings.ttsSpeechRate = rate

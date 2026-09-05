@@ -3,6 +3,13 @@ package com.example.myjarvice.data
 import android.content.Context
 import com.example.myjarvice.theme.ThemeMode
 
+/** Chooses where Jarvis generates a response. */
+enum class SmartMode {
+    FAST_ON_DEVICE,
+    STRONG_HOST,
+    AUTO
+}
+
 class SettingsStore(context: Context) {
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -81,6 +88,21 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_ON_DEVICE_INFERENCE, false)
         set(value) { prefs.edit().putBoolean(KEY_ON_DEVICE_INFERENCE, value).apply() }
 
+    /**
+     * Smart routing preference. Existing installations keep their previous choice
+     * until the user selects a mode for the first time.
+     */
+    var smartMode: SmartMode
+        get() = prefs.getString(KEY_SMART_MODE, null)?.let { stored ->
+            runCatching { SmartMode.valueOf(stored) }.getOrNull()
+        } ?: if (onDeviceInferenceEnabled) SmartMode.FAST_ON_DEVICE else SmartMode.STRONG_HOST
+        set(value) {
+            prefs.edit()
+                .putString(KEY_SMART_MODE, value.name)
+                .putBoolean(KEY_ON_DEVICE_INFERENCE, value == SmartMode.FAST_ON_DEVICE)
+                .apply()
+        }
+
     /** App-private absolute path to the user-imported LiteRT-LM model file. */
     var onDeviceModelPath: String
         get() = prefs.getString(KEY_ON_DEVICE_MODEL_PATH, "") ?: ""
@@ -154,6 +176,7 @@ class SettingsStore(context: Context) {
         private const val KEY_TEMPERATURE = "temperature"
         private const val KEY_ON_DEVICE_INFERENCE = "on_device_inference"
         private const val KEY_ON_DEVICE_MODEL_PATH = "on_device_model_path"
+        private const val KEY_SMART_MODE = "smart_mode"
 
         private const val KEY_VOICE_MATCH_ENABLED = "voice_match_enabled"
         private const val KEY_VOICE_MATCH_THRESHOLD = "voice_match_threshold"
