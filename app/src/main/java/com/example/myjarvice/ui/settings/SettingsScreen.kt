@@ -488,6 +488,9 @@ fun SettingsScreen(
         // ==========================================
         SettingsSectionHeader("MODEL & INTELLIGENCE")
 
+        LocalKnowledgePanel()
+        Spacer(Modifier.height(16.dp))
+
         SettingsCard {
             OutlinedTextField(
                 value = userName,
@@ -507,7 +510,7 @@ fun SettingsScreen(
             Spacer(Modifier.height(12.dp))
 
             // AI Personality
-            Text("AI Personality", color = scheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text("Conversation style", color = scheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(6.dp))
 
             Box(modifier = Modifier.fillMaxWidth()) {
@@ -522,7 +525,12 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(aiPersonality, color = scheme.onSurface, fontSize = 13.sp)
+                    Text(when {
+                        aiPersonality.contains("Technical", true) -> "Thoughtful & detailed"
+                        aiPersonality.contains("Concise", true) -> "Brief & direct"
+                        aiPersonality.contains("Iron Man", true) -> "Natural & warm"
+                        else -> aiPersonality
+                    }, color = scheme.onSurface, fontSize = 13.sp)
                     Text("▾", color = scheme.onSurfaceVariant, fontSize = 12.sp)
                 }
 
@@ -532,9 +540,9 @@ fun SettingsScreen(
                     modifier = Modifier.background(scheme.surface)
                 ) {
                     listOf(
-                        "Iron Man JARVIS (Polite, Stark HUD)",
-                        "Concise Assistant (Brief, direct)",
-                        "Technical Specialist (Deep reasoning)"
+                        "Natural & warm",
+                        "Brief & direct",
+                        "Thoughtful & detailed"
                     ).forEach { p ->
                         DropdownMenuItem(
                             text = { Text(p, color = scheme.onSurface) },

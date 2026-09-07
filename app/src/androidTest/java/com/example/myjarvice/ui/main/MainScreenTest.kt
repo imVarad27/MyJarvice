@@ -1,5 +1,7 @@
 package com.example.myjarvice.ui.main
 
+import androidx.activity.ComponentActivity
+
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText

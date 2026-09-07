@@ -18,6 +18,8 @@ import com.example.myjarvice.data.OnDeviceInferenceEngine
 import com.example.myjarvice.data.SettingsStore
 import com.example.myjarvice.data.SpeechManager
 import com.example.myjarvice.data.SmartMode
+import com.example.myjarvice.data.LocalKnowledgeStore
+import com.example.myjarvice.data.LocalCalculator
 import com.example.myjarvice.data.VoiceOption
 import com.example.myjarvice.wake.WakeEvents
 import kotlinx.coroutines.delay
@@ -42,6 +44,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     private val actionExecutor = DeviceActionExecutor(application.applicationContext)
     private val historyStore = ChatHistoryStore(application.applicationContext)
     private val onDeviceEngine = OnDeviceInferenceEngine(application.applicationContext)
+    private val knowledgeStore = LocalKnowledgeStore(application.applicationContext)
+    private var localRequestActive = false
 
     val connectionStatus: StateFlow<ConnectionStatus> = wsClient.connectionStatus
     val chatHistory: StateFlow<List<JarvisMessage>> = wsClient.chatHistory
@@ -79,6 +83,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     /** True between sending a query and the reply landing, so the UI can show progress. */
     private val _isThinking = MutableStateFlow(false)
     val isThinking: StateFlow<Boolean> = _isThinking.asStateFlow()
+    private val _responseRoute = MutableStateFlow("Choose Fast for private local answers; Strong uses your PC/server.")
+    val responseRoute: StateFlow<String> = _responseRoute.asStateFlow()
 
     /** Non-null while an email draft is waiting on the user's yes/no. */
     val pendingEmail: StateFlow<PendingEmail?> = wsClient.pendingEmail
@@ -128,7 +134,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             wsClient.latestResponse.collect { msg ->
                 msg?.let {
-                    _isThinking.value = false
+                    if (it.sender != "USER" && !localRequestActive) _isThinking.value = false
                     if (it.sender.startsWith("JARVIS", ignoreCase = true)) {
                         if (!it.audioB64.isNullOrBlank()) {
                             speechManager.stopSpeaking()
@@ -283,7 +289,41 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun sendQuery(text: String) {
-        if (text.isBlank()) return
+        if (text.isBlank() || localRequestActive) return
+
+        // Explicit local tools never forward saved facts or document excerpts to a host.
+        val command = text.trim()
+        if (command.startsWith("calculate ", true) || command.startsWith("remember: ", true) ||
+            command.equals("show memories", true) || command.startsWith("search documents:", true)) {
+            localRequestActive = true
+            _responseRoute.value = "Local tool · stays on this phone"
+            _isThinking.value = true
+            wsClient.addLocalMessage(JarvisMessage(sender = "USER", text = text, type = "QUERY", timestamp = timestampNow()))
+            viewModelScope.launch {
+                try {
+                    val reply = withContext(Dispatchers.IO) {
+                        runCatching {
+                            when {
+                                command.startsWith("calculate ", true) -> LocalCalculator.evaluate(command.substringAfter(' '))
+                                command.startsWith("remember: ", true) -> {
+                                    knowledgeStore.remember(command.substringAfter(':'))
+                                    "Saved on this phone. Review or delete it in Settings → Local memory & documents."
+                                }
+                                command.equals("show memories", true) -> knowledgeStore.entries().filter { it.memory }
+                                    .joinToString("\n") { "• ${it.text}" }.ifBlank { "No saved memories yet." }
+                                else -> LocalKnowledgeStore.rank(command.substringAfter(':'), knowledgeStore.entries().filterNot { it.memory })
+                                    .mapIndexed { i, hit -> "[${i + 1}] ${hit.source}\n${hit.text}" }
+                                    .joinToString("\n\n").ifBlank { "No matching passages. Import a document in Settings or try more specific keywords." }
+                            }
+                        }
+                    }
+                    wsClient.addLocalMessage(JarvisMessage(sender = "JARVIS (Local tool)",
+                        text = reply.getOrElse { it.message ?: "Local tool failed." },
+                        type = if (reply.isSuccess) "RESPONSE" else "ERROR", timestamp = timestampNow()))
+                } finally { localRequestActive = false; _isThinking.value = false }
+            }
+            return
+        }
 
         _isThinking.value = true
         val useOnDevice = when (settings.smartMode) {
@@ -294,6 +334,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             SmartMode.AUTO -> connectionStatus.value != ConnectionStatus.CONNECTED && hasOnDeviceModel()
         }
         if (!useOnDevice) {
+            _responseRoute.value = "PC/server · sending this request to your configured host"
             val ctx = deviceContext.getDeviceContext()
             wsClient.sendMessage(text, voiceId = selectedVoiceId.value, deviceContext = ctx)
             return
@@ -306,8 +347,11 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             type = "QUERY",
             timestamp = timestampNow()
         )
+        localRequestActive = true
+        _responseRoute.value = "On-device · loading / generating locally"
         wsClient.addLocalMessage(userMessage)
         viewModelScope.launch {
+            try {
             val result = withContext(Dispatchers.Default) {
                 onDeviceEngine.generate(
                     modelPath = settings.onDeviceModelPath,
@@ -320,6 +364,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             _isThinking.value = false
             result.fold(
                 onSuccess = { reply ->
+                    _responseRoute.value = "On-device · response completed locally"
                     wsClient.addLocalMessage(
                         JarvisMessage(
                             sender = "JARVIS (On-device)",
@@ -329,6 +374,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                     )
                 },
                 onFailure = { error ->
+                    _responseRoute.value = "On-device · failed; nothing forwarded to the server"
                     wsClient.addLocalMessage(
                         JarvisMessage(
                             sender = "JARVIS (On-device)",
@@ -339,6 +385,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                     )
                 }
             )
+            } finally { localRequestActive = false; _isThinking.value = false }
         }
     }
 

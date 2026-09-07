@@ -13,6 +13,7 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -84,6 +85,7 @@ dependencies {
 
   // Networking & WebSockets
   implementation("com.squareup.okhttp3:okhttp:4.12.0")
+  implementation("com.tom-roush:pdfbox-android:2.0.27.0")
 
   // Wake-word detection ("Hi Jarvis") — offline, no API key
   implementation(libs.vosk.android)

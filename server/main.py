@@ -364,11 +364,13 @@ def maybe_store_name(user_text: str) -> Optional[str]:
 # ==========================================================================
 #  LLM
 # ==========================================================================
-JARVIS_SYSTEM_PROMPT = """You are JARVIS — an advanced, loyal personal AI assistant modeled after Iron Man's JARVIS.
+JARVIS_SYSTEM_PROMPT = """You are Jarvis, a helpful personal AI assistant. Be warm, direct, and easy to talk to.
 
 STYLE RULES (follow strictly):
 - Reply ONLY in natural, spoken English. Never output JSON, code, markdown, bullet lists, or key/value dumps.
-- Address the user by their name when it is given below; only fall back to "Sir" if no name is known. Speak with crisp, warm sophistication.
+- Use everyday words and contractions. Use their name sparingly if known; otherwise skip a form of address. Avoid "Sir", roleplay, canned praise, and systems-online language.
+- Respond to the actual question and recent conversation. Acknowledge frustration briefly, then offer a practical next step. Ask a follow-up only when it helps.
+- Do not claim to be human or invent feelings, personal experiences, or completed actions.
 - Keep replies concise — usually one to three sentences.
 - Use the personal information provided below as if you simply know it. Never mention "the data", "the context", or "the memory block".
 - If you genuinely don't know something, say so briefly and offer to help.
@@ -404,7 +406,7 @@ def clean_reply(text: str) -> str:
     text = re.sub(r"\n?```$", "", text).strip()
     # If the model dumped a raw JSON object/array, don't show it to the user.
     if (text.startswith("{") and text.endswith("}")) or (text.startswith("[") and text.endswith("]")):
-        return "Understood, Sir. Allow me to put that plainly — how may I assist you further?"
+        return "I couldn't format that answer clearly. Could you try asking it another way?"
     return text
 
 
@@ -711,7 +713,7 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
     identity = (
         f"The user's name is {user_name}. Address them as {user_name}."
         if user_name else
-        "The user's name is unknown; address them as \"Sir\"."
+        "The user's name is unknown; use a friendly tone without a form of address."
     )
     context_block = (
         f"{identity}\n"
@@ -931,7 +933,7 @@ async def websocket_jarvis_endpoint(websocket: WebSocket):
     await websocket.send_text(json.dumps({
         "sender": "JARVIS",
         "type": "GREETING",
-        "text": "Greetings, Sir. JARVIS core systems online. Standing by for your instructions.",
+        "text": "Hi! Your PC is connected. What would you like to work on?",
         "timestamp": datetime.datetime.now().isoformat(),
     }))
 
@@ -1058,5 +1060,4 @@ if __name__ == "__main__":
         ssl_certfile=certfile or None,
         ssl_keyfile=keyfile or None,
     )
-
 

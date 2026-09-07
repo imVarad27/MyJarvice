@@ -1,6 +1,12 @@
 package com.example.myjarvice.ui.main
 
 import android.app.Application
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import kotlinx.coroutines.delay
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -155,6 +161,7 @@ fun MainScreen(
     val selectedVoiceId by viewModel.selectedVoiceId.collectAsStateWithLifecycle()
     val pendingEmail by viewModel.pendingEmail.collectAsStateWithLifecycle()
     val isThinking by viewModel.isThinking.collectAsStateWithLifecycle()
+    val responseRoute by viewModel.responseRoute.collectAsStateWithLifecycle()
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
@@ -357,6 +364,12 @@ fun MainScreen(
                         .imePadding()
                 ) {
                     // Content Area: Empty Hero OR Active Chat Feed
+                    Text(
+                        text = responseRoute,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = scheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+                    )
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -424,6 +437,7 @@ fun MainScreen(
                         textInput = textInput,
                         onTextChange = { textInput = it },
                         isListening = isListening,
+                        isThinking = isThinking,
                         showToolsMenu = showToolsMenu,
                         onToggleToolsMenu = { showToolsMenu = !showToolsMenu },
                         onToolSelected = { toolPrompt ->
@@ -734,15 +748,16 @@ private fun EmptyChatHero(
     val greeting = remember {
         val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         when {
-            hour < 12 -> "Good morning, Sir"
-            hour < 18 -> "Good afternoon, Sir"
-            else -> "Good evening, Sir"
+            hour < 12 -> "Good morning"
+            hour < 18 -> "Good afternoon"
+            else -> "Good evening"
         }
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -766,7 +781,7 @@ private fun EmptyChatHero(
         Spacer(Modifier.height(6.dp))
 
         Text(
-            "How can I assist your workstation, web queries, and workflow today?",
+            "What's on your mind?",
             color = scheme.onSurfaceVariant,
             fontSize = 14.sp,
             textAlign = TextAlign.Center
@@ -777,27 +792,27 @@ private fun EmptyChatHero(
         // Professional 2x2 Suggestion Cards
         val promptCards = listOf(
             PromptCardItem(
-                title = "Executive Briefing",
-                desc = "Weather, PC status & news briefing",
-                prompt = "Jarvis, give me my executive morning briefing.",
+                title = "Talk it through",
+                desc = "Make a little space to think",
+                prompt = "I have a lot on my mind. Help me figure out where to start.",
                 icon = { IconSparkles(tint = ArcGold, size = 18.dp) }
             ),
             PromptCardItem(
-                title = "Smart Reminder",
-                desc = "Schedule tasks & alarm alerts",
-                prompt = "Jarvis, remind me to check the deployment in 15 minutes.",
+                title = "Make it simple",
+                desc = "An explanation that makes sense",
+                prompt = "Explain how a phone runs an AI model, using a simple example.",
                 icon = { IconActivity(tint = Color(0xFF60A5FA), size = 18.dp) }
             ),
             PromptCardItem(
-                title = "Host PC Screen",
-                desc = "Live desktop screenshot capture",
-                prompt = "Jarvis, capture host PC screenshot.",
+                title = "Quick calculation",
+                desc = "Accurate, right on your phone",
+                prompt = "Calculate (18 + 7) * 4",
                 icon = { IconDocument(tint = scheme.primary, size = 18.dp) }
             ),
             PromptCardItem(
-                title = "Codebase & Doc RAG",
-                desc = "Search indexed project files",
-                prompt = "Jarvis, where in the project do we handle device actions like camera and maps?",
+                title = "Your memories",
+                desc = "Review what you've saved",
+                prompt = "Show memories",
                 icon = { IconDocument(tint = Color(0xFF34D399), size = 18.dp) }
             )
         )
@@ -893,7 +908,7 @@ private fun ChatFeed(
 
     LaunchedEffect(chatHistory.size, isThinking) {
         if (chatHistory.isNotEmpty()) {
-            listState.animateScrollToItem(chatHistory.size - 1)
+            listState.animateScrollToItem(chatHistory.size - 1 + if (isThinking) 1 else 0)
         }
     }
 
@@ -956,6 +971,9 @@ private fun JarvisMessageBubble(
     val scheme = MaterialTheme.colorScheme
     val context = LocalContext.current
     var showFullscreenImage by remember { mutableStateOf(false) }
+    var showSources by remember(msg.text) { mutableStateOf(false) }
+    val answer = msg.text.substringBefore("\n\nRetrieved sources:\n")
+    val sources = msg.text.substringAfter("\n\nRetrieved sources:\n", "")
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -988,7 +1006,12 @@ private fun JarvisMessageBubble(
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    "1.0",
+                    when {
+                        msg.type == "ERROR" -> "Couldn't finish"
+                        msg.sender.contains("On-device", true) -> "On your phone"
+                        msg.sender.contains("Local tool", true) -> "Local tool"
+                        else -> "PC / server"
+                    },
                     color = scheme.onSurfaceVariant,
                     fontSize = 11.sp
                 )
@@ -997,12 +1020,22 @@ private fun JarvisMessageBubble(
             Spacer(Modifier.height(4.dp))
 
             // Body text
-            Text(
-                msg.text,
-                color = scheme.onSurface,
-                fontSize = 14.sp,
-                lineHeight = 22.sp
-            )
+            SelectionContainer {
+                Text(
+                    answer,
+                    color = if (msg.type == "ERROR") scheme.error else scheme.onSurface,
+                    fontSize = 16.sp,
+                    lineHeight = 25.sp
+                )
+            }
+            if (sources.isNotBlank()) {
+                TextButton(onClick = { showSources = !showSources }) {
+                    Text(if (showSources) "Hide sources" else "View sources")
+                }
+                if (showSources) SelectionContainer {
+                    Text(sources, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                }
+            }
 
             // Desktop Screenshot / Image Rendering
             if (!msg.image.isNullOrBlank()) {
@@ -1220,6 +1253,10 @@ private fun FullscreenImageDialog(
 @Composable
 private fun ThinkingIndicator() {
     val scheme = MaterialTheme.colorScheme
+    var elapsedSeconds by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) { delay(1000); elapsedSeconds++ }
+    }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1254,7 +1291,11 @@ private fun ThinkingIndicator() {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "Thinking...",
+                when {
+                    elapsedSeconds >= 20 -> "Taking a little longer… ${elapsedSeconds}s"
+                    elapsedSeconds >= 8 -> "Still working on it… ${elapsedSeconds}s"
+                    else -> "Thinking it through…"
+                },
                 color = scheme.primary.copy(alpha = alpha),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium
@@ -1271,6 +1312,7 @@ private fun FloatingInputBar(
     textInput: String,
     onTextChange: (String) -> Unit,
     isListening: Boolean,
+    isThinking: Boolean,
     showToolsMenu: Boolean,
     onToggleToolsMenu: () -> Unit,
     onToolSelected: (String) -> Unit,
@@ -1375,7 +1417,7 @@ private fun FloatingInputBar(
             OutlinedTextField(
                 value = textInput,
                 onValueChange = onTextChange,
-                placeholder = { Text("Ask JARVIS, search web, or control PC...", color = scheme.onSurfaceVariant, fontSize = 14.sp) },
+                placeholder = { Text("Message Jarvis…", color = scheme.onSurfaceVariant, fontSize = 14.sp) },
                 modifier = Modifier.weight(1f),
                 maxLines = 4,
                 colors = OutlinedTextFieldDefaults.colors(
@@ -1393,8 +1435,10 @@ private fun FloatingInputBar(
             if (textInput.isNotBlank()) {
                 IconButton(
                     onClick = onSend,
+                    enabled = !isThinking,
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(48.dp)
+                        .semantics { contentDescription = "Send message" }
                         .clip(CircleShape)
                         .background(scheme.primary)
                 ) {
