@@ -78,6 +78,19 @@
             </intent-filter>
         </activity>
 
+        <!-- Gives the system camera a temporary, private destination for a photo
+             taken from the chat composer. No captured image is written to shared
+             storage by Jarvis. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/jarvis_file_paths" />
+        </provider>
+
         <!-- Foreground service that listens for the "Jarvis" wake word. -->
         <service
             android:name=".wake.WakeWordService"

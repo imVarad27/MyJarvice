@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 import logging
 import datetime
@@ -59,6 +60,10 @@ def _load_dotenv() -> None:
 
 
 _load_dotenv()
+
+# Set JARVIS_VISION_MODEL in server/.env if your text model and vision model are
+# different. Jarvis verifies Ollama's advertised capability before it sends pixels.
+VISION_MODEL = os.environ.get("JARVIS_VISION_MODEL", DEFAULT_MODEL)
 
 SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
@@ -377,9 +382,35 @@ STYLE RULES (follow strictly):
 """
 
 
-def call_ollama(messages: List[Dict[str, str]]) -> Optional[str]:
+_vision_capability_cache: Dict[str, bool] = {}
+
+
+def ollama_supports_vision(model: str) -> bool:
+    """Check the local Ollama model instead of guessing that a name is visual."""
+    if model in _vision_capability_cache:
+        return _vision_capability_cache[model]
+    try:
+        request = urllib.request.Request(
+            "http://localhost:11434/api/show",
+            data=json.dumps({"name": model}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=8) as response:
+            result = json.loads(response.read().decode("utf-8"))
+        supported = "vision" in result.get("capabilities", [])
+    except Exception as exc:
+        logger.info("Could not verify visual support for %s: %s", model, exc)
+        # Do not cache a transient startup/network failure: the user may start
+        # Ollama and retry without restarting this server.
+        return False
+    _vision_capability_cache[model] = supported
+    return supported
+
+
+def call_ollama(messages: List[Dict[str, Any]], model: Optional[str] = None) -> Optional[str]:
     payload = {
-        "model": DEFAULT_MODEL,
+        "model": model or DEFAULT_MODEL,
         "messages": messages,
         "stream": False,
         "options": {"temperature": 0.7},
@@ -667,32 +698,41 @@ def detect_pc_action(user_text: str) -> Optional[Tuple[str, Optional[str]]]:
 
 
 
-def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[Dict[str, str]]) -> Tuple[str, Optional[Dict[str, Any]], Optional[Dict[str, Any]], Optional[str], List[Dict[str, str]]]:
+def generate_reply(
+    user_text: str,
+    phone_context: Dict[str, Any],
+    history: List[Dict[str, str]],
+    image_b64: Optional[str] = None,
+    image_ocr_text: str = ""
+) -> Tuple[str, Optional[Dict[str, Any]], Optional[Dict[str, Any]], Optional[str], List[Dict[str, str]]]:
     """Returns (reply_text, action, pending_email, image_payload, web_sources); action/pending_email/image_payload may be None."""
     name_set = maybe_store_name(user_text)
     user_name = get_user_name()
     address = user_name if user_name else "Sir"
     web_sources: List[Dict[str, str]] = []
 
-    # Host PC Remote Automation check
-    pc_res = detect_pc_action(user_text)
-    if pc_res:
-        reply_txt, img_b64 = pc_res
-        return reply_txt, None, None, img_b64, []
+    # A photo question is always analysis, never an accidental device/PC action.
+    has_photo = bool(image_b64)
+    if not has_photo:
+        # Host PC Remote Automation check
+        pc_res = detect_pc_action(user_text)
+        if pc_res:
+            reply_txt, img_b64 = pc_res
+            return reply_txt, None, None, img_b64, []
 
     # "Alex's email is ..." — save it before anything else so the same sentence can
     # also be used to address a message.
-    saved_contact = maybe_store_contact_email(user_text)
+    saved_contact = maybe_store_contact_email(user_text) if not has_photo else None
     if saved_contact and not detect_email_intent(user_text):
         return f"Noted, {address}. I'll remember {saved_contact}.", None, None, None, []
 
-    if detect_email_intent(user_text):
+    if not has_photo and detect_email_intent(user_text):
         reply_text, pending = build_email_draft(user_text, address)
         return reply_text, None, pending, None, []
 
     # Phone actions are handled deterministically and returned immediately (no LLM
     # round-trip) so "call Mom" or "open WhatsApp" fire instantly and reliably.
-    device_action = detect_device_action(user_text)
+    device_action = detect_device_action(user_text) if not has_photo else None
     if device_action:
         target = device_action["query"]
         if device_action["type"] == "CALL":
@@ -705,8 +745,8 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
             text = f"Right away, {address}."
         return text, device_action, None, None, []
 
-    stored = maybe_store_memory(user_text)
-    action_note = maybe_run_action(user_text)
+    stored = maybe_store_memory(user_text) if not has_photo else None
+    action_note = maybe_run_action(user_text) if not has_photo else None
     memory_ctx = build_memory_context(user_text)
     now = datetime.datetime.now()
 
@@ -727,6 +767,13 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
         context_block += f"\n\nThe user just told you their name is {name_set}. Warmly acknowledge it and use it."
     if stored:
         context_block += f"\n\nYou just saved a new fact to memory: '{stored}'. Briefly confirm you'll remember it."
+    if has_photo:
+        context_block += (
+            "\n\nThe user attached a photo. Answer their question about that photo directly. "
+            "Do not claim text is exact if it is not readable."
+        )
+        if image_ocr_text:
+            context_block += f"\n\nText read on the user's phone from the photo:\n{image_ocr_text[:6000]}"
 
     low_text = user_text.lower().strip()
 
@@ -825,13 +872,28 @@ def generate_reply(user_text: str, phone_context: Dict[str, Any], history: List[
                 "INSTRUCTION: Use the above real-time live web evidence to answer the user's question accurately with up-to-date facts."
             )
 
-    messages: List[Dict[str, str]] = [
+    messages: List[Dict[str, Any]] = [
         {"role": "system", "content": JARVIS_SYSTEM_PROMPT + "\n" + context_block}
     ]
     messages.extend(history[-MAX_HISTORY_TURNS:])
-    messages.append({"role": "user", "content": user_text})
+    user_message: Dict[str, Any] = {"role": "user", "content": user_text}
+    model_for_reply = DEFAULT_MODEL
+    if has_photo:
+        if ollama_supports_vision(VISION_MODEL):
+            user_message["images"] = [image_b64]
+            model_for_reply = VISION_MODEL
+        elif not image_ocr_text:
+            return (
+                "Your PC model is text-only right now, and this photo has no readable text. "
+                "Choose a vision-capable Ollama model for Strong mode, then try again.",
+                None, None, None, []
+            )
+        else:
+            context_block += "\n\nThe host model is text-only, so answer only from the extracted photo text."
+            messages[0] = {"role": "system", "content": JARVIS_SYSTEM_PROMPT + "\n" + context_block}
+    messages.append(user_message)
 
-    reply = call_ollama(messages)
+    reply = call_ollama(messages, model=model_for_reply)
     if reply is None:
         reply = fallback_reply(user_text, address, stored, name_set, action_note)
     return clean_reply(reply), None, None, None, web_sources
@@ -958,17 +1020,34 @@ async def websocket_jarvis_endpoint(websocket: WebSocket):
                 user_text = msg.get("query") or msg.get("text") or ""
                 phone_context = msg.get("device_context") or msg.get("context") or {}
                 voice_id = msg.get("voice_id") or "jarvis_classic"
+                image_b64 = msg.get("image_b64") or None
+                image_mime_type = msg.get("image_mime_type") or "image/jpeg"
+                image_ocr_text = msg.get("image_ocr_text") or ""
                 if not isinstance(user_text, str) or not user_text.strip() or len(user_text) > MAX_MESSAGE_CHARS:
                     await websocket.send_text(json.dumps({"sender": "JARVIS", "type": "ERROR", "text": "Please send a non-empty message up to 4,000 characters."}))
                     continue
                 if not isinstance(phone_context, dict):
                     phone_context = {}
+                if image_b64 is not None:
+                    if not isinstance(image_b64, str) or len(image_b64) > 2_300_000 or image_mime_type not in {"image/jpeg", "image/png", "image/webp"}:
+                        await websocket.send_text(json.dumps({"sender": "JARVIS", "type": "ERROR", "text": "That image is not in a supported, safe format. Please choose a JPG, PNG, or WebP under about 1.6 MB."}))
+                        continue
+                    try:
+                        decoded_image = base64.b64decode(image_b64, validate=True)
+                    except Exception:
+                        await websocket.send_text(json.dumps({"sender": "JARVIS", "type": "ERROR", "text": "I couldn't read that image. Please try attaching it again."}))
+                        continue
+                    if len(decoded_image) > 1_700_000:
+                        await websocket.send_text(json.dumps({"sender": "JARVIS", "type": "ERROR", "text": "That image is still too large. Please choose a smaller photo."}))
+                        continue
+                if not isinstance(image_ocr_text, str):
+                    image_ocr_text = ""
                 logger.info("Received query from authenticated client: '%s' (%d characters) with voice '%s'.", user_text[:60], len(user_text), voice_id)
 
 
                 # Run the (blocking) LLM call off the event loop so other clients aren't blocked.
                 ai_response, action, pending_email, image_payload, web_sources = await asyncio.to_thread(
-                    generate_reply, user_text, phone_context, history
+                    generate_reply, user_text, phone_context, history, image_b64, image_ocr_text[:6000]
                 )
 
                 # Synthesize high-fidelity neural speech audio
@@ -1060,4 +1139,3 @@ if __name__ == "__main__":
         ssl_certfile=certfile or None,
         ssl_keyfile=keyfile or None,
     )
-

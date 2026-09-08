@@ -232,12 +232,20 @@ class JarvisWebSocketClient {
         }
     }
 
-    fun sendMessage(query: String, voiceId: String = "jarvis_classic", deviceContext: Map<String, Any> = emptyMap()) {
+    fun sendMessage(
+        query: String,
+        voiceId: String = "jarvis_classic",
+        deviceContext: Map<String, Any> = emptyMap(),
+        imageBase64: String? = null,
+        imageMimeType: String? = null,
+        imageOcrText: String? = null
+    ) {
         val userMsg = JarvisMessage(
             sender = "USER",
             text = query,
             type = "QUERY",
-            timestamp = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+            timestamp = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()),
+            image = imageBase64?.takeIf { it.isNotBlank() }?.let { "data:${imageMimeType ?: "image/jpeg"};base64,$it" }
         )
         _chatHistory.value = _chatHistory.value + userMsg
 
@@ -247,6 +255,9 @@ class JarvisWebSocketClient {
             put("voice_id", voiceId)
             put("device_context", JSONObject(deviceContext))
             put("context", JSONObject(deviceContext))
+            imageBase64?.takeIf { it.isNotBlank() }?.let { put("image_b64", it) }
+            imageMimeType?.takeIf { it.isNotBlank() }?.let { put("image_mime_type", it) }
+            imageOcrText?.takeIf { it.isNotBlank() }?.let { put("image_ocr_text", it.take(6000)) }
         }
 
 

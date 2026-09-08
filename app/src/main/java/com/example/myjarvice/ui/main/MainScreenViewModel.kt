@@ -20,6 +20,7 @@ import com.example.myjarvice.data.SpeechManager
 import com.example.myjarvice.data.SmartMode
 import com.example.myjarvice.data.LocalKnowledgeStore
 import com.example.myjarvice.data.LocalCalculator
+import com.example.myjarvice.data.PhotoAttachment
 import com.example.myjarvice.data.VoiceOption
 import com.example.myjarvice.wake.WakeEvents
 import kotlinx.coroutines.delay
@@ -288,7 +289,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         wsClient.updateServerConnection(trimmed, _serverToken.value)
     }
 
-    fun sendQuery(text: String) {
+    fun sendQuery(text: String, photo: PhotoAttachment? = null) {
         if (text.isBlank() || localRequestActive) return
 
         // Explicit local tools never forward saved facts or document excerpts to a host.
@@ -334,28 +335,50 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             SmartMode.AUTO -> connectionStatus.value != ConnectionStatus.CONNECTED && hasOnDeviceModel()
         }
         if (!useOnDevice) {
-            _responseRoute.value = "PC/server · sending this request to your configured host"
+            _responseRoute.value = if (photo == null) {
+                "PC/server · sending this request to your configured host"
+            } else {
+                "PC/server · analysing your photo on the configured host"
+            }
             val ctx = deviceContext.getDeviceContext()
-            wsClient.sendMessage(text, voiceId = selectedVoiceId.value, deviceContext = ctx)
+            wsClient.sendMessage(
+                query = text,
+                voiceId = selectedVoiceId.value,
+                deviceContext = ctx,
+                imageBase64 = photo?.base64,
+                imageMimeType = photo?.mimeType,
+                imageOcrText = photo?.ocrText
+            )
             return
         }
 
-
+        val localPrompt = if (photo?.hasReadableText == true) {
+            "Photo text (read privately on this phone):\n${photo.ocrText}\n\nUser question: $text"
+        } else {
+            text
+        }
         val userMessage = JarvisMessage(
             sender = "USER",
             text = text,
             type = "QUERY",
-            timestamp = timestampNow()
+            timestamp = timestampNow(),
+            image = photo?.dataUrl
         )
         localRequestActive = true
-        _responseRoute.value = "On-device · loading / generating locally"
+        _responseRoute.value = if (photo == null) {
+            "On-device · loading / generating locally"
+        } else if (photo.hasReadableText) {
+            "On-device · reading the photo text privately"
+        } else {
+            "On-device · photo has no readable text; Strong mode can analyse the full image"
+        }
         wsClient.addLocalMessage(userMessage)
         viewModelScope.launch {
             try {
             val result = withContext(Dispatchers.Default) {
                 onDeviceEngine.generate(
                     modelPath = settings.onDeviceModelPath,
-                    query = text,
+                    query = localPrompt,
                     chatHistory = chatHistory.value.dropLast(1),
                     personality = settings.aiPersonality,
                     temperature = settings.temperature

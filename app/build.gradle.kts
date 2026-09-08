@@ -86,6 +86,9 @@ dependencies {
   // Networking & WebSockets
   implementation("com.squareup.okhttp3:okhttp:4.12.0")
   implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+  // On-device OCR for receipts, homework pages, and product labels. The text
+  // recognizer is bundled, so Fast mode can understand readable photos offline.
+  implementation("com.google.mlkit:text-recognition:16.0.1")
 
   // Wake-word detection ("Hi Jarvis") — offline, no API key
   implementation(libs.vosk.android)

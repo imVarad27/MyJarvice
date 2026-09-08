@@ -1,6 +1,8 @@
 package com.example.myjarvice.ui.main
 
 import android.app.Application
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -97,10 +99,14 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import com.example.myjarvice.data.ChatSession
 import com.example.myjarvice.data.ConnectionStatus
 import com.example.myjarvice.data.FileTransferManager
+import com.example.myjarvice.data.ImageUnderstanding
 import com.example.myjarvice.data.JarvisMessage
+import com.example.myjarvice.data.PhotoAttachment
 import com.example.myjarvice.data.PendingEmail
 import com.example.myjarvice.data.SettingsStore
 import com.example.myjarvice.data.WebSource
@@ -131,7 +137,9 @@ import com.example.myjarvice.wake.WakeWordService
 import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.io.File
 import java.util.Calendar
+import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -218,6 +226,44 @@ fun MainScreen(
     // File Attachment State
     var attachedFileName by remember { mutableStateOf<String?>(null) }
     var attachedFileContent by remember { mutableStateOf<String?>(null) }
+    var attachedPhoto by remember { mutableStateOf<PhotoAttachment?>(null) }
+    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+
+    fun attachPhoto(uri: Uri) {
+        coroutineScope.launch {
+            Toast.makeText(context, "Reading photo on your phone…", Toast.LENGTH_SHORT).show()
+            ImageUnderstanding.prepare(context, uri).onSuccess { photo ->
+                attachedPhoto = photo
+                val status = if (photo.hasReadableText) "Text read privately on phone" else "Photo attached"
+                Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
+            }.onFailure { error ->
+                Toast.makeText(context, error.message ?: "Could not read that photo.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { saved ->
+        val capturedUri = pendingCameraUri
+        pendingCameraUri = null
+        if (saved && capturedUri != null) attachPhoto(capturedUri)
+    }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            val imageFile = File(context.cacheDir, "camera/${UUID.randomUUID()}.jpg").apply { parentFile?.mkdirs() }
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", imageFile)
+            pendingCameraUri = uri
+            cameraLauncher.launch(uri)
+        } else {
+            Toast.makeText(context, "Camera permission is needed to take a photo.", Toast.LENGTH_SHORT).show()
+        }
+    }
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? -> uri?.let(::attachPhoto) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -432,10 +478,44 @@ fun MainScreen(
                         }
                     }
 
+                    if (attachedPhoto != null) {
+                        val photo = attachedPhoto!!
+                        Row(
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(scheme.surfaceVariant)
+                                .border(1.dp, scheme.primary.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                                .padding(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Image(
+                                bitmap = photo.bitmap.asImageBitmap(),
+                                contentDescription = "Attached photo",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(42.dp).clip(RoundedCornerShape(7.dp))
+                            )
+                            Spacer(Modifier.width(9.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Photo ready", color = scheme.onSurface, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                Text(
+                                    if (photo.hasReadableText) "Text read on this phone" else "Use Strong mode for full visual analysis",
+                                    color = scheme.onSurfaceVariant,
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Text("✕", color = scheme.onSurfaceVariant, fontSize = 15.sp,
+                                modifier = Modifier.padding(horizontal = 8.dp).clickable { attachedPhoto = null })
+                        }
+                    }
+
                     // Floating Bottom Input Bar
                     FloatingInputBar(
                         textInput = textInput,
                         onTextChange = { textInput = it },
+                        canSendAttachment = attachedFileContent != null || attachedPhoto != null,
                         isListening = isListening,
                         isThinking = isThinking,
                         showToolsMenu = showToolsMenu,
@@ -448,6 +528,21 @@ fun MainScreen(
                             showToolsMenu = false
                             filePickerLauncher.launch("*/*")
                         },
+                        onTakePhoto = {
+                            showToolsMenu = false
+                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                                val imageFile = File(context.cacheDir, "camera/${UUID.randomUUID()}.jpg").apply { parentFile?.mkdirs() }
+                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", imageFile)
+                                pendingCameraUri = uri
+                                cameraLauncher.launch(uri)
+                            } else {
+                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                            }
+                        },
+                        onChoosePhoto = {
+                            showToolsMenu = false
+                            imagePickerLauncher.launch("image/*")
+                        },
                         onSendFileToPc = {
                             showToolsMenu = false
                             fileDropLauncher.launch("*/*")
@@ -458,16 +553,15 @@ fun MainScreen(
                         },
                         onSend = {
 
-                            if (textInput.isNotBlank() || attachedFileContent != null) {
+                            if (textInput.isNotBlank() || attachedFileContent != null || attachedPhoto != null) {
                                 val fullQuery = if (attachedFileName != null) {
                                     "[Attached File: $attachedFileName]\n${attachedFileContent.orEmpty()}\n\n$textInput"
-                                } else {
-                                    textInput
-                                }
-                                viewModel.sendQuery(fullQuery)
+                                } else textInput.ifBlank { "What can you tell me about this photo?" }
+                                viewModel.sendQuery(fullQuery, attachedPhoto)
                                 textInput = ""
                                 attachedFileName = null
                                 attachedFileContent = null
+                                attachedPhoto = null
                             }
                         },
                         onQuickVoice = { viewModel.toggleVoiceInput() },
@@ -945,13 +1039,28 @@ private fun UserMessageBubble(msg: JarvisMessage) {
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.End
     ) {
-        Box(
+        Column(
             modifier = Modifier
                 .widthIn(max = 290.dp)
                 .clip(RoundedCornerShape(18.dp))
                 .background(scheme.surfaceVariant)
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .padding(horizontal = 10.dp, vertical = 10.dp)
         ) {
+            val bitmap = remember(msg.image) {
+                msg.image?.let { payload -> runCatching {
+                    val bytes = Base64.decode(payload.substringAfter("base64,"), Base64.DEFAULT)
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                }.getOrNull() }
+            }
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = "Photo sent to Jarvis",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(12.dp))
+                )
+                Spacer(Modifier.height(8.dp))
+            }
             Text(
                 msg.text,
                 color = scheme.onSurface,
@@ -1311,12 +1420,15 @@ private fun ThinkingIndicator() {
 private fun FloatingInputBar(
     textInput: String,
     onTextChange: (String) -> Unit,
+    canSendAttachment: Boolean,
     isListening: Boolean,
     isThinking: Boolean,
     showToolsMenu: Boolean,
     onToggleToolsMenu: () -> Unit,
     onToolSelected: (String) -> Unit,
     onAttachFile: () -> Unit,
+    onTakePhoto: () -> Unit,
+    onChoosePhoto: () -> Unit,
     onSendFileToPc: () -> Unit,
     onOpenPcExplorer: () -> Unit,
     onSend: () -> Unit,
@@ -1353,6 +1465,16 @@ private fun FloatingInputBar(
                     onDismissRequest = onToggleToolsMenu,
                     modifier = Modifier.background(scheme.surface)
                 ) {
+                    DropdownMenuItem(
+                        text = { Text("Take photo for Jarvis", color = scheme.onSurface, fontSize = 13.sp) },
+                        leadingIcon = { IconSparkles(tint = Color(0xFF34D399), size = 16.dp) },
+                        onClick = onTakePhoto
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Choose photo for Jarvis", color = scheme.onSurface, fontSize = 13.sp) },
+                        leadingIcon = { IconDocument(tint = Color(0xFF38BDF8), size = 16.dp) },
+                        onClick = onChoosePhoto
+                    )
                     DropdownMenuItem(
                         text = { Text("Send File to PC (AirDrop)", color = scheme.onSurface, fontSize = 13.sp) },
                         leadingIcon = { IconDocument(tint = Color(0xFF38BDF8), size = 16.dp) },
@@ -1432,7 +1554,7 @@ private fun FloatingInputBar(
             )
 
             // Right Action: Send Button OR Voice / Waveform
-            if (textInput.isNotBlank()) {
+            if (textInput.isNotBlank() || canSendAttachment) {
                 IconButton(
                     onClick = onSend,
                     enabled = !isThinking,
