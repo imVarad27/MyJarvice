@@ -108,6 +108,9 @@ import com.example.myjarvice.data.ImageUnderstanding
 import com.example.myjarvice.data.JarvisMessage
 import com.example.myjarvice.data.PhotoAttachment
 import com.example.myjarvice.data.PendingEmail
+import com.example.myjarvice.data.RememberInboxStore
+import com.example.myjarvice.data.RememberItem
+import com.example.myjarvice.data.RememberKind
 import com.example.myjarvice.data.SettingsStore
 import com.example.myjarvice.data.WebSource
 import com.example.myjarvice.theme.ArcGold
@@ -139,6 +142,8 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.File
 import java.util.Calendar
+import java.text.DateFormat
+import java.util.Date
 import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -201,6 +206,8 @@ fun MainScreen(
     var showVoicePicker by remember { mutableStateOf(false) }
     var showToolsMenu by remember { mutableStateOf(false) }
     var showPcExplorer by remember { mutableStateOf(false) }
+    var showRememberInbox by remember { mutableStateOf(false) }
+    val rememberInbox = remember { RememberInboxStore(context.applicationContext) }
 
     val fileDropLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -303,6 +310,17 @@ fun MainScreen(
         )
     }
 
+    if (showRememberInbox) {
+        RememberInboxDialog(
+            store = rememberInbox,
+            onDismiss = { showRememberInbox = false },
+            onAskJarvis = { item ->
+                showRememberInbox = false
+                viewModel.sendQuery(item.toJarvisPrompt())
+            }
+        )
+    }
+
     if (showIpDialog) {
 
         ServerConfigDialog(
@@ -399,7 +417,8 @@ fun MainScreen(
                         onOpenDrawer = { coroutineScope.launch { drawerState.open() } },
                         onStatusClick = { showIpDialog = true },
                         onNewChat = { viewModel.startNewChat() },
-                        onVoiceMode = { viewModel.enterVoiceMode() }
+                        onVoiceMode = { viewModel.enterVoiceMode() },
+                        onOpenInbox = { showRememberInbox = true }
                     )
                 }
             ) { innerPadding ->
@@ -602,7 +621,8 @@ private fun ChatTopBar(
     onOpenDrawer: () -> Unit,
     onStatusClick: () -> Unit,
     onNewChat: () -> Unit,
-    onVoiceMode: () -> Unit
+    onVoiceMode: () -> Unit,
+    onOpenInbox: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
 
@@ -668,6 +688,12 @@ private fun ChatTopBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(
+                onClick = onOpenInbox,
+                modifier = Modifier.size(38.dp)
+            ) {
+                IconDocument(tint = scheme.onSurfaceVariant, size = 19.dp)
+            }
+            IconButton(
                 onClick = onNewChat,
                 modifier = Modifier.size(38.dp)
             ) {
@@ -685,6 +711,157 @@ private fun ChatTopBar(
             }
         }
     }
+}
+
+@Composable
+private fun RememberInboxDialog(
+    store: RememberInboxStore,
+    onDismiss: () -> Unit,
+    onAskJarvis: (RememberItem) -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    var search by remember { mutableStateOf("") }
+    var revision by remember { mutableStateOf(0) }
+    var reminderItem by remember { mutableStateOf<RememberItem?>(null) }
+    val items = remember(search, revision) { store.search(search) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(620.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(scheme.surface)
+                .padding(18.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Remember later", color = scheme.onSurface, fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Shared items stay private on this phone", color = scheme.onSurfaceVariant, fontSize = 12.sp)
+                }
+                TextButton(onClick = onDismiss) { Text("Done") }
+            }
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
+                value = search,
+                onValueChange = { search = it },
+                singleLine = true,
+                placeholder = { Text("Search notes, links, photo text…") },
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = scheme.primary,
+                    unfocusedBorderColor = scheme.outline.copy(alpha = 0.45f)
+                )
+            )
+            Spacer(Modifier.height(12.dp))
+            if (items.isEmpty()) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text("Share a note, link, photo, or voice note to Jarvis and it will appear here.",
+                        color = scheme.onSurfaceVariant, textAlign = TextAlign.Center, fontSize = 14.sp)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(items, key = { it.id }) { item ->
+                        RememberInboxCard(
+                            item = item,
+                            onAsk = { onAskJarvis(item) },
+                            onReminder = { reminderItem = item },
+                            onDelete = { store.delete(item.id); revision++ }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    reminderItem?.let { item ->
+        AlertDialog(
+            onDismissRequest = { reminderItem = null },
+            title = { Text("Remind me about this") },
+            text = { Text(item.title, color = scheme.onSurfaceVariant) },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = {
+                        store.setReminder(item.id, reminderTime(hour = 20))
+                        revision++; reminderItem = null
+                    }) { Text("Tonight") }
+                    TextButton(onClick = {
+                        store.setReminder(item.id, reminderTime(hour = 9, tomorrow = true))
+                        revision++; reminderItem = null
+                    }) { Text("Tomorrow") }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    store.setReminder(item.id, null)
+                    revision++; reminderItem = null
+                }) { Text("Clear reminder") }
+            }
+        )
+    }
+}
+
+@Composable
+private fun RememberInboxCard(
+    item: RememberItem,
+    onAsk: () -> Unit,
+    onReminder: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    val photo = remember(item.mediaPath) {
+        item.mediaPath?.takeIf { item.kind == RememberKind.PHOTO }?.let(BitmapFactory::decodeFile)
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(scheme.surfaceVariant.copy(alpha = 0.55f))
+            .border(1.dp, scheme.outline.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
+            .padding(11.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (photo != null) {
+                Image(photo.asImageBitmap(), "Saved photo", contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(42.dp).clip(RoundedCornerShape(8.dp)))
+                Spacer(Modifier.width(9.dp))
+            } else {
+                IconDocument(tint = if (item.kind == RememberKind.VOICE) ArcGold else scheme.primary, size = 18.dp)
+                Spacer(Modifier.width(8.dp))
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(item.title, color = scheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(item.kind.name.lowercase().replaceFirstChar { it.uppercase() } + " · " + DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(item.createdAt)),
+                    color = scheme.onSurfaceVariant, fontSize = 11.sp, maxLines = 1)
+            }
+            if (item.reminderAt != null) Text("⏰", fontSize = 14.sp)
+        }
+        if (item.summary.isNotBlank()) {
+            Spacer(Modifier.height(7.dp))
+            Text(item.summary, color = scheme.onSurfaceVariant, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.padding(top = 5.dp)) {
+            TextButton(onClick = onAsk) { Text("Ask Jarvis") }
+            TextButton(onClick = onReminder) { Text(if (item.reminderAt == null) "Remind me" else "Change reminder") }
+            TextButton(onClick = onDelete) { Text("Delete", color = scheme.error) }
+        }
+    }
+}
+
+private fun reminderTime(hour: Int, tomorrow: Boolean = false): Long {
+    return Calendar.getInstance().apply {
+        if (tomorrow) add(Calendar.DAY_OF_YEAR, 1)
+        set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        if (!tomorrow && timeInMillis <= System.currentTimeMillis()) add(Calendar.DAY_OF_YEAR, 1)
+    }.timeInMillis
+}
+
+private fun RememberItem.toJarvisPrompt(): String {
+    val content = searchableText.ifBlank { summary }.take(6000)
+    return "I saved this for later. Help me decide what to do with it or explain it:\n$title\n$content"
 }
 
 /**
