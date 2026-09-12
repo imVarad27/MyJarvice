@@ -2,6 +2,12 @@ package com.example.myjarvice
 
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import android.Manifest
+import android.widget.Toast
 import androidx.compose.ui.Modifier
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
@@ -14,6 +20,7 @@ import com.example.myjarvice.ui.splash.SplashScreen
 @Composable
 fun MainNavigation(
     startOnChat: Boolean,
+    inboxRequest: Long = 0L,
     themeMode: ThemeMode,
     dynamicColor: Boolean,
     onThemeMode: (ThemeMode) -> Unit,
@@ -23,6 +30,14 @@ fun MainNavigation(
 ) {
     // Splash screen briefly initializes then transitions directly to Main Chat!
     val backStack = rememberNavBackStack(if (startOnChat) Main else Splash)
+    val context = LocalContext.current
+    val voiceSetupPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) backStack.add(VoiceMatchEnrollment)
+        else Toast.makeText(context, "Allow microphone access to set up your voice.", Toast.LENGTH_LONG).show()
+    }
+    LaunchedEffect(inboxRequest) {
+        if (inboxRequest > 0) { backStack.clear(); backStack.add(Main) }
+    }
 
     NavDisplay(
         backStack = backStack,
@@ -36,6 +51,7 @@ fun MainNavigation(
             }
             entry<Main> {
                 MainScreen(
+                    inboxRequest = inboxRequest,
                     onOpenSettings = { backStack.add(Settings) },
                     modifier = Modifier.systemBarsPadding()
                 )
@@ -48,7 +64,7 @@ fun MainNavigation(
                     onDynamicColor = onDynamicColor,
                     wakeEnabled = wakeEnabled,
                     onWakeEnabled = onWakeEnabled,
-                    onOpenVoiceMatch = { backStack.add(VoiceMatchEnrollment) },
+                    onOpenVoiceMatch = { voiceSetupPermission.launch(Manifest.permission.RECORD_AUDIO) },
                     onBack = { if (backStack.size > 1) backStack.removeLastOrNull() }
                 )
             }

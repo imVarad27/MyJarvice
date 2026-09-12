@@ -29,7 +29,7 @@ class SettingsStore(context: Context) {
         }
 
     var wakeWordEnabled: Boolean
-        get() = prefs.getBoolean(KEY_WAKE, true)
+        get() = prefs.getBoolean(KEY_WAKE, false)
         set(value) {
             prefs.edit().putBoolean(KEY_WAKE, value).apply()
         }

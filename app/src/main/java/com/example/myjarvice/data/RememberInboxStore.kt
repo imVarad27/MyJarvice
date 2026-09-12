@@ -40,7 +40,8 @@ class RememberInboxStore(private val context: Context) {
     fun addText(text: String): RememberItem {
         val trimmed = text.trim()
         val isLink = trimmed.matches(Regex("https?://\\S+", RegexOption.IGNORE_CASE))
-        val title = if (isLink) trimmed.substringAfter("//").substringBefore('/').ifBlank { "Saved link" } else "Saved note"
+        val title = if (isLink) trimmed.substringAfter("//").substringBefore('/').ifBlank { "Saved link" }
+            else trimmed.lineSequence().firstOrNull { it.isNotBlank() }?.take(80) ?: "Saved note"
         return add(RememberItem(
             id = UUID.randomUUID().toString(),
             kind = if (isLink) RememberKind.LINK else RememberKind.TEXT,
@@ -58,7 +59,7 @@ class RememberInboxStore(private val context: Context) {
         return add(RememberItem(
             id = id,
             kind = RememberKind.PHOTO,
-            title = "Saved photo",
+            title = photo.ocrText.lineSequence().firstOrNull { it.isNotBlank() }?.take(80) ?: "Saved photo",
             summary = if (photo.hasReadableText) photo.ocrText.take(260) else "Photo saved for later",
             searchableText = photo.ocrText,
             createdAt = System.currentTimeMillis(),
@@ -89,6 +90,7 @@ class RememberInboxStore(private val context: Context) {
     }
 
     fun setReminder(id: String, at: Long?) {
+        require(at == null || at > System.currentTimeMillis()) { "Choose a reminder time in the future." }
         val updated = load().map { if (it.id == id) it.copy(reminderAt = at) else it }
         save(updated)
         updated.firstOrNull { it.id == id }?.let { item ->
@@ -100,6 +102,12 @@ class RememberInboxStore(private val context: Context) {
     private fun add(item: RememberItem): RememberItem {
         save(load() + item)
         return item
+    }
+
+    fun restoreReminders() {
+        items().forEach { item -> item.reminderAt?.let { time ->
+            scheduleReminder(item, maxOf(time, System.currentTimeMillis() + 1000))
+        } }
     }
 
     private fun inboxDir(): File = File(context.filesDir, "remember-inbox").apply { mkdirs() }

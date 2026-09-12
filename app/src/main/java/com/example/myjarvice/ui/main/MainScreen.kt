@@ -1,32 +1,31 @@
 package com.example.myjarvice.ui.main
 
 import android.app.Application
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import com.example.myjarvice.ui.inbox.RememberInboxScreen
+import com.example.myjarvice.ui.inbox.toJarvisPrompt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import android.Manifest
 import android.content.pm.PackageManager
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import kotlinx.coroutines.delay
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
-import android.util.Base64
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -47,19 +46,13 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
@@ -68,6 +61,7 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -93,7 +87,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -102,54 +95,35 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.example.myjarvice.data.ChatSession
-import com.example.myjarvice.data.ConnectionStatus
 import com.example.myjarvice.data.FileTransferManager
 import com.example.myjarvice.data.ImageUnderstanding
-import com.example.myjarvice.data.JarvisMessage
 import com.example.myjarvice.data.PhotoAttachment
-import com.example.myjarvice.data.PendingEmail
 import com.example.myjarvice.data.RememberInboxStore
-import com.example.myjarvice.data.RememberItem
-import com.example.myjarvice.data.RememberKind
-import com.example.myjarvice.data.SettingsStore
-import com.example.myjarvice.data.WebSource
 import com.example.myjarvice.theme.ArcGold
-import com.example.myjarvice.theme.OfflineGray
-import com.example.myjarvice.theme.OnlineGreen
 import com.example.myjarvice.ui.JarvisArcReactor
 import com.example.myjarvice.ui.files.PcExplorerDialog
 
 import com.example.myjarvice.ui.icons.IconActivity
-import com.example.myjarvice.ui.icons.IconCopy
 import com.example.myjarvice.ui.icons.IconDocument
-import com.example.myjarvice.ui.icons.IconMenu
 import com.example.myjarvice.ui.icons.IconMessage
-import com.example.myjarvice.ui.icons.IconMicrophone
-import com.example.myjarvice.ui.icons.IconNewChat
 import com.example.myjarvice.ui.icons.IconPlus
-import com.example.myjarvice.ui.icons.IconSend
 import com.example.myjarvice.ui.icons.IconSettings
 import com.example.myjarvice.ui.icons.IconSparkles
-import com.example.myjarvice.ui.icons.IconSpeaker
 import com.example.myjarvice.ui.icons.IconTrash
-import com.example.myjarvice.ui.icons.IconVoiceWaveform
 import com.example.myjarvice.ui.voice.VoiceInfoDialog
 import com.example.myjarvice.ui.voice.VoiceModeScreen
 import com.example.myjarvice.ui.voice.VoicePickerDialog
 import com.example.myjarvice.wake.WakeWordService
 import kotlinx.coroutines.launch
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.io.File
 import java.util.Calendar
-import java.text.DateFormat
-import java.util.Date
 import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun MainScreen(
     onOpenSettings: () -> Unit = {},
+    inboxRequest: Long = 0L,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -181,17 +155,16 @@ fun MainScreen(
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
-        val settings = SettingsStore(context.applicationContext)
         WakeWordService.stop(context.applicationContext)
 
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_START -> WakeWordService.stop(context.applicationContext)
+                Lifecycle.Event.ON_START -> {
+                    WakeWordService.stop(context.applicationContext)
+                    viewModel.refreshPreferences()
+                }
                 Lifecycle.Event.ON_STOP -> {
                     viewModel.exitVoiceMode()
-                    if (settings.wakeWordEnabled) {
-                        WakeWordService.start(context.applicationContext)
-                    }
                 }
                 else -> Unit
             }
@@ -200,14 +173,41 @@ fun MainScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    var textInput by remember { mutableStateOf("") }
+    var textInput by rememberSaveable { mutableStateOf("") }
     var showIpDialog by remember { mutableStateOf(false) }
     var showVoiceInfo by remember { mutableStateOf(false) }
     var showVoicePicker by remember { mutableStateOf(false) }
     var showToolsMenu by remember { mutableStateOf(false) }
     var showPcExplorer by remember { mutableStateOf(false) }
-    var showRememberInbox by remember { mutableStateOf(false) }
+    var showRememberInbox by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(inboxRequest) { if (inboxRequest > 0) showRememberInbox = true }
     val rememberInbox = remember { RememberInboxStore(context.applicationContext) }
+    var pendingChatDeletion by remember { mutableStateOf<String?>(null) }
+    var pendingVoiceMode by remember { mutableStateOf(false) }
+    val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed ->
+        if (allowed) {
+            if (pendingVoiceMode) viewModel.enterVoiceMode() else viewModel.toggleVoiceInput()
+        } else Toast.makeText(context, "Allow microphone access to use voice input.", Toast.LENGTH_LONG).show()
+    }
+    fun startVoice(conversation: Boolean) {
+        if (isThinking) return
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            if (conversation) viewModel.enterVoiceMode() else viewModel.toggleVoiceInput()
+        } else {
+            pendingVoiceMode = conversation
+            microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+    pendingChatDeletion?.let { id ->
+        AlertDialog(onDismissRequest = { pendingChatDeletion = null },
+            title = { Text(if (id == "all") "Delete all conversations?" else "Delete conversation?") },
+            text = { Text("This removes the saved conversation history from this phone.") },
+            confirmButton = { TextButton(onClick = {
+                if (id == "all") viewModel.clearAllHistory() else viewModel.deleteSession(id)
+                pendingChatDeletion = null
+            }) { Text("Delete", color = scheme.error) } },
+            dismissButton = { TextButton(onClick = { pendingChatDeletion = null }) { Text("Cancel") } })
+    }
 
     val fileDropLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -234,26 +234,31 @@ fun MainScreen(
     var attachedFileName by remember { mutableStateOf<String?>(null) }
     var attachedFileContent by remember { mutableStateOf<String?>(null) }
     var attachedPhoto by remember { mutableStateOf<PhotoAttachment?>(null) }
-    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingCameraPath by rememberSaveable { mutableStateOf<String?>(null) }
+    var attachmentBusy by remember { mutableStateOf(false) }
 
     fun attachPhoto(uri: Uri) {
         coroutineScope.launch {
-            Toast.makeText(context, "Reading photo on your phone…", Toast.LENGTH_SHORT).show()
-            ImageUnderstanding.prepare(context, uri).onSuccess { photo ->
+            attachmentBusy = true
+            val result = withContext(Dispatchers.IO) { ImageUnderstanding.prepare(context, uri) }
+            result.onSuccess { photo ->
                 attachedPhoto = photo
+                attachedFileName = null
+                attachedFileContent = null
                 val status = if (photo.hasReadableText) "Text read privately on phone" else "Photo attached"
                 Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
             }.onFailure { error ->
                 Toast.makeText(context, error.message ?: "Could not read that photo.", Toast.LENGTH_SHORT).show()
             }
+            attachmentBusy = false
         }
     }
 
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { saved ->
-        val capturedUri = pendingCameraUri
-        pendingCameraUri = null
+        val capturedUri = pendingCameraPath?.let(Uri::parse)
+        pendingCameraPath = null
         if (saved && capturedUri != null) attachPhoto(capturedUri)
     }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
@@ -262,8 +267,10 @@ fun MainScreen(
         if (granted) {
             val imageFile = File(context.cacheDir, "camera/${UUID.randomUUID()}.jpg").apply { parentFile?.mkdirs() }
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", imageFile)
-            pendingCameraUri = uri
-            cameraLauncher.launch(uri)
+            pendingCameraPath = uri.toString()
+            runCatching { cameraLauncher.launch(uri) }.onFailure {
+                Toast.makeText(context, "No camera app is available. Choose a photo instead.", Toast.LENGTH_LONG).show()
+            }
         } else {
             Toast.makeText(context, "Camera permission is needed to take a photo.", Toast.LENGTH_SHORT).show()
         }
@@ -272,30 +279,35 @@ fun MainScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? -> uri?.let(::attachPhoto) }
 
-    val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            try {
-                var fileName = "Document"
-                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                    if (cursor.moveToFirst() && nameIndex >= 0) {
-                        fileName = cursor.getString(nameIndex)
+    val filePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) coroutineScope.launch {
+            attachmentBusy = true
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+                        if (it.moveToFirst()) it.getString(0) else null
+                    } ?: "Document"
+                    val mime = context.contentResolver.getType(uri).orEmpty()
+                    require(mime.startsWith("text/") || name.endsWith(".txt", true) || name.endsWith(".md", true)) {
+                        "Choose a text or Markdown file. Add PDFs through Settings → AI & personal knowledge."
                     }
+                    val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { reader ->
+                        val buffer = CharArray(8000)
+                        var count = 0
+                        while (count < buffer.size) {
+                            val read = reader.read(buffer, count, buffer.size - count)
+                            if (read < 0) break
+                            count += read
+                        }
+                        String(buffer, 0, count)
+                    } ?: error("The document is unavailable.")
+                    name to content
                 }
-                attachedFileName = fileName
-
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val reader = BufferedReader(InputStreamReader(inputStream))
-                val content = reader.readText()
-                reader.close()
-                attachedFileContent = if (content.length > 8000) content.take(8000) + "\n...[Truncated]" else content
-
-                Toast.makeText(context, "Attached: $fileName", Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                Toast.makeText(context, "Attached file: ${e.message}", Toast.LENGTH_SHORT).show()
             }
+            result.onSuccess { (name, content) ->
+                attachedFileName = name; attachedFileContent = content; attachedPhoto = null
+            }.onFailure { Toast.makeText(context, it.message ?: "Couldn't attach this document.", Toast.LENGTH_LONG).show() }
+            attachmentBusy = false
         }
     }
 
@@ -311,12 +323,15 @@ fun MainScreen(
     }
 
     if (showRememberInbox) {
-        RememberInboxDialog(
+        RememberInboxScreen(
             store = rememberInbox,
             onDismiss = { showRememberInbox = false },
             onAskJarvis = { item ->
-                showRememberInbox = false
-                viewModel.sendQuery(item.toJarvisPrompt())
+                if (isThinking) Toast.makeText(context, "Wait for the current reply before starting another request.", Toast.LENGTH_SHORT).show()
+                else {
+                    showRememberInbox = false
+                    textInput = item.toJarvisPrompt()
+                }
             }
         )
     }
@@ -386,18 +401,22 @@ fun MainScreen(
                 HistoryDrawerContent(
                     savedSessions = savedSessions,
                     onNewChat = {
-                        coroutineScope.launch { drawerState.close() }
-                        viewModel.startNewChat()
+                        if (!isThinking) {
+                            coroutineScope.launch { drawerState.close() }
+                            viewModel.startNewChat()
+                            textInput = ""; attachedPhoto = null; attachedFileName = null; attachedFileContent = null
+                        } else Toast.makeText(context, "Wait for the current reply first.", Toast.LENGTH_SHORT).show()
                     },
                     onSelectSession = { session ->
                         coroutineScope.launch { drawerState.close() }
-                        viewModel.loadSession(session)
+                        if (!isThinking) viewModel.loadSession(session)
+                        else Toast.makeText(context, "Wait for the current reply first.", Toast.LENGTH_SHORT).show()
                     },
                     onDeleteSession = { sessionId ->
-                        viewModel.deleteSession(sessionId)
+                        if (!isThinking) pendingChatDeletion = sessionId
                     },
                     onClearAllHistory = {
-                        viewModel.clearAllHistory()
+                        if (!isThinking) pendingChatDeletion = "all"
                     },
                     onOpenSettings = {
                         coroutineScope.launch { drawerState.close() }
@@ -411,13 +430,16 @@ fun MainScreen(
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
                 containerColor = scheme.background,
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
                 topBar = {
                     ChatTopBar(
                         connectionStatus = connectionStatus,
                         onOpenDrawer = { coroutineScope.launch { drawerState.open() } },
                         onStatusClick = { showIpDialog = true },
-                        onNewChat = { viewModel.startNewChat() },
-                        onVoiceMode = { viewModel.enterVoiceMode() },
+                        onNewChat = {
+                            if (!isThinking) { viewModel.startNewChat(); textInput = ""; attachedPhoto = null; attachedFileName = null; attachedFileContent = null }
+                            else Toast.makeText(context, "Wait for this reply before starting a new conversation.", Toast.LENGTH_SHORT).show()
+                        },
                         onOpenInbox = { showRememberInbox = true }
                     )
                 }
@@ -443,7 +465,7 @@ fun MainScreen(
                         if (chatHistory.isEmpty()) {
                             EmptyChatHero(
                                 onPromptSelected = { prompt ->
-                                    viewModel.sendQuery(prompt)
+                                    textInput = prompt
                                 }
                             )
                         } else {
@@ -463,6 +485,10 @@ fun MainScreen(
                         }
                     }
 
+                    if (attachmentBusy) {
+                        Text("Preparing attachment…", modifier = Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall)
+                        LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp))
+                    }
                     // Attached File Indicator Chip
                     if (attachedFileName != null) {
                         Row(
@@ -485,15 +511,10 @@ fun MainScreen(
                                 modifier = Modifier.weight(1f)
                             )
                             Spacer(Modifier.width(8.dp))
-                            Text(
-                                "✕",
-                                color = scheme.onSurfaceVariant,
-                                fontSize = 14.sp,
-                                modifier = Modifier.clickable {
+                            ChatIconButton("Remove document attachment", onClick = {
                                     attachedFileName = null
                                     attachedFileContent = null
-                                }
-                            )
+                                }) { Text("×", style = MaterialTheme.typography.titleLarge) }
                         }
                     }
 
@@ -525,18 +546,19 @@ fun MainScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
-                            Text("✕", color = scheme.onSurfaceVariant, fontSize = 15.sp,
-                                modifier = Modifier.padding(horizontal = 8.dp).clickable { attachedPhoto = null })
+                            ChatIconButton("Remove photo attachment", onClick = { attachedPhoto = null }) {
+                                Text("×", style = MaterialTheme.typography.titleLarge)
+                            }
                         }
                     }
 
                     // Floating Bottom Input Bar
-                    FloatingInputBar(
+                    ChatComposer(
                         textInput = textInput,
-                        onTextChange = { textInput = it },
+                        onTextChange = { textInput = it.take(4000) },
                         canSendAttachment = attachedFileContent != null || attachedPhoto != null,
                         isListening = isListening,
-                        isThinking = isThinking,
+                        isThinking = isThinking || attachmentBusy,
                         showToolsMenu = showToolsMenu,
                         onToggleToolsMenu = { showToolsMenu = !showToolsMenu },
                         onToolSelected = { toolPrompt ->
@@ -552,8 +574,10 @@ fun MainScreen(
                             if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
                                 val imageFile = File(context.cacheDir, "camera/${UUID.randomUUID()}.jpg").apply { parentFile?.mkdirs() }
                                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", imageFile)
-                                pendingCameraUri = uri
-                                cameraLauncher.launch(uri)
+                                pendingCameraPath = uri.toString()
+                                runCatching { cameraLauncher.launch(uri) }.onFailure {
+                                    Toast.makeText(context, "No camera app is available. Choose a photo instead.", Toast.LENGTH_LONG).show()
+                                }
                             } else {
                                 cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                             }
@@ -574,17 +598,19 @@ fun MainScreen(
 
                             if (textInput.isNotBlank() || attachedFileContent != null || attachedPhoto != null) {
                                 val fullQuery = if (attachedFileName != null) {
-                                    "[Attached File: $attachedFileName]\n${attachedFileContent.orEmpty()}\n\n$textInput"
+                                    val question = textInput.ifBlank { "Help me understand this document." }
+                                    val header = "$question\n\n[Attached text: ${attachedFileName?.take(80)}]\n"
+                                    header + attachedFileContent.orEmpty().take((4000 - header.length).coerceAtLeast(0))
                                 } else textInput.ifBlank { "What can you tell me about this photo?" }
-                                viewModel.sendQuery(fullQuery, attachedPhoto)
+                                viewModel.sendQuery(fullQuery.take(4000), attachedPhoto)
                                 textInput = ""
                                 attachedFileName = null
                                 attachedFileContent = null
                                 attachedPhoto = null
                             }
                         },
-                        onQuickVoice = { viewModel.toggleVoiceInput() },
-                        onVoiceMode = { viewModel.enterVoiceMode() }
+                        onQuickVoice = { startVoice(false) },
+                        onVoiceMode = { startVoice(true) }
                     )
                 }
             }
@@ -615,254 +641,6 @@ fun MainScreen(
 /**
  * Top App Bar (JARVIS 1.0)
  */
-@Composable
-private fun ChatTopBar(
-    connectionStatus: ConnectionStatus,
-    onOpenDrawer: () -> Unit,
-    onStatusClick: () -> Unit,
-    onNewChat: () -> Unit,
-    onVoiceMode: () -> Unit,
-    onOpenInbox: () -> Unit
-) {
-    val scheme = MaterialTheme.colorScheme
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .background(scheme.background)
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        // Left: Menu Icon
-        IconButton(
-            onClick = onOpenDrawer,
-            modifier = Modifier.size(40.dp)
-        ) {
-            IconMenu(tint = scheme.onSurfaceVariant, size = 20.dp)
-        }
-
-        // Center: Model Selector Chip
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
-                .background(scheme.surface)
-                .border(1.dp, scheme.outline.copy(alpha = 0.35f), RoundedCornerShape(20.dp))
-                .clickable { onStatusClick() }
-                .padding(horizontal = 14.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            val dotColor = when (connectionStatus) {
-                ConnectionStatus.CONNECTED -> OnlineGreen
-                ConnectionStatus.CONNECTING -> ArcGold
-                ConnectionStatus.DISCONNECTED -> OfflineGray
-                ConnectionStatus.ERROR -> Color(0xFFEF4444)
-            }
-
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .clip(CircleShape)
-                    .background(dotColor)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                "JARVIS",
-                color = scheme.onSurface,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(Modifier.width(4.dp))
-            Text(
-                "1.0",
-                color = scheme.onSurfaceVariant,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Normal
-            )
-        }
-
-        // Right Actions: New Chat & Voice Mode
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onOpenInbox,
-                modifier = Modifier.size(38.dp)
-            ) {
-                IconDocument(tint = scheme.onSurfaceVariant, size = 19.dp)
-            }
-            IconButton(
-                onClick = onNewChat,
-                modifier = Modifier.size(38.dp)
-            ) {
-                IconNewChat(tint = scheme.onSurfaceVariant, size = 20.dp)
-            }
-
-            IconButton(
-                onClick = onVoiceMode,
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(scheme.surfaceVariant)
-            ) {
-                IconVoiceWaveform(tint = scheme.primary, size = 18.dp)
-            }
-        }
-    }
-}
-
-@Composable
-private fun RememberInboxDialog(
-    store: RememberInboxStore,
-    onDismiss: () -> Unit,
-    onAskJarvis: (RememberItem) -> Unit
-) {
-    val scheme = MaterialTheme.colorScheme
-    var search by remember { mutableStateOf("") }
-    var revision by remember { mutableStateOf(0) }
-    var reminderItem by remember { mutableStateOf<RememberItem?>(null) }
-    val items = remember(search, revision) { store.search(search) }
-
-    Dialog(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(620.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(scheme.surface)
-                .padding(18.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Remember later", color = scheme.onSurface, fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
-                    Text("Shared items stay private on this phone", color = scheme.onSurfaceVariant, fontSize = 12.sp)
-                }
-                TextButton(onClick = onDismiss) { Text("Done") }
-            }
-            Spacer(Modifier.height(12.dp))
-            OutlinedTextField(
-                value = search,
-                onValueChange = { search = it },
-                singleLine = true,
-                placeholder = { Text("Search notes, links, photo text…") },
-                modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = scheme.primary,
-                    unfocusedBorderColor = scheme.outline.copy(alpha = 0.45f)
-                )
-            )
-            Spacer(Modifier.height(12.dp))
-            if (items.isEmpty()) {
-                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Text("Share a note, link, photo, or voice note to Jarvis and it will appear here.",
-                        color = scheme.onSurfaceVariant, textAlign = TextAlign.Center, fontSize = 14.sp)
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(items, key = { it.id }) { item ->
-                        RememberInboxCard(
-                            item = item,
-                            onAsk = { onAskJarvis(item) },
-                            onReminder = { reminderItem = item },
-                            onDelete = { store.delete(item.id); revision++ }
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    reminderItem?.let { item ->
-        AlertDialog(
-            onDismissRequest = { reminderItem = null },
-            title = { Text("Remind me about this") },
-            text = { Text(item.title, color = scheme.onSurfaceVariant) },
-            confirmButton = {
-                Row {
-                    TextButton(onClick = {
-                        store.setReminder(item.id, reminderTime(hour = 20))
-                        revision++; reminderItem = null
-                    }) { Text("Tonight") }
-                    TextButton(onClick = {
-                        store.setReminder(item.id, reminderTime(hour = 9, tomorrow = true))
-                        revision++; reminderItem = null
-                    }) { Text("Tomorrow") }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    store.setReminder(item.id, null)
-                    revision++; reminderItem = null
-                }) { Text("Clear reminder") }
-            }
-        )
-    }
-}
-
-@Composable
-private fun RememberInboxCard(
-    item: RememberItem,
-    onAsk: () -> Unit,
-    onReminder: () -> Unit,
-    onDelete: () -> Unit
-) {
-    val scheme = MaterialTheme.colorScheme
-    val photo = remember(item.mediaPath) {
-        item.mediaPath?.takeIf { item.kind == RememberKind.PHOTO }?.let(BitmapFactory::decodeFile)
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(scheme.surfaceVariant.copy(alpha = 0.55f))
-            .border(1.dp, scheme.outline.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
-            .padding(11.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (photo != null) {
-                Image(photo.asImageBitmap(), "Saved photo", contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(42.dp).clip(RoundedCornerShape(8.dp)))
-                Spacer(Modifier.width(9.dp))
-            } else {
-                IconDocument(tint = if (item.kind == RememberKind.VOICE) ArcGold else scheme.primary, size = 18.dp)
-                Spacer(Modifier.width(8.dp))
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(item.title, color = scheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(item.kind.name.lowercase().replaceFirstChar { it.uppercase() } + " · " + DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(item.createdAt)),
-                    color = scheme.onSurfaceVariant, fontSize = 11.sp, maxLines = 1)
-            }
-            if (item.reminderAt != null) Text("⏰", fontSize = 14.sp)
-        }
-        if (item.summary.isNotBlank()) {
-            Spacer(Modifier.height(7.dp))
-            Text(item.summary, color = scheme.onSurfaceVariant, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.padding(top = 5.dp)) {
-            TextButton(onClick = onAsk) { Text("Ask Jarvis") }
-            TextButton(onClick = onReminder) { Text(if (item.reminderAt == null) "Remind me" else "Change reminder") }
-            TextButton(onClick = onDelete) { Text("Delete", color = scheme.error) }
-        }
-    }
-}
-
-private fun reminderTime(hour: Int, tomorrow: Boolean = false): Long {
-    return Calendar.getInstance().apply {
-        if (tomorrow) add(Calendar.DAY_OF_YEAR, 1)
-        set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-        if (!tomorrow && timeInMillis <= System.currentTimeMillis()) add(Calendar.DAY_OF_YEAR, 1)
-    }.timeInMillis
-}
-
-private fun RememberItem.toJarvisPrompt(): String {
-    val content = searchableText.ifBlank { summary }.take(6000)
-    return "I saved this for later. Help me decide what to do with it or explain it:\n$title\n$content"
-}
 
 /**
  * Sidebar Navigation Drawer (Chat History)
@@ -965,7 +743,7 @@ private fun HistoryDrawerContent(
 
                         IconButton(
                             onClick = { onDeleteSession(session.id) },
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(48.dp).semantics { contentDescription = "Delete conversation ${session.title}" }
                         ) {
                             IconTrash(tint = scheme.onSurfaceVariant, size = 14.dp)
                         }
@@ -983,7 +761,8 @@ private fun HistoryDrawerContent(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(10.dp))
                 .clickable { onOpenSettings() }
-                .padding(horizontal = 10.dp, vertical = 10.dp),
+                    .heightIn(min = 48.dp)
+                    .padding(horizontal = 10.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconSettings(tint = scheme.onSurfaceVariant, size = 18.dp)
@@ -1093,7 +872,8 @@ private fun EmptyChatHero(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            promptCards.chunked(2).forEach { rowItems ->
+            val columns = if (androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.2f) 1 else 2
+            promptCards.chunked(columns).forEach { rowItems ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -1167,608 +947,10 @@ private fun PromptSuggestionCard(
 /**
  * Message Feed (Adaptive Theme with Live Web Sources & Screenshot Cards)
  */
-@Composable
-private fun ChatFeed(
-    chatHistory: List<JarvisMessage>,
-    isThinking: Boolean,
-    onCopy: (String) -> Unit,
-    onSpeak: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val listState = rememberLazyListState()
-
-    LaunchedEffect(chatHistory.size, isThinking) {
-        if (chatHistory.isNotEmpty()) {
-            listState.animateScrollToItem(chatHistory.size - 1 + if (isThinking) 1 else 0)
-        }
-    }
-
-    LazyColumn(
-        state = listState,
-        modifier = modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
-    ) {
-        items(chatHistory) { msg ->
-            if (msg.sender == "USER") {
-                UserMessageBubble(msg = msg)
-            } else {
-                JarvisMessageBubble(
-                    msg = msg,
-                    onCopy = { onCopy(msg.text) },
-                    onSpeak = { onSpeak(msg.text) }
-                )
-            }
-        }
-
-        if (isThinking) {
-            item {
-                ThinkingIndicator()
-            }
-        }
-    }
-}
-
-@Composable
-private fun UserMessageBubble(msg: JarvisMessage) {
-    val scheme = MaterialTheme.colorScheme
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.End
-    ) {
-        Column(
-            modifier = Modifier
-                .widthIn(max = 290.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(scheme.surfaceVariant)
-                .padding(horizontal = 10.dp, vertical = 10.dp)
-        ) {
-            val bitmap = remember(msg.image) {
-                msg.image?.let { payload -> runCatching {
-                    val bytes = Base64.decode(payload.substringAfter("base64,"), Base64.DEFAULT)
-                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                }.getOrNull() }
-            }
-            if (bitmap != null) {
-                Image(
-                    bitmap = bitmap.asImageBitmap(),
-                    contentDescription = "Photo sent to Jarvis",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(12.dp))
-                )
-                Spacer(Modifier.height(8.dp))
-            }
-            Text(
-                msg.text,
-                color = scheme.onSurface,
-                fontSize = 14.sp,
-                lineHeight = 20.sp
-            )
-        }
-    }
-}
-
-@Composable
-private fun JarvisMessageBubble(
-    msg: JarvisMessage,
-    onCopy: () -> Unit,
-    onSpeak: () -> Unit
-) {
-    val scheme = MaterialTheme.colorScheme
-    val context = LocalContext.current
-    var showFullscreenImage by remember { mutableStateOf(false) }
-    var showSources by remember(msg.text) { mutableStateOf(false) }
-    val answer = msg.text.substringBefore("\n\nRetrieved sources:\n")
-    val sources = msg.text.substringAfter("\n\nRetrieved sources:\n", "")
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Start
-    ) {
-        // Mini Avatar
-        Box(
-            modifier = Modifier
-                .padding(top = 2.dp)
-                .size(24.dp)
-                .clip(CircleShape)
-                .background(scheme.surfaceVariant),
-            contentAlignment = Alignment.Center
-        ) {
-            JarvisArcReactor(size = 18.dp)
-        }
-
-        Spacer(Modifier.width(12.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            // Header
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    "JARVIS",
-                    color = scheme.onSurface,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    when {
-                        msg.type == "ERROR" -> "Couldn't finish"
-                        msg.sender.contains("On-device", true) -> "On your phone"
-                        msg.sender.contains("Local tool", true) -> "Local tool"
-                        else -> "PC / server"
-                    },
-                    color = scheme.onSurfaceVariant,
-                    fontSize = 11.sp
-                )
-            }
-
-            Spacer(Modifier.height(4.dp))
-
-            // Body text
-            SelectionContainer {
-                Text(
-                    answer,
-                    color = if (msg.type == "ERROR") scheme.error else scheme.onSurface,
-                    fontSize = 16.sp,
-                    lineHeight = 25.sp
-                )
-            }
-            if (sources.isNotBlank()) {
-                TextButton(onClick = { showSources = !showSources }) {
-                    Text(if (showSources) "Hide sources" else "View sources")
-                }
-                if (showSources) SelectionContainer {
-                    Text(sources, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-                }
-            }
-
-            // Desktop Screenshot / Image Rendering
-            if (!msg.image.isNullOrBlank()) {
-                val bitmap: Bitmap? = remember(msg.image) {
-                    try {
-                        val rawBase64 = msg.image.substringAfter("base64,")
-                        val bytes = Base64.decode(rawBase64, Base64.DEFAULT)
-                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                    } catch (e: Exception) {
-                        null
-                    }
-                }
-
-                if (bitmap != null) {
-                    Spacer(Modifier.height(10.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(scheme.surfaceVariant)
-                            .border(1.dp, scheme.primary.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                            .clickable { showFullscreenImage = true }
-                            .padding(6.dp)
-                    ) {
-                        Column {
-                            Image(
-                                bitmap = bitmap.asImageBitmap(),
-                                contentDescription = "Host PC Screenshot",
-                                contentScale = ContentScale.FillWidth,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    "🖥️ Host PC Screen • Tap to expand",
-                                    color = scheme.primary,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-                    }
-
-                    if (showFullscreenImage) {
-                        FullscreenImageDialog(
-                            bitmap = bitmap,
-                            onDismiss = { showFullscreenImage = false }
-                        )
-                    }
-                }
-            }
-
-            // Live Web Sources Row (Clickable citation chips)
-            if (msg.sources.isNotEmpty()) {
-                Spacer(Modifier.height(10.dp))
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(scheme.surfaceVariant.copy(alpha = 0.5f))
-                        .border(1.dp, scheme.outline.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 10.dp, vertical = 8.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            "🌐 Sources & Live Grounding",
-                            color = scheme.primary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        items(msg.sources) { src ->
-                            Row(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(scheme.surface)
-                                    .border(1.dp, scheme.primary.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
-                                    .clickable {
-                                        if (src.url.isNotBlank()) {
-                                            try {
-                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(src.url))
-                                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                context.startActivity(intent)
-                                            } catch (e: Exception) {
-                                                Toast.makeText(context, "Could not open source link", Toast.LENGTH_SHORT).show()
-                                            }
-                                        }
-                                    }
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    src.domain.ifBlank { "source" },
-                                    color = scheme.onSurface,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Spacer(Modifier.width(4.dp))
-                                Text("↗", color = scheme.primary, fontSize = 10.sp)
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // Action Toolbar (Copy, Speak, Timestamp)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable(onClick = onCopy)
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconCopy(tint = scheme.onSurfaceVariant, size = 14.dp)
-                    Spacer(Modifier.width(4.dp))
-                    Text("Copy", color = scheme.onSurfaceVariant, fontSize = 11.sp)
-                }
-
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable(onClick = onSpeak)
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconSpeaker(tint = scheme.onSurfaceVariant, size = 14.dp)
-                    Spacer(Modifier.width(4.dp))
-                    Text("Listen", color = scheme.onSurfaceVariant, fontSize = 11.sp)
-                }
-
-                val time = formatTimestamp(msg.timestamp)
-                if (time.isNotBlank()) {
-                    Text(
-                        time,
-                        color = scheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        fontSize = 11.sp
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Fullscreen Interactive Image Dialog
- */
-@Composable
-private fun FullscreenImageDialog(
-    bitmap: Bitmap,
-    onDismiss: () -> Unit
-) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.95f))
-        ) {
-            Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = "Fullscreen Host Screenshot",
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                contentScale = ContentScale.Fit
-            )
-
-            // Top Bar with Close Action
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "Host PC Display Capture",
-                    color = Color.White,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.25f))
-                ) {
-                    Text("✕", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ThinkingIndicator() {
-    val scheme = MaterialTheme.colorScheme
-    var elapsedSeconds by remember { mutableStateOf(0) }
-    LaunchedEffect(Unit) {
-        while (true) { delay(1000); elapsedSeconds++ }
-    }
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Start,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(24.dp)
-                .clip(CircleShape)
-                .background(scheme.surfaceVariant),
-            contentAlignment = Alignment.Center
-        ) {
-            JarvisArcReactor(size = 18.dp, isSpeaking = true)
-        }
-
-        Spacer(Modifier.width(12.dp))
-
-        val transition = rememberInfiniteTransition(label = "thinking")
-        val alpha by transition.animateFloat(
-            initialValue = 0.3f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(600, easing = LinearEasing), RepeatMode.Reverse),
-            label = "thinkingAlpha"
-        )
-
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(12.dp))
-                .background(scheme.surfaceVariant)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                when {
-                    elapsedSeconds >= 20 -> "Taking a little longer… ${elapsedSeconds}s"
-                    elapsedSeconds >= 8 -> "Still working on it… ${elapsedSeconds}s"
-                    else -> "Thinking it through…"
-                },
-                color = scheme.primary.copy(alpha = alpha),
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium
-            )
-        }
-    }
-}
 
 /**
  * Floating Bottom Input Bar (with Host PC & Web Search Tools)
  */
-@Composable
-private fun FloatingInputBar(
-    textInput: String,
-    onTextChange: (String) -> Unit,
-    canSendAttachment: Boolean,
-    isListening: Boolean,
-    isThinking: Boolean,
-    showToolsMenu: Boolean,
-    onToggleToolsMenu: () -> Unit,
-    onToolSelected: (String) -> Unit,
-    onAttachFile: () -> Unit,
-    onTakePhoto: () -> Unit,
-    onChoosePhoto: () -> Unit,
-    onSendFileToPc: () -> Unit,
-    onOpenPcExplorer: () -> Unit,
-    onSend: () -> Unit,
-    onQuickVoice: () -> Unit,
-    onVoiceMode: () -> Unit
-) {
-    val scheme = MaterialTheme.colorScheme
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 10.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(28.dp))
-                .background(scheme.surface)
-                .border(1.dp, scheme.outline.copy(alpha = 0.35f), RoundedCornerShape(28.dp))
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // (+) Tool Attachment
-            Box {
-                IconButton(
-                    onClick = onToggleToolsMenu,
-                    modifier = Modifier.size(38.dp)
-                ) {
-                    IconPlus(tint = scheme.onSurfaceVariant, size = 18.dp)
-                }
-
-                DropdownMenu(
-                    expanded = showToolsMenu,
-                    onDismissRequest = onToggleToolsMenu,
-                    modifier = Modifier.background(scheme.surface)
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Take photo for Jarvis", color = scheme.onSurface, fontSize = 13.sp) },
-                        leadingIcon = { IconSparkles(tint = Color(0xFF34D399), size = 16.dp) },
-                        onClick = onTakePhoto
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Choose photo for Jarvis", color = scheme.onSurface, fontSize = 13.sp) },
-                        leadingIcon = { IconDocument(tint = Color(0xFF38BDF8), size = 16.dp) },
-                        onClick = onChoosePhoto
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Send File to PC (AirDrop)", color = scheme.onSurface, fontSize = 13.sp) },
-                        leadingIcon = { IconDocument(tint = Color(0xFF38BDF8), size = 16.dp) },
-                        onClick = onSendFileToPc
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Browse PC File Explorer", color = scheme.onSurface, fontSize = 13.sp) },
-                        leadingIcon = { IconDocument(tint = scheme.primary, size = 16.dp) },
-                        onClick = onOpenPcExplorer
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Executive Daily Briefing", color = scheme.onSurface, fontSize = 13.sp) },
-                        leadingIcon = { IconSparkles(tint = ArcGold, size = 16.dp) },
-                        onClick = { onToolSelected("Jarvis, give me my executive morning briefing.") }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("View Active Reminders", color = scheme.onSurface, fontSize = 13.sp) },
-                        leadingIcon = { IconActivity(tint = Color(0xFF60A5FA), size = 16.dp) },
-                        onClick = { onToolSelected("Jarvis, what are my active reminders?") }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Search Web & Live News", color = scheme.onSurface, fontSize = 13.sp) },
-                        leadingIcon = { IconSparkles(tint = Color(0xFF38BDF8), size = 16.dp) },
-                        onClick = { onToolSelected("Jarvis, search the web for the latest artificial intelligence news.") }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Live Weather Forecast", color = scheme.onSurface, fontSize = 13.sp) },
-                        leadingIcon = { IconActivity(tint = ArcGold, size = 16.dp) },
-                        onClick = { onToolSelected("Jarvis, what is the live weather forecast for Pune today?") }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Host PC Screenshot", color = scheme.onSurface, fontSize = 13.sp) },
-                        leadingIcon = { IconDocument(tint = scheme.primary, size = 16.dp) },
-                        onClick = { onToolSelected("Jarvis, capture host PC screenshot.") }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Host PC Hardware Stats", color = scheme.onSurface, fontSize = 13.sp) },
-                        leadingIcon = { IconActivity(tint = scheme.primary, size = 16.dp) },
-                        onClick = { onToolSelected("Jarvis, what are my PC hardware stats (CPU, RAM, Disks)?") }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Lock Host Workstation", color = scheme.onSurface, fontSize = 13.sp) },
-                        leadingIcon = { IconSparkles(tint = ArcGold, size = 16.dp) },
-                        onClick = { onToolSelected("Jarvis, lock my host PC workstation.") }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Search PC Code & Docs", color = scheme.onSurface, fontSize = 13.sp) },
-                        leadingIcon = { IconDocument(tint = Color(0xFF34D399), size = 16.dp) },
-                        onClick = { onToolSelected("Jarvis, search indexed files on my PC drives.") }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Attach Document to Chat", color = scheme.onSurface, fontSize = 13.sp) },
-                        leadingIcon = { IconDocument(tint = scheme.onSurfaceVariant, size = 16.dp) },
-                        onClick = onAttachFile
-                    )
-                }
-
-
-            }
-
-            // Text Input Field
-            OutlinedTextField(
-                value = textInput,
-                onValueChange = onTextChange,
-                placeholder = { Text("Message Jarvis…", color = scheme.onSurfaceVariant, fontSize = 14.sp) },
-                modifier = Modifier.weight(1f),
-                maxLines = 4,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color.Transparent,
-                    unfocusedBorderColor = Color.Transparent,
-                    focusedTextColor = scheme.onSurface,
-                    unfocusedTextColor = scheme.onSurface,
-                    cursorColor = scheme.primary,
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent
-                )
-            )
-
-            // Right Action: Send Button OR Voice / Waveform
-            if (textInput.isNotBlank() || canSendAttachment) {
-                IconButton(
-                    onClick = onSend,
-                    enabled = !isThinking,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .semantics { contentDescription = "Send message" }
-                        .clip(CircleShape)
-                        .background(scheme.primary)
-                ) {
-                    IconSend(tint = scheme.onPrimary, size = 16.dp)
-                }
-            } else {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = onQuickVoice,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        IconMicrophone(
-                            tint = if (isListening) scheme.primary else scheme.onSurfaceVariant,
-                            size = 18.dp
-                        )
-                    }
-
-                    IconButton(
-                        onClick = onVoiceMode,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(scheme.surfaceVariant)
-                    ) {
-                        IconVoiceWaveform(tint = scheme.primary, size = 16.dp)
-                    }
-                }
-            }
-        }
-    }
-}
 
 /**
  * Server Configuration Dialog
@@ -1790,41 +972,17 @@ private fun ServerConfigDialog(
         text = {
             Column {
                 Text(
-                    "Select a network preset or specify host address:",
+                    "For Wi-Fi, enter this PC's reserved local address. USB debugging uses localhost.",
                     color = scheme.onSurfaceVariant,
                     fontSize = 12.sp
                 )
                 Spacer(Modifier.height(12.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                OutlinedButton(
+                    onClick = { tempIp = "127.0.0.1:8000" },
+                    shape = RoundedCornerShape(10.dp)
                 ) {
-                    Button(
-                        onClick = { tempIp = "127.0.0.1:8000"; tempToken = "jarvis_local_token" },
-                        colors = ButtonDefaults.buttonColors(containerColor = scheme.surfaceVariant),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("USB", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                    }
-                    Button(
-                        onClick = { tempIp = "192.168.1.39:8000"; tempToken = "jarvis_local_token" },
-                        colors = ButtonDefaults.buttonColors(containerColor = scheme.surfaceVariant),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Wi-Fi", color = scheme.onSurface, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                    }
-
-                    Button(
-                        onClick = { tempIp = "192.168.137.1:8000"; tempToken = "jarvis_local_token" },
-                        colors = ButtonDefaults.buttonColors(containerColor = scheme.surfaceVariant),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Hotspot", color = ArcGold, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                    }
+                    Text("Use USB connection")
                 }
 
                 Spacer(Modifier.height(14.dp))
@@ -1832,6 +990,7 @@ private fun ServerConfigDialog(
                     value = tempIp,
                     onValueChange = { tempIp = it },
                     label = { Text("Server Host / IP") },
+                    supportingText = { Text("Wi-Fi example: 192.168.0.121:8000") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = scheme.primary,
@@ -1844,6 +1003,7 @@ private fun ServerConfigDialog(
                     value = tempToken,
                     onValueChange = { tempToken = it },
                     label = { Text("Pairing Token") },
+                    visualTransformation = PasswordVisualTransformation(),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = scheme.primary,
@@ -1884,10 +1044,4 @@ private fun shareTranscript(context: Context, transcript: String) {
         putExtra(Intent.EXTRA_TEXT, transcript)
     }
     context.startActivity(Intent.createChooser(send, "Share transcript"))
-}
-
-private fun formatTimestamp(ts: String): String {
-    if (ts.length < 16 || !ts.contains("T")) return ""
-    val timePart = ts.substringAfter("T")
-    return if (timePart.length >= 5) timePart.substring(0, 5) else ""
 }

@@ -10,6 +10,10 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -102,7 +106,7 @@ fun VoiceModeScreen(
                 .fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
                 VoiceOrb(
                     isListening = isListening && !micMuted,
                     isSpeaking = isSpeaking,
@@ -284,7 +288,8 @@ private fun TopIconButton(
 ) {
     Box(
         modifier = Modifier
-            .size(40.dp)
+            .size(48.dp)
+            .semantics { this.contentDescription = contentDescription }
             .clip(CircleShape)
             .clickable(onClickLabel = contentDescription) { onClick() },
         contentAlignment = Alignment.Center
@@ -303,6 +308,7 @@ private fun CircleControl(
     Box(
         modifier = Modifier
             .size(64.dp)
+            .semantics { this.contentDescription = contentDescription }
             .clip(CircleShape)
             .background(background)
             .clickable(onClickLabel = contentDescription) { onClick() },

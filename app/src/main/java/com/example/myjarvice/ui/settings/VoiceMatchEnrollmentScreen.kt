@@ -45,6 +45,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
@@ -117,6 +122,8 @@ fun VoiceMatchEnrollmentScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(scheme.background)
+            .safeDrawingPadding()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -127,7 +134,8 @@ fun VoiceMatchEnrollmentScreen(
         ) {
             Box(
                 modifier = Modifier
-                    .size(42.dp)
+                    .size(48.dp)
+                    .semantics { contentDescription = "Back from voice setup" }
                     .clip(CircleShape)
                     .clickable { onBack() },
                 contentAlignment = Alignment.Center
@@ -137,13 +145,13 @@ fun VoiceMatchEnrollmentScreen(
             Spacer(Modifier.width(12.dp))
             Column {
                 Text(
-                    "Voice Match Calibration",
+                    "Set up your voice",
                     color = scheme.onBackground,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "Iron Man Biometric Voice Lock",
+                    "Help Jarvis recognize your voice",
                     color = JarvisCyan,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium

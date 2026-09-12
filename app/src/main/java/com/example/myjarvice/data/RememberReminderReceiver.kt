@@ -13,16 +13,23 @@ import com.example.myjarvice.R
 
 class RememberReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val title = intent.getStringExtra(EXTRA_TITLE).orEmpty().ifBlank { "Saved item" }
+        val store = RememberInboxStore(context)
+        val item = store.items().firstOrNull { it.id == intent.getStringExtra(EXTRA_ITEM_ID) } ?: return
+        if (item.reminderAt == null) return
+        val title = item.title
+        store.setReminder(item.id, null)
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Jarvis reminders", NotificationManager.IMPORTANCE_DEFAULT))
         }
         val openApp = PendingIntent.getActivity(
-            context, 0, Intent(context, MainActivity::class.java),
+            context, 0, Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_OPEN_INBOX, true),
             PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
         )
-        manager.notify(intent.getStringExtra(EXTRA_ITEM_ID).orEmpty().hashCode(),
+        if (Build.VERSION.SDK_INT >= 33 && androidx.core.content.ContextCompat.checkSelfPermission(context,
+                android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        if (!androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()) return
+        manager.notify(item.id.hashCode(),
             NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle("Jarvis reminder")

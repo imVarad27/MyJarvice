@@ -16,6 +16,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -29,10 +35,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myjarvice.data.ConnectionStatus
 import com.example.myjarvice.data.VoiceOption
-import com.example.myjarvice.theme.JarvisCyan
-import com.example.myjarvice.theme.JarvisSurfaceDark
-import com.example.myjarvice.theme.TextPrimary
-import com.example.myjarvice.theme.TextSecondary
 
 /** Session details behind voice mode's ⓘ button. */
 @Composable
@@ -45,25 +47,25 @@ fun VoiceInfoDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Session Info", color = JarvisCyan, fontFamily = FontFamily.Monospace) },
+        title = { Text("Session Info", color = MaterialTheme.colorScheme.primary) },
         text = {
-            Column {
-                InfoRow("Host", "$serverIp:8000")
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                InfoRow("PC", serverIp.ifBlank { "Not configured" })
                 InfoRow("Link", connectionStatus.name)
                 InfoRow("Messages", messageCount.toString())
                 InfoRow("Voice", voiceLabel)
                 Spacer(Modifier.size(10.dp))
                 Text(
                     "Speak naturally — Jarvis listens again automatically after each reply.",
-                    color = TextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close", color = JarvisCyan) }
+            TextButton(onClick = onDismiss) { Text("Close", color = MaterialTheme.colorScheme.primary) }
         },
-        containerColor = JarvisSurfaceDark
+        containerColor = MaterialTheme.colorScheme.surface
     )
 }
 
@@ -75,8 +77,8 @@ private fun InfoRow(label: String, value: String) {
             .padding(vertical = 3.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(label, color = TextSecondary, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
-        Text(value, color = TextPrimary, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
+        Text(label, modifier = Modifier.width(88.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+        Text(value, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
     }
 }
 
@@ -90,13 +92,13 @@ fun VoicePickerDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Change Voice", color = JarvisCyan, fontFamily = FontFamily.Monospace) },
+        title = { Text("Change Voice", color = MaterialTheme.colorScheme.primary) },
         text = {
             if (voices.isEmpty()) {
                 Text(
                     "No offline English voices are installed on this device. " +
                         "Add one under Settings › Accessibility › Text-to-speech.",
-                    color = TextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp
                 )
             } else {
@@ -119,9 +121,9 @@ fun VoicePickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Done", color = JarvisCyan) }
+            TextButton(onClick = onDismiss) { Text("Done", color = MaterialTheme.colorScheme.primary) }
         },
-        containerColor = JarvisSurfaceDark
+        containerColor = MaterialTheme.colorScheme.surface
     )
 }
 
@@ -130,29 +132,16 @@ private fun VoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .heightIn(min = 48.dp)
+            .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
             .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(16.dp)
-                .clip(CircleShape)
-                .background(if (selected) JarvisCyan else Color.Transparent)
-        ) {
-            if (!selected) {
-                Box(
-                    modifier = Modifier
-                        .size(16.dp)
-                        .clip(CircleShape)
-                        .background(TextSecondary.copy(alpha = 0.25f))
-                )
-            }
-        }
+        RadioButton(selected = selected, onClick = null)
         Spacer(Modifier.width(12.dp))
         Text(
             label,
-            color = if (selected) TextPrimary else TextSecondary,
+            color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 14.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
         )

@@ -32,40 +32,51 @@ class WakeWordService : Service() {
         private const val TAG = "WakeWordService"
 
         fun start(context: Context) {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) return
             val intent = Intent(context, WakeWordService::class.java).apply {
                 action = ACTION_START
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
+                else context.startService(intent)
+            } catch (restricted: IllegalStateException) {
+                Log.w(TAG, "Android restricted background microphone startup", restricted)
+            } catch (restricted: SecurityException) {
+                Log.w(TAG, "Microphone service permission is unavailable", restricted)
             }
         }
 
         fun stop(context: Context) {
-            val intent = Intent(context, WakeWordService::class.java).apply {
-                action = ACTION_STOP
-            }
-            context.startService(intent)
+            context.stopService(Intent(context, WakeWordService::class.java))
         }
     }
 
     private var speechRecognizer: SpeechRecognizer? = null
     private var audioRecorder: AudioBufferRecorder? = null
     private var isListening = false
+    private var foregroundStarted = false
     private lateinit var settings: SettingsStore
 
     override fun onCreate() {
         super.onCreate()
         settings = SettingsStore(applicationContext)
         createNotificationChannel()
+        // Android gives a foreground service only a short window to promote itself.
+        // Do this in onCreate before any recognizer work can delay onStartCommand.
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification())
+            foregroundStarted = true
+        } catch (restricted: Exception) {
+            Log.w(TAG, "Unable to start the wake service in the foreground", restricted)
+            stopSelf()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
-                val notification = buildNotification()
-                startForeground(NOTIFICATION_ID, notification)
+                if (!foregroundStarted) return START_NOT_STICKY
                 startWakeWordListening()
             }
             ACTION_STOP -> {

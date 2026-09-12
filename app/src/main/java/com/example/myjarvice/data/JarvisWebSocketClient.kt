@@ -97,16 +97,15 @@ class JarvisWebSocketClient {
 
     private var serverIp = ""
     private var serverToken = ""
-    private val fallbackIps = listOf("192.168.1.39:8000", "127.0.0.1:8000", "192.168.1.35:8000", "192.168.137.1:8000")
-
-
 
     fun connect(rawIpOrUrl: String = "", pairingToken: String = "") {
         keepConnected = true
         reconnectJob?.cancel()
         _connectionStatus.value = ConnectionStatus.CONNECTING
 
-        val effectiveIp = if (rawIpOrUrl.isNotBlank()) rawIpOrUrl.trim() else if (serverIp.isNotBlank()) serverIp else fallbackIps[retryAttempt % fallbackIps.size]
+        // A configured host is authoritative. Rotating through old LAN addresses after
+        // a transient failure can strand the client on somebody else's network range.
+        val effectiveIp = rawIpOrUrl.trim().ifBlank { serverIp.ifBlank { DEFAULT_SERVER } }
         val effectiveToken = if (pairingToken.isNotBlank()) pairingToken.trim() else if (serverToken.isNotBlank()) serverToken else "jarvis_local_token"
 
         this.serverIp = effectiveIp
@@ -203,15 +202,7 @@ class JarvisWebSocketClient {
                 _connectionStatus.value = ConnectionStatus.ERROR
                 Log.e("JarvisWS", "WebSocket Connection Failed to $wsUrl: ${t.message}")
 
-                // Auto fallback to alternative IP
-                if (retryAttempt < fallbackIps.size - 1) {
-                    retryAttempt++
-                    val nextIp = fallbackIps[retryAttempt % fallbackIps.size]
-                    Log.d("JarvisWS", "Attempting fallback IP: $nextIp")
-                    connect(nextIp, serverToken)
-                } else {
-                    scheduleReconnect()
-                }
+                scheduleReconnect()
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
@@ -327,6 +318,7 @@ class JarvisWebSocketClient {
     }
 
     private companion object {
+        const val DEFAULT_SERVER = "127.0.0.1:8000"
         const val INITIAL_RETRY_MS = 1_000L
         const val MAX_RETRY_MS = 30_000L
     }

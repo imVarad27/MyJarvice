@@ -40,6 +40,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -120,12 +122,12 @@ fun PcExplorerDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("📁", fontSize = 18.sp)
+                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                        IconDocument(tint = scheme.primary, size = 20.dp)
                         Spacer(Modifier.width(8.dp))
                         Column {
                             Text(
-                                "Host PC File Explorer",
+                                "PC files",
                                 color = scheme.onSurface,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -141,7 +143,8 @@ fun PcExplorerDialog(
                     IconButton(
                         onClick = onDismiss,
                         modifier = Modifier
-                            .size(32.dp)
+                            .size(48.dp)
+                            .semantics { contentDescription = "Close PC files" }
                             .clip(CircleShape)
                             .background(scheme.surfaceVariant)
                     ) {
@@ -207,7 +210,7 @@ fun PcExplorerDialog(
                             }
                         },
                         enabled = !parentPath.isNullOrBlank(),
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(48.dp).semantics { contentDescription = "Go to parent folder" }
                     ) {
                         Text(
                             "⬆",

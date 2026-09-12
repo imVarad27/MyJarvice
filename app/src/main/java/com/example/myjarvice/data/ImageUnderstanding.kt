@@ -30,10 +30,33 @@ object ImageUnderstanding {
     private const val MAX_UPLOAD_BYTES = 1_550_000
 
     suspend fun prepare(context: Context, uri: Uri): Result<PhotoAttachment> = runCatching {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        require(bounds.outWidth > 0 && bounds.outHeight > 0) { "This file is not a supported image." }
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / sample > MAX_EDGE * 2) sample *= 2
         val bitmap = context.contentResolver.openInputStream(uri)?.use { input ->
-            BitmapFactory.decodeStream(input)
+            BitmapFactory.decodeStream(input, null, BitmapFactory.Options().apply { inSampleSize = sample })
         } ?: error("Jarvis could not read that image.")
-        val scaled = scaleDown(bitmap)
+        val orientation = runCatching {
+            context.contentResolver.openInputStream(uri)?.use {
+                android.media.ExifInterface(it).getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, 1)
+            } ?: 1
+        }.getOrDefault(1)
+        val matrix = android.graphics.Matrix().apply {
+            when (orientation) {
+                2 -> setScale(-1f, 1f)
+                3 -> setRotate(180f)
+                4 -> setScale(1f, -1f)
+                5 -> { setRotate(90f); postScale(-1f, 1f) }
+                6 -> setRotate(90f)
+                7 -> { setRotate(-90f); postScale(-1f, 1f) }
+                8 -> setRotate(-90f)
+            }
+        }
+        val upright = if (orientation in 2..8) Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true) else bitmap
+        val scaled = scaleDown(upright)
+        if (upright !== bitmap && upright !== scaled) upright.recycle()
         if (scaled !== bitmap) bitmap.recycle()
 
         val bytes = compressForChat(scaled)
@@ -86,6 +109,8 @@ object ImageUnderstanding {
     }
 
     private fun displayName(context: Context, uri: Uri): String {
-        return uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "Photo"
+        return context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+            if (it.moveToFirst()) it.getString(0) else null
+        } ?: "Photo"
     }
 }

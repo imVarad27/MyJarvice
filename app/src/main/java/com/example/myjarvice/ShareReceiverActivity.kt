@@ -1,69 +1,127 @@
 package com.example.myjarvice
 
+import android.app.Application
 import android.content.Intent
-import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
-import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.viewModels
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewModelScope
 import com.example.myjarvice.data.ImageUnderstanding
 import com.example.myjarvice.data.RememberInboxStore
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import com.example.myjarvice.data.SettingsStore
+import com.example.myjarvice.theme.MyJarvisTheme
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import java.io.ByteArrayOutputStream
 
-/** Receives Android Share-sheet content, stores it privately, then opens Jarvis. */
+/** Retains import state across rotation; shows progress and recoverable errors. */
 class ShareReceiverActivity : ComponentActivity() {
+    private val importer: ShareImportViewModel by viewModels()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        lifecycleScope.launch {
-            val saved = withContext(Dispatchers.IO) { saveSharedContent(intent) }
-            Toast.makeText(this@ShareReceiverActivity, if (saved) "Saved to Jarvis · Remember later" else "Jarvis could not save that item", Toast.LENGTH_SHORT).show()
-            startActivity(Intent(this@ShareReceiverActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
-            finish()
-        }
-    }
-
-    private suspend fun saveSharedContent(shared: Intent): Boolean {
-        val store = RememberInboxStore(applicationContext)
-        val text = shared.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()?.trim()
-        if (!text.isNullOrBlank()) {
-            store.addText(text)
-            return true
-        }
-        @Suppress("DEPRECATION")
-        val sharedUris = shared.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM).orEmpty()
-        if (sharedUris.isNotEmpty()) {
-            var savedAny = false
-            for (uri in sharedUris) if (saveUri(store, uri)) savedAny = true
-            return savedAny
-        }
-        val uri = shared.getParcelableExtra<Uri>(Intent.EXTRA_STREAM) ?: shared.clipData?.getItemAt(0)?.uri ?: return false
-        return saveUri(store, uri)
-    }
-
-    private suspend fun saveUri(store: RememberInboxStore, uri: Uri): Boolean {
-        val mime = contentResolver.getType(uri).orEmpty()
-        return when {
-            mime.startsWith("image/") -> ImageUnderstanding.prepare(applicationContext, uri).map { store.addPhoto(it) }.isSuccess
-            mime.startsWith("audio/") -> {
-                val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return false
-                if (bytes.size > 30 * 1024 * 1024) return false
-                val ext = mime.substringAfter('/', "m4a").substringBefore('+').ifBlank { "m4a" }
-                store.addVoice(displayName(uri), bytes, ext)
-                true
+        importer.startImport(intent)
+        setContent {
+            val state by importer.state.collectAsState()
+            val settings = remember { SettingsStore(applicationContext) }
+            MyJarvisTheme(themeMode = settings.themeMode, dynamicColor = settings.dynamicColor) {
+                Surface(Modifier.fillMaxSize()) {
+                    Column(Modifier.safeDrawingPadding().fillMaxSize().padding(32.dp),
+                        verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(if (!state.done) "Saving to Jarvis…" else if (state.saved > 0) "Saved for later" else "Couldn't save these items", style = MaterialTheme.typography.headlineSmall)
+                        Spacer(Modifier.height(16.dp))
+                        if (!state.done) CircularProgressIndicator()
+                        else {
+                            Text("${state.saved} item(s) saved on this phone.", style = MaterialTheme.typography.bodyLarge)
+                            if (state.failed > 0) Text("${state.failed} item(s) couldn't be saved. Try sharing a smaller file or a different format.",
+                                modifier = Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.error)
+                            Button(onClick = { openInbox() }) { Text("Open inbox") }
+                            TextButton(onClick = { finish() }) { Text("Done") }
+                        }
+                    }
+                }
             }
-            else -> false
+        }
+        lifecycleScope.launch {
+            importer.state.collect { if (it.done && it.failed == 0) openInbox() }
         }
     }
+    private fun openInbox() {
+        startActivity(Intent(this, MainActivity::class.java)
+            .putExtra(MainActivity.EXTRA_OPEN_INBOX, true).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
+        finish()
+    }
+}
 
-    private fun displayName(uri: Uri): String {
-        contentResolver.query(uri, null, null, null, null)?.use { cursor: Cursor ->
-            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            if (cursor.moveToFirst() && index >= 0) return cursor.getString(index)
+data class ShareImportState(val done: Boolean = false, val saved: Int = 0, val failed: Int = 0)
+
+class ShareImportViewModel(application: Application) : AndroidViewModel(application) {
+    private val mutableState = MutableStateFlow(ShareImportState())
+    val state = mutableState.asStateFlow()
+    private var started = false
+
+    @Suppress("DEPRECATION")
+    fun startImport(shared: Intent) {
+        if (started) return
+        started = true
+        viewModelScope.launch(Dispatchers.IO) {
+            val context = getApplication<Application>()
+            val resolver = context.contentResolver
+            val store = RememberInboxStore(context)
+            var saved = 0
+            var failed = 0
+            val text = shared.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()?.trim().orEmpty()
+            if (text.isNotEmpty()) runCatching { store.addText(text.take(100_000)) }
+                .onSuccess { saved++ }.onFailure { failed++ }
+            val uris = buildList {
+                if (shared.action == Intent.ACTION_SEND_MULTIPLE) addAll(shared.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM).orEmpty())
+                else shared.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)?.let { add(it) }
+                shared.clipData?.let { clip -> for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let { add(it) } }
+            }.distinct()
+            for (uri in uris.take(20)) {
+                try {
+                    val mime = resolver.getType(uri) ?: shared.type.orEmpty()
+                    when {
+                        mime.startsWith("image/") -> store.addPhoto(ImageUnderstanding.prepare(context, uri).getOrThrow())
+                        mime.startsWith("audio/") -> {
+                            val bytes = resolver.openInputStream(uri)?.use { input ->
+                                val out = ByteArrayOutputStream()
+                                val buffer = ByteArray(8192)
+                                var total = 0
+                                while (true) {
+                                    val count = input.read(buffer)
+                                    if (count < 0) break
+                                    total += count
+                                    require(total <= 30 * 1024 * 1024) { "Audio file is too large" }
+                                    out.write(buffer, 0, count)
+                                }
+                                out.toByteArray()
+                            } ?: error("File is unavailable")
+                            val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+                                if (it.moveToFirst()) it.getString(0) else null
+                            } ?: "Voice note"
+                            store.addVoice(name, bytes, "audio")
+                        }
+                        else -> error("Unsupported attachment")
+                    }
+                    saved++
+                } catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { failed++ }
+            }
+            failed += (uris.size - 20).coerceAtLeast(0)
+            if (saved == 0 && failed == 0) failed = 1
+            mutableState.value = ShareImportState(true, saved, failed)
         }
-        return "Voice note"
     }
 }

@@ -84,7 +84,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     /** True between sending a query and the reply landing, so the UI can show progress. */
     private val _isThinking = MutableStateFlow(false)
     val isThinking: StateFlow<Boolean> = _isThinking.asStateFlow()
-    private val _responseRoute = MutableStateFlow("Choose Fast for private local answers; Strong uses your PC/server.")
+    private val _responseRoute = MutableStateFlow("Ready when you are")
     val responseRoute: StateFlow<String> = _responseRoute.asStateFlow()
 
     /** Non-null while an email draft is waiting on the user's yes/no. */
@@ -136,7 +136,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             wsClient.latestResponse.collect { msg ->
                 msg?.let {
                     if (it.sender != "USER" && !localRequestActive) _isThinking.value = false
-                    if (it.sender.startsWith("JARVIS", ignoreCase = true)) {
+                    if (it.sender.startsWith("JARVIS", ignoreCase = true) && (settings.autoSpeakReplies || _voiceModeActive.value)) {
                         if (!it.audioB64.isNullOrBlank()) {
                             speechManager.stopSpeaking()
                             neuralAudioPlayer.playBase64Audio(it.audioB64)
@@ -289,13 +289,29 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         wsClient.updateServerConnection(trimmed, _serverToken.value)
     }
 
+    fun refreshPreferences() {
+        if (settings.serverIp != _serverIp.value || settings.serverToken != _serverToken.value) {
+            if (settings.serverIp.isNotBlank()) updateServerConnection(settings.serverIp, settings.serverToken)
+            else {
+                wsClient.disconnect()
+                _serverIp.value = ""
+                _serverToken.value = settings.serverToken
+            }
+        }
+        if (!_isThinking.value) _responseRoute.value = when (settings.smartMode) {
+            SmartMode.FAST_ON_DEVICE -> "Fast · Replies stay on this phone"
+            SmartMode.STRONG_HOST -> "Strong · Uses your configured PC"
+            SmartMode.AUTO -> "Auto · PC when connected, phone when offline"
+        }
+    }
+
     fun sendQuery(text: String, photo: PhotoAttachment? = null) {
-        if (text.isBlank() || localRequestActive) return
+        if (text.isBlank() || localRequestActive || _isThinking.value) return
 
         // Explicit local tools never forward saved facts or document excerpts to a host.
         val command = text.trim()
-        if (command.startsWith("calculate ", true) || command.startsWith("remember: ", true) ||
-            command.equals("show memories", true) || command.startsWith("search documents:", true)) {
+        if (photo == null && (command.startsWith("calculate ", true) || command.startsWith("remember: ", true) ||
+            command.equals("show memories", true) || command.startsWith("search documents:", true))) {
             localRequestActive = true
             _responseRoute.value = "Local tool · stays on this phone"
             _isThinking.value = true
@@ -373,6 +389,14 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             "On-device · photo has no readable text; Strong mode can analyse the full image"
         }
         wsClient.addLocalMessage(userMessage)
+        if (photo != null && !photo.hasReadableText) {
+            wsClient.addLocalMessage(JarvisMessage(sender = "JARVIS (On-device)",
+                text = "I couldn't read text in this photo. Try a clearer picture of the page, or use Strong mode with a vision-capable PC model to ask about the image.",
+                type = "ERROR", timestamp = timestampNow()))
+            localRequestActive = false
+            _isThinking.value = false
+            return
+        }
         viewModelScope.launch {
             try {
             val result = withContext(Dispatchers.Default) {
@@ -422,6 +446,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     fun stopSpeaking() {
         speechManager.stopSpeaking()
+        neuralAudioPlayer.stop()
     }
 
     /** Push-to-talk from the chat screen, without entering full-screen voice mode. */
