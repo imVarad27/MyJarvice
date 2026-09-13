@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -51,10 +52,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val VoiceModeBackground = Color(0xFF000000)
-private val ControlSurface = Color(0xFF1C1C1E)
-private val IconTint = Color(0xFFEDEDED)
-private val CaptionColor = Color(0xFF9A9A9E)
 private val MutedAccent = Color(0xFFFF5A5A)
 
 /**
@@ -73,14 +70,17 @@ fun VoiceModeScreen(
     onInfo: () -> Unit,
     onShare: () -> Unit,
     onChangeVoice: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    liveTranscript: String = "",
+    recognitionStatus: String = ""
 ) {
     BackHandler(enabled = true) { onClose() }
+    val colors = MaterialTheme.colorScheme
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(VoiceModeBackground)
+            .background(colors.background)
             .statusBarsPadding()
             .navigationBarsPadding()
             .padding(horizontal = 20.dp, vertical = 12.dp),
@@ -92,11 +92,12 @@ fun VoiceModeScreen(
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Text("Voice", style = MaterialTheme.typography.titleMedium, color = colors.onSurface, modifier = Modifier.weight(1f))
             TopIconButton(onClick = onInfo, contentDescription = "Session info") { drawInfoIcon(it) }
             Spacer(Modifier.width(18.dp))
             TopIconButton(onClick = onShare, contentDescription = "Share transcript") { drawShareIcon(it) }
             Spacer(Modifier.width(18.dp))
-            TopIconButton(onClick = onChangeVoice, contentDescription = "Change voice") { drawSlidersIcon(it) }
+            TopIconButton(onClick = onChangeVoice, contentDescription = "Change voice") { drawSlidersIcon(it, colors.background) }
         }
 
         // --- ORB ---
@@ -119,15 +120,20 @@ fun VoiceModeScreen(
                         micMuted -> "Muted"
                         isThinking -> "Thinking…"
                         isSpeaking -> "Speaking…"
+                        recognitionStatus.isNotBlank() -> recognitionStatus
                         isListening -> "Listening…"
                         else -> "Tap the mic to speak"
                     },
-                    color = if (micMuted) MutedAccent else CaptionColor,
-                    fontSize = 14.sp,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.sp,
-                    fontWeight = FontWeight.Medium
+                    color = if (micMuted) colors.error else colors.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
+                if (liveTranscript.isNotBlank() && !isSpeaking) {
+                    Spacer(Modifier.height(16.dp))
+                    Text(liveTranscript, color = colors.onSurface, fontSize = 18.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+                }
             }
         }
 
@@ -142,13 +148,13 @@ fun VoiceModeScreen(
             CircleControl(
                 onClick = onToggleMute,
                 contentDescription = if (micMuted) "Unmute microphone" else "Mute microphone",
-                background = if (micMuted) MutedAccent.copy(alpha = 0.22f) else ControlSurface
+                background = if (micMuted) colors.errorContainer else colors.surfaceContainerHigh
             ) { drawMicIcon(it, muted = micMuted) }
 
             CircleControl(
                 onClick = onClose,
                 contentDescription = "Close voice mode",
-                background = ControlSurface
+                background = colors.surfaceContainerHigh
             ) { drawCloseIcon(it) }
         }
     }
@@ -294,7 +300,8 @@ private fun TopIconButton(
             .clickable(onClickLabel = contentDescription) { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        Canvas(modifier = Modifier.size(22.dp)) { draw(IconTint) }
+        val tint = MaterialTheme.colorScheme.onSurface
+        Canvas(modifier = Modifier.size(22.dp)) { draw(tint) }
     }
 }
 
@@ -314,7 +321,8 @@ private fun CircleControl(
             .clickable(onClickLabel = contentDescription) { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        Canvas(modifier = Modifier.size(26.dp)) { draw(IconTint) }
+        val tint = MaterialTheme.colorScheme.onSurface
+        Canvas(modifier = Modifier.size(26.dp)) { draw(tint) }
     }
 }
 
@@ -373,7 +381,7 @@ private fun DrawScope.drawShareIcon(tint: Color) {
     drawLine(color = tint, start = Offset(w * 0.14f, h * 0.92f), end = Offset(w * 0.86f, h * 0.92f), strokeWidth = stroke, cap = StrokeCap.Round)
 }
 
-private fun DrawScope.drawSlidersIcon(tint: Color) {
+private fun DrawScope.drawSlidersIcon(tint: Color, background: Color) {
     val stroke = size.minDimension * 0.085f
     val w = size.width
     val h = size.height
@@ -387,7 +395,7 @@ private fun DrawScope.drawSlidersIcon(tint: Color) {
             strokeWidth = stroke,
             cap = StrokeCap.Round
         )
-        drawCircle(color = VoiceModeBackground, radius = stroke * 1.7f, center = Offset(knobX, y))
+        drawCircle(color = background, radius = stroke * 1.7f, center = Offset(knobX, y))
         drawCircle(color = tint, radius = stroke * 1.25f, center = Offset(knobX, y), style = Stroke(width = stroke * 0.85f))
     }
 }

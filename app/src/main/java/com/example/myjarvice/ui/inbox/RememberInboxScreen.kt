@@ -101,7 +101,7 @@ fun RememberInboxScreen(store: RememberInboxStore, onDismiss: () -> Unit, onAskJ
                     TextButton(onClick = { if (selected != null) selectedId = null else onDismiss() }) {
                         Text(if (selected != null) "Back" else "Close")
                     }
-                    Text(if (selected != null) "Saved item" else "Remember later", style = MaterialTheme.typography.titleLarge,
+                    Text(if (selected != null) "Saved item" else "Saved", style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 error?.let { message ->

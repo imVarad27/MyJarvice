@@ -8,4 +8,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
  */
 object WakeEvents {
     val voiceTrigger = MutableStateFlow(false)
+    val microphoneBusy = MutableStateFlow(false)
+    val captureReleased = MutableStateFlow(true)
+    val appVisible = MutableStateFlow(false)
+    val status = MutableStateFlow("Off")
+    val running = MutableStateFlow(false)
 }

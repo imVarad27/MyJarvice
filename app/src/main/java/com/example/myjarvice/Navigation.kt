@@ -16,6 +16,7 @@ import com.example.myjarvice.theme.ThemeMode
 import com.example.myjarvice.ui.main.MainScreen
 import com.example.myjarvice.ui.settings.SettingsScreen
 import com.example.myjarvice.ui.splash.SplashScreen
+import com.example.myjarvice.wake.WakeEvents
 
 @Composable
 fun MainNavigation(
@@ -31,6 +32,14 @@ fun MainNavigation(
     // Splash screen briefly initializes then transitions directly to Main Chat!
     val backStack = rememberNavBackStack(if (startOnChat) Main else Splash)
     val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        WakeEvents.voiceTrigger.collect { triggered ->
+            if (triggered && backStack.lastOrNull() != Main) {
+                backStack.clear()
+                backStack.add(Main)
+            }
+        }
+    }
     val voiceSetupPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) backStack.add(VoiceMatchEnrollment)
         else Toast.makeText(context, "Allow microphone access to set up your voice.", Toast.LENGTH_LONG).show()

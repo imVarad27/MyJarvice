@@ -35,6 +35,9 @@ class SpeechManager(private val context: Context) : TextToSpeech.OnInitListener 
 
     private var tts: TextToSpeech? = TextToSpeech(context, this)
     private var speechRecognizer: SpeechRecognizer? = null
+    private var recognitionGeneration = 0
+    private val _recognitionStatus = MutableStateFlow("")
+    val recognitionStatus: StateFlow<String> = _recognitionStatus
 
     private val _isSpeaking = MutableStateFlow(false)
     val isSpeaking: StateFlow<Boolean> = _isSpeaking
@@ -193,23 +196,47 @@ class SpeechManager(private val context: Context) : TextToSpeech.OnInitListener 
      * @param onNoResult fires when recognition ended without producing text (silence,
      *   timeout, engine error). Lets hands-free mode re-arm instead of going deaf.
      */
-    fun startListening(onResult: (String) -> Unit, onNoResult: () -> Unit = {}) {
-        if (!SpeechRecognizer.isRecognitionAvailable(context)) return
+    fun startListening(onResult: (String) -> Unit, onNoResult: () -> Unit = {}, onReady: () -> Unit = {}) {
+        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
+            _recognitionStatus.value = "No speech recognition service installed"
+            onNoResult()
+            return
+        }
+        val generation = ++recognitionGeneration
+        _recognizedText.value = ""
+        _recognitionStatus.value = "Starting microphone…"
+        _isListening.value = true
 
         speechRecognizer?.destroy()
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
             setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) { _isListening.value = true }
+                override fun onReadyForSpeech(params: Bundle?) {
+                    if (generation != recognitionGeneration) return
+                    _recognitionStatus.value = "Listening…"
+                    Log.d(TAG, "Command microphone ready")
+                    onReady()
+                }
                 override fun onBeginningOfSpeech() {}
                 override fun onRmsChanged(rmsdB: Float) { _micLevel.value = rmsdB }
                 override fun onBufferReceived(buffer: ByteArray?) {}
-                override fun onEndOfSpeech() { _isListening.value = false }
+                override fun onEndOfSpeech() {
+                    if (generation == recognitionGeneration) _recognitionStatus.value = "Finishing transcription…"
+                }
                 override fun onError(error: Int) {
+                    if (generation != recognitionGeneration) return
+                    Log.w(TAG, "Command recognition error: $error")
+                    _recognitionStatus.value = when (error) {
+                        SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Speech service needs a working internet connection"
+                        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission is needed"
+                        SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Didn't catch that. Try again after the tone."
+                        else -> "Speech service interrupted ($error). Retrying…"
+                    }
                     _isListening.value = false
                     _micLevel.value = 0f
                     onNoResult()
                 }
                 override fun onResults(results: Bundle?) {
+                    if (generation != recognitionGeneration) return
                     _isListening.value = false
                     _micLevel.value = 0f
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
@@ -217,9 +244,13 @@ class SpeechManager(private val context: Context) : TextToSpeech.OnInitListener 
                         val text = matches[0]
                         _recognizedText.value = text
                         onResult(text)
+                    } else onNoResult()
+                }
+                override fun onPartialResults(partialResults: Bundle?) {
+                    if (generation == recognitionGeneration) {
+                        _recognizedText.value = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
                     }
                 }
-                override fun onPartialResults(partialResults: Bundle?) {}
                 override fun onEvent(eventType: Int, params: Bundle?) {}
             })
         }
@@ -227,17 +258,29 @@ class SpeechManager(private val context: Context) : TextToSpeech.OnInitListener 
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 3000L)
         }
-        speechRecognizer?.startListening(intent)
+        try { speechRecognizer?.startListening(intent) }
+        catch (e: RuntimeException) {
+            _isListening.value = false
+            _recognitionStatus.value = "Unable to start microphone. Check permission."
+            Log.w(TAG, "Command microphone failed", e)
+            onNoResult()
+        }
     }
 
     fun stopListening() {
-        speechRecognizer?.stopListening()
+        recognitionGeneration++
+        speechRecognizer?.cancel()
         _isListening.value = false
         _micLevel.value = 0f
     }
 
     fun shutdown() {
+        recognitionGeneration++
         tts?.stop()
         tts?.shutdown()
         speechRecognizer?.destroy()

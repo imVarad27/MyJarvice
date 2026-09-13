@@ -22,6 +22,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.core.view.WindowCompat
 import com.example.myjarvice.theme.ThemeMode
@@ -52,12 +55,19 @@ class MainActivity : ComponentActivity() {
             var themeMode by remember { mutableStateOf(settingsStore.themeMode) }
             var dynamicColor by remember { mutableStateOf(settingsStore.dynamicColor) }
             var wakeEnabled by remember { mutableStateOf(settingsStore.wakeWordEnabled) }
+            DisposableEffect(lifecycle) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_RESUME) wakeEnabled = settingsStore.wakeWordEnabled
+                }
+                lifecycle.addObserver(observer)
+                onDispose { lifecycle.removeObserver(observer) }
+            }
             val wakePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
                 wakeEnabled = granted
                 settingsStore.wakeWordEnabled = granted
                 if (granted) {
-                    ensureOverlayAndBattery()
                     WakeWordService.start(applicationContext)
+                    requestNotificationPermission()
                 } else Toast.makeText(this, "Microphone access is needed for hands-free voice.", Toast.LENGTH_LONG).show()
             }
             val darkBars = themeMode == ThemeMode.DARK || themeMode == ThemeMode.AMOLED ||
@@ -89,8 +99,8 @@ class MainActivity : ComponentActivity() {
                                 wakeEnabled = enabled
                                 settingsStore.wakeWordEnabled = enabled
                                 if (enabled) {
-                                    ensureOverlayAndBattery()
                                     WakeWordService.start(applicationContext)
+                                    requestNotificationPermission()
                                 } else WakeWordService.stop(applicationContext)
                             }
                         }
@@ -122,24 +132,21 @@ class MainActivity : ComponentActivity() {
         permissionLauncher.launch(perms.toTypedArray())
     }
 
-    /** Ask for "display over other apps" (for the pop-up) and battery-opt exemption. */
-    private fun ensureOverlayAndBattery() {
-        if (!Settings.canDrawOverlays(this)) {
-            startActivity(
-                Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:$packageName")
-                )
-            )
+    override fun onResume() {
+        super.onResume()
+        WakeEvents.appVisible.value = true
+        if (SettingsStore(this).wakeWordEnabled) WakeWordService.start(this)
+    }
+
+    override fun onPause() {
+        WakeEvents.appVisible.value = false
+        super.onPause()
+    }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            permissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
         }
-        try {
-            startActivity(
-                Intent(
-                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                    Uri.parse("package:$packageName")
-                )
-            )
-        } catch (_: Exception) { /* Some OEMs restrict this intent; ignore. */ }
     }
 
     companion object {

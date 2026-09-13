@@ -45,10 +45,15 @@ internal fun ChatFeed(
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
+    val streaming = chatHistory.lastOrNull()?.type == "PARTIAL"
+    val showThinking = isThinking && !streaming
 
-    LaunchedEffect(chatHistory.size, isThinking) {
+    LaunchedEffect(chatHistory.size, showThinking) {
         if (chatHistory.isNotEmpty()) {
-            listState.animateScrollToItem(chatHistory.size - 1 + if (isThinking) 1 else 0)
+            // Never pull the reader away from an earlier answer when generation completes.
+            if (chatHistory.last().sender == "USER" || !listState.canScrollForward) {
+                listState.animateScrollToItem(chatHistory.size - 1 + if (showThinking) 1 else 0)
+            }
         }
     }
 
@@ -69,7 +74,7 @@ internal fun ChatFeed(
             }
         }
 
-        if (isThinking) {
+        if (showThinking) {
             item {
                 ThinkingIndicator()
             }
@@ -91,7 +96,7 @@ private fun UserMessageBubble(msg: JarvisMessage) {
                 .widthIn(max = 290.dp)
                 .clip(RoundedCornerShape(18.dp))
                 .background(scheme.surfaceVariant)
-                .padding(horizontal = 10.dp, vertical = 10.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             val bitmap = remember(msg.image) {
                 msg.image?.let { payload -> runCatching {
@@ -113,8 +118,7 @@ private fun UserMessageBubble(msg: JarvisMessage) {
             Text(
                 msg.text,
                 color = scheme.onSurface,
-                fontSize = 14.sp,
-                lineHeight = 20.sp
+                style = MaterialTheme.typography.bodyLarge
             )
         }
     }
@@ -137,20 +141,6 @@ private fun JarvisMessageBubble(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Start
     ) {
-        // Mini Avatar
-        Box(
-            modifier = Modifier
-                .padding(top = 2.dp)
-                .size(24.dp)
-                .clip(CircleShape)
-                .background(scheme.surfaceVariant),
-            contentAlignment = Alignment.Center
-        ) {
-            JarvisArcReactor(size = 18.dp)
-        }
-
-        Spacer(Modifier.width(12.dp))
-
         Column(modifier = Modifier.weight(1f)) {
             // Header
             Row(
@@ -158,17 +148,17 @@ private fun JarvisMessageBubble(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    "JARVIS",
+                    "Jarvis",
                     color = scheme.onSurface,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
+                    style = MaterialTheme.typography.titleMedium
                 )
                 Text(
                     when {
                         msg.type == "ERROR" -> "Couldn't finish"
+                        msg.type == "PARTIAL" -> "Writing…"
                         msg.sender.contains("On-device", true) -> "On your phone"
                         msg.sender.contains("Local tool", true) -> "Local tool"
-                        else -> "PC / server"
+                        else -> "PC"
                     },
                     color = scheme.onSurfaceVariant,
                     fontSize = 11.sp
@@ -180,7 +170,7 @@ private fun JarvisMessageBubble(
             // Body text
             SelectionContainer {
                 Text(
-                    answer,
+                    remember(answer) { formatReplyText(answer) },
                     color = if (msg.type == "ERROR") scheme.error else scheme.onSurface,
                     fontSize = 16.sp,
                     lineHeight = 25.sp
@@ -312,14 +302,14 @@ private fun JarvisMessageBubble(
             Spacer(Modifier.height(8.dp))
 
             // Action Toolbar (Copy, Speak, Timestamp)
-            Row(
+            if (msg.type != "PARTIAL") Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(4.dp))
-                        .clickable(onClick = onCopy)
+                        .clickable(enabled = msg.type != "PARTIAL", onClick = onCopy)
                         .heightIn(min = 48.dp)
                         .padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -332,7 +322,7 @@ private fun JarvisMessageBubble(
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(4.dp))
-                        .clickable(onClick = onSpeak)
+                        .clickable(enabled = msg.type != "PARTIAL", onClick = onSpeak)
                         .heightIn(min = 48.dp)
                         .padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically

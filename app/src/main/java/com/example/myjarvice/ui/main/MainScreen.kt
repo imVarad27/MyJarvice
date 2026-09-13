@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.example.myjarvice.ui.inbox.RememberInboxScreen
@@ -95,6 +97,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.example.myjarvice.data.ChatSession
+import com.example.myjarvice.data.ConnectionStatus
 import com.example.myjarvice.data.FileTransferManager
 import com.example.myjarvice.data.ImageUnderstanding
 import com.example.myjarvice.data.PhotoAttachment
@@ -108,12 +111,12 @@ import com.example.myjarvice.ui.icons.IconDocument
 import com.example.myjarvice.ui.icons.IconMessage
 import com.example.myjarvice.ui.icons.IconPlus
 import com.example.myjarvice.ui.icons.IconSettings
+import com.example.myjarvice.wake.WakeEvents
 import com.example.myjarvice.ui.icons.IconSparkles
 import com.example.myjarvice.ui.icons.IconTrash
 import com.example.myjarvice.ui.voice.VoiceInfoDialog
 import com.example.myjarvice.ui.voice.VoiceModeScreen
 import com.example.myjarvice.ui.voice.VoicePickerDialog
-import com.example.myjarvice.wake.WakeWordService
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.Calendar
@@ -138,6 +141,9 @@ fun MainScreen(
     val savedSessions by viewModel.savedSessions.collectAsStateWithLifecycle()
     val isSpeaking by viewModel.isSpeaking.collectAsStateWithLifecycle()
     val isListening by viewModel.isListening.collectAsStateWithLifecycle()
+    val smartMode by viewModel.smartMode.collectAsStateWithLifecycle()
+    val liveTranscript by viewModel.liveTranscript.collectAsStateWithLifecycle()
+    val recognitionStatus by viewModel.recognitionStatus.collectAsStateWithLifecycle()
     val serverIp by viewModel.serverIp.collectAsStateWithLifecycle()
     val serverToken by viewModel.serverToken.collectAsStateWithLifecycle()
     val pendingAction by viewModel.pendingAction.collectAsStateWithLifecycle()
@@ -154,13 +160,18 @@ fun MainScreen(
     val coroutineScope = rememberCoroutineScope()
 
     val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(viewModel) {
+        WakeEvents.voiceTrigger.collect { triggered ->
+            if (triggered) {
+                WakeEvents.voiceTrigger.value = false
+                viewModel.enterVoiceMode()
+            }
+        }
+    }
     DisposableEffect(lifecycleOwner) {
-        WakeWordService.stop(context.applicationContext)
-
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> {
-                    WakeWordService.stop(context.applicationContext)
                     viewModel.refreshPreferences()
                 }
                 Lifecycle.Event.ON_STOP -> {
@@ -175,6 +186,7 @@ fun MainScreen(
 
     var textInput by rememberSaveable { mutableStateOf("") }
     var showIpDialog by remember { mutableStateOf(false) }
+    var showResponseModes by remember { mutableStateOf(false) }
     var showVoiceInfo by remember { mutableStateOf(false) }
     var showVoicePicker by remember { mutableStateOf(false) }
     var showToolsMenu by remember { mutableStateOf(false) }
@@ -349,6 +361,15 @@ fun MainScreen(
             onDismiss = { showIpDialog = false }
         )
     }
+    if (showResponseModes) {
+        ResponseModeSheet(mode = smartMode, connection = connectionStatus, hasLocalModel = viewModel.hasOnDeviceModel(),
+            onSelect = {
+                if (!isThinking) { viewModel.selectSmartMode(it); showResponseModes = false }
+                else Toast.makeText(context, "Wait for the current reply before changing modes.", Toast.LENGTH_SHORT).show()
+            },
+            onConnect = { showResponseModes = false; showIpDialog = true },
+            onDismiss = { showResponseModes = false })
+    }
 
     val currentPendingEmail = pendingEmail
     if (currentPendingEmail != null) {
@@ -434,8 +455,9 @@ fun MainScreen(
                 topBar = {
                     ChatTopBar(
                         connectionStatus = connectionStatus,
+                        mode = smartMode,
                         onOpenDrawer = { coroutineScope.launch { drawerState.open() } },
-                        onStatusClick = { showIpDialog = true },
+                        onStatusClick = { showResponseModes = true },
                         onNewChat = {
                             if (!isThinking) { viewModel.startNewChat(); textInput = ""; attachedPhoto = null; attachedFileName = null; attachedFileContent = null }
                             else Toast.makeText(context, "Wait for this reply before starting a new conversation.", Toast.LENGTH_SHORT).show()
@@ -451,12 +473,6 @@ fun MainScreen(
                         .imePadding()
                 ) {
                     // Content Area: Empty Hero OR Active Chat Feed
-                    Text(
-                        text = responseRoute,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = scheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
-                    )
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -464,6 +480,7 @@ fun MainScreen(
                     ) {
                         if (chatHistory.isEmpty()) {
                             EmptyChatHero(
+                                pcAvailable = connectionStatus == ConnectionStatus.CONNECTED && smartMode != com.example.myjarvice.data.SmartMode.FAST_ON_DEVICE,
                                 onPromptSelected = { prompt ->
                                     textInput = prompt
                                 }
@@ -554,6 +571,7 @@ fun MainScreen(
 
                     // Floating Bottom Input Bar
                     ChatComposer(
+                        pcConnected = connectionStatus == ConnectionStatus.CONNECTED && smartMode != com.example.myjarvice.data.SmartMode.FAST_ON_DEVICE,
                         textInput = textInput,
                         onTextChange = { textInput = it.take(4000) },
                         canSendAttachment = attachedFileContent != null || attachedPhoto != null,
@@ -622,6 +640,8 @@ fun MainScreen(
                 exit = fadeOut(animationSpec = tween(180))
             ) {
                 VoiceModeScreen(
+                    liveTranscript = liveTranscript,
+                    recognitionStatus = recognitionStatus,
                     isListening = isListening,
                     isSpeaking = isSpeaking,
                     isThinking = isThinking,
@@ -655,6 +675,13 @@ private fun HistoryDrawerContent(
     onOpenSettings: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
+    var historyQuery by rememberSaveable { mutableStateOf("") }
+    val filteredSessions = remember(savedSessions, historyQuery) {
+        savedSessions.filter { session ->
+            historyQuery.isBlank() || session.title.contains(historyQuery.trim(), ignoreCase = true) ||
+                session.messages.any { it.text.contains(historyQuery.trim(), ignoreCase = true) }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -687,16 +714,22 @@ private fun HistoryDrawerContent(
         }
 
         Spacer(Modifier.height(18.dp))
+        OutlinedTextField(value = historyQuery, onValueChange = { historyQuery = it },
+            placeholder = { Text("Search conversations", style = MaterialTheme.typography.bodyMedium) }, singleLine = true,
+            shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth(),
+            trailingIcon = if (historyQuery.isNotEmpty()) ({
+                ChatIconButton("Clear conversation search", { historyQuery = "" }) { Text("×") }
+            }) else null)
 
         Text(
-            "Recent",
+            if (historyQuery.isBlank()) "Recent conversations" else "${filteredSessions.size} results",
             color = scheme.onSurfaceVariant,
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
 
-        if (savedSessions.isEmpty()) {
+        if (filteredSessions.isEmpty()) {
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -704,8 +737,8 @@ private fun HistoryDrawerContent(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    "No conversation history",
-                    color = scheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    if (historyQuery.isBlank()) "Your conversations will appear here" else "No conversations match your search",
+                    color = scheme.onSurfaceVariant,
                     fontSize = 13.sp
                 )
             }
@@ -716,7 +749,7 @@ private fun HistoryDrawerContent(
                     .fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                items(savedSessions, key = { it.id }) { session ->
+                items(filteredSessions, key = { it.id }) { session ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -792,7 +825,8 @@ private fun HistoryDrawerContent(
  */
 @Composable
 private fun EmptyChatHero(
-    onPromptSelected: (String) -> Unit
+    onPromptSelected: (String) -> Unit,
+    pcAvailable: Boolean = false
 ) {
     val scheme = MaterialTheme.colorScheme
     val greeting = remember {
@@ -809,61 +843,52 @@ private fun EmptyChatHero(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.Center
     ) {
-        JarvisArcReactor(
-            size = 72.dp,
-            isListening = false,
-            isSpeaking = false
-        )
-
-        Spacer(Modifier.height(24.dp))
-
         Text(
             greeting,
-            color = scheme.onBackground,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center
+            color = scheme.onSurfaceVariant,
+            style = MaterialTheme.typography.titleMedium
         )
 
         Spacer(Modifier.height(6.dp))
 
         Text(
-            "What's on your mind?",
-            color = scheme.onSurfaceVariant,
-            fontSize = 14.sp,
-            textAlign = TextAlign.Center
+            "A little help.\nA clearer day.",
+            color = scheme.onBackground,
+            style = MaterialTheme.typography.displaySmall
         )
+        Text("Ask, plan, or pick up a thought.", color = scheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp))
 
         Spacer(Modifier.height(28.dp))
 
         // Professional 2x2 Suggestion Cards
         val promptCards = listOf(
             PromptCardItem(
-                title = "Talk it through",
-                desc = "Make a little space to think",
-                prompt = "I have a lot on my mind. Help me figure out where to start.",
-                icon = { IconSparkles(tint = ArcGold, size = 18.dp) }
+                title = if (pcAvailable) "Plan my day" else "Make a plan",
+                desc = if (pcAvailable) "Your tasks & reminders" else "Break a goal into steps",
+                prompt = if (pcAvailable) "plan my day" else "Help me make a realistic plan for today. Ask what I need to get done first.",
+                icon = { IconSparkles(tint = scheme.primary, size = 18.dp) }
             ),
             PromptCardItem(
-                title = "Make it simple",
-                desc = "An explanation that makes sense",
+                title = "Explain simply",
+                desc = "Understand something new",
                 prompt = "Explain how a phone runs an AI model, using a simple example.",
-                icon = { IconActivity(tint = Color(0xFF60A5FA), size = 18.dp) }
+                icon = { IconActivity(tint = scheme.primary, size = 18.dp) }
             ),
             PromptCardItem(
-                title = "Quick calculation",
-                desc = "Accurate, right on your phone",
-                prompt = "Calculate (18 + 7) * 4",
+                title = "Help me write",
+                desc = "Find the right words",
+                prompt = "Help me write a clear, friendly message. Ask who it's for and what I want to say.",
                 icon = { IconDocument(tint = scheme.primary, size = 18.dp) }
             ),
             PromptCardItem(
-                title = "Your memories",
-                desc = "Review what you've saved",
+                title = "My memory",
+                desc = "Review saved preferences",
                 prompt = "Show memories",
-                icon = { IconDocument(tint = Color(0xFF34D399), size = 18.dp) }
+                icon = { IconDocument(tint = scheme.primary, size = 18.dp) }
             )
         )
 
@@ -875,14 +900,14 @@ private fun EmptyChatHero(
             val columns = if (androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.2f) 1 else 2
             promptCards.chunked(columns).forEach { rowItems ->
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     rowItems.forEach { item ->
                         PromptSuggestionCard(
                             item = item,
                             onClick = { onPromptSelected(item.prompt) },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f).fillMaxHeight()
                         )
                     }
                 }
@@ -909,7 +934,7 @@ private fun PromptSuggestionCard(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(scheme.surface)
+            .background(scheme.surfaceContainerLow)
             .border(1.dp, scheme.outline.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
             .padding(14.dp)
@@ -929,16 +954,14 @@ private fun PromptSuggestionCard(
         Text(
             item.title,
             color = scheme.onSurface,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold
+            style = MaterialTheme.typography.titleMedium
         )
         Spacer(Modifier.height(2.dp))
         Text(
             item.desc,
             color = scheme.onSurfaceVariant,
-            fontSize = 11.sp,
-            lineHeight = 15.sp,
-            maxLines = 2,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 3,
             overflow = TextOverflow.Ellipsis
         )
     }

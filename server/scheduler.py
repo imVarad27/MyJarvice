@@ -162,7 +162,7 @@ def format_reminders_summary() -> str:
     """Formats active reminders into spoken text."""
     reminders = get_active_reminders()
     if not reminders:
-        return "You have no pending reminders or scheduled tasks on your agenda, Sir."
+        return "You have no pending reminders."
 
     now = datetime.datetime.now()
     lines = [f"You have {len(reminders)} scheduled reminder{'s' if len(reminders) > 1 else ''}:"]

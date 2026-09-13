@@ -1,6 +1,10 @@
 package com.example.myjarvice.ui.settings
 
 import android.os.Build
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import com.example.myjarvice.wake.WakeEvents
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -89,6 +93,7 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val settingsStore = remember { SettingsStore(context) }
+    val wakeStatus by WakeEvents.status.collectAsState()
     val speechManager = remember { SpeechManager(context) }
     val availableVoices by speechManager.voices.collectAsState()
     DisposableEffect(speechManager) { onDispose { speechManager.shutdown() } }
@@ -204,7 +209,7 @@ fun SettingsScreen(
         // 1. APPEARANCE & THEME
         // ==========================================
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            SettingsSection("Appearance", initiallyExpanded = true) {
+            SettingsSection("Appearance", initiallyExpanded = false) {
 
 
                 SettingsCard {
@@ -406,7 +411,7 @@ fun SettingsScreen(
                     ) {
                         Column(Modifier.weight(1f).padding(end = 12.dp)) {
                             Text("Listen for Hey Jarvis", color = scheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            Text("Hands-free background detection", color = scheme.onSurfaceVariant, fontSize = 12.sp)
+                            Text(if (wakeEnabled) wakeStatus else "Off • enable to set up", color = scheme.onSurfaceVariant, fontSize = 12.sp)
                         }
                         Switch(
                             checked = wakeEnabled,
@@ -416,6 +421,12 @@ fun SettingsScreen(
                     }
 
                     Spacer(Modifier.height(14.dp))
+                    Text("First setup downloads a 40 MB English wake model. Wake detection stays on this phone and uses the microphone and battery while enabled. Anyone saying the phrase can wake Jarvis.", color = scheme.onSurfaceVariant, fontSize = 12.sp)
+                    Text("Say ‘Hey Jarvis’, pause for the voice screen, then speak. From other apps, allow pop-up access below or tap the Jarvis notification. Unlocking your phone may still be required.", color = scheme.onSurfaceVariant, fontSize = 12.sp)
+                    Button(onClick = {
+                        runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))) }
+                            .onFailure { Toast.makeText(context, "Open Android Settings → Apps → Jarvis → Display over other apps", Toast.LENGTH_LONG).show() }
+                    }) { Text("Allow wake from other apps") }
                     HorizontalDivider(color = scheme.outline.copy(alpha = 0.2f))
                     Spacer(Modifier.height(12.dp))
 
@@ -426,16 +437,16 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                            Text("Voice Match Verification", color = scheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text("Experimental voice profile", color = scheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                             Text(
-                                if (isEnrolled) "Profile Enrolled (Active)" else "Profile Not Calibrated",
+                                "Not used to authenticate wake commands",
                                 color = if (isEnrolled) scheme.primary else scheme.onSurfaceVariant,
                                 fontSize = 12.sp
                             )
                         }
                         Switch(
-                            checked = voiceMatchEnabled && isEnrolled,
-                            enabled = isEnrolled,
+                            checked = false,
+                            enabled = false,
                             onCheckedChange = {
                                 voiceMatchEnabled = it
                                 settingsStore.voiceMatchEnabled = it
@@ -449,6 +460,7 @@ fun SettingsScreen(
                     // Calibration Button
                     Button(
                         onClick = onOpenVoiceMatch,
+                        enabled = false, // Wake detection is not speaker authentication.
                         colors = ButtonDefaults.buttonColors(containerColor = scheme.surfaceVariant),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier
@@ -758,13 +770,26 @@ fun SettingsScreen(
 @Composable
 private fun SettingsSection(title: String, initiallyExpanded: Boolean = false, content: @Composable () -> Unit) {
     var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
+    val subtitle = when (title) {
+        "Appearance" -> "Theme and display"
+        "Voice & speech" -> "Voice, pace and spoken replies"
+        "Hands-free voice" -> "Hey Jarvis and microphone access"
+        "AI & personal knowledge" -> "Models, preferences and local memory"
+        "PC connection" -> "Pair your computer"
+        "Data & storage" -> "Manage local files"
+        else -> "App information"
+    }
     androidx.compose.material3.Surface(
         onClick = { expanded = !expanded },
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         shape = RoundedCornerShape(12.dp)
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                if (!expanded) Text(subtitle, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+            }
             Text(if (expanded) "−" else "+", style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.semantics { contentDescription = if (expanded) "Collapse $title" else "Expand $title" })
         }

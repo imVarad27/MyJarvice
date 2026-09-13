@@ -24,6 +24,9 @@ import com.example.myjarvice.data.PhotoAttachment
 import com.example.myjarvice.data.VoiceOption
 import com.example.myjarvice.wake.WakeEvents
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -47,6 +50,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     private val onDeviceEngine = OnDeviceInferenceEngine(application.applicationContext)
     private val knowledgeStore = LocalKnowledgeStore(application.applicationContext)
     private var localRequestActive = false
+    private var listeningJob: Job? = null
+    private val preparingMic = MutableStateFlow(false)
 
     val connectionStatus: StateFlow<ConnectionStatus> = wsClient.connectionStatus
     val chatHistory: StateFlow<List<JarvisMessage>> = wsClient.chatHistory
@@ -55,10 +60,20 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val isListening: StateFlow<Boolean> = speechManager.isListening
+    val liveTranscript = speechManager.recognizedText
+    val recognitionStatus = speechManager.recognitionStatus
 
 
 
     private val settings = SettingsStore(application.applicationContext)
+    private val _smartMode = MutableStateFlow(settings.smartMode)
+    val smartMode = _smartMode.asStateFlow()
+    fun selectSmartMode(mode: SmartMode) {
+        if (_isThinking.value) return
+        settings.smartMode = mode
+        _smartMode.value = mode
+        refreshPreferences()
+    }
 
     // Restored from disk so the link comes back by itself on every launch.
     private val _serverIp = MutableStateFlow(settings.serverIp)
@@ -103,6 +118,11 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val selectedVoiceId: StateFlow<String> = speechManager.selectedVoiceId
 
     init {
+        viewModelScope.launch {
+            combine(isSpeaking, isListening, _voiceModeActive, _isThinking, preparingMic) { speaking, listening, voice, thinking, preparing ->
+                speaking || listening || voice || thinking || preparing
+            }.collect { WakeEvents.microphoneBusy.value = it }
+        }
         // Load existing session history into sidebar, but start with a clean new session on start
         _savedSessions.value = historyStore.loadAllSessions()
 
@@ -113,7 +133,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         // Persist messages whenever chat history changes
         viewModelScope.launch {
             wsClient.chatHistory.collect { messages ->
-                if (messages.isNotEmpty()) {
+                if (messages.isNotEmpty() && messages.none { it.type == "PARTIAL" }) {
                     val userMsg = messages.firstOrNull { it.sender == "USER" }
                     val rawTitle = userMsg?.text ?: "Conversation"
                     val cleanTitle = if (rawTitle.length > 38) rawTitle.take(38) + "..." else rawTitle
@@ -165,16 +185,6 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         }
 
 
-        // When opened by the "Jarvis" wake word, drop straight into voice mode.
-        viewModelScope.launch {
-            WakeEvents.voiceTrigger.collect { triggered ->
-                if (triggered) {
-                    WakeEvents.voiceTrigger.value = false
-                    enterVoiceMode()
-                }
-            }
-        }
-
         // Hands-free turn taking: once JARVICE finishes speaking, listen again.
         viewModelScope.launch {
             isSpeaking.collect { speaking ->
@@ -216,31 +226,41 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     /** Single entry point for listening, so every path re-arms the same way. */
     private fun beginListening() {
-        speechManager.startListening(
-            onResult = { voiceText -> sendQuery(voiceText) },
-            onNoResult = {
-                viewModelScope.launch {
-                    delay(RELISTEN_DELAY_MS)
-                    if (_voiceModeActive.value && !_micMuted.value &&
-                        !isSpeaking.value && !isListening.value && !_isThinking.value
-                    ) {
-                        beginListening()
+        if (listeningJob?.isActive == true || isListening.value) return
+        preparingMic.value = true
+        WakeEvents.microphoneBusy.value = true
+        listeningJob = viewModelScope.launch {
+            try {
+                if (withTimeoutOrNull(1500) { WakeEvents.captureReleased.first { it } } != true) return@launch
+                speechManager.startListening(
+                    onReady = { viewModelScope.launch { JarvisSoundFx.playWakeChime() } },
+                    onResult = { voiceText -> sendQuery(voiceText) },
+                    onNoResult = {
+                        viewModelScope.launch {
+                            delay(RELISTEN_DELAY_MS)
+                            if (_voiceModeActive.value && !_micMuted.value &&
+                                !isSpeaking.value && !isListening.value && !_isThinking.value
+                            ) {
+                                beginListening()
+                            }
+                        }
                     }
-                }
-            }
-        )
+                )
+            } finally { preparingMic.value = false }
+        }
     }
 
     fun enterVoiceMode() {
         _voiceModeActive.value = true
         _micMuted.value = false
-        viewModelScope.launch { JarvisSoundFx.playWakeChime() }
         if (!isListening.value && !isSpeaking.value) {
             beginListening()
         }
     }
 
     fun exitVoiceMode() {
+        listeningJob?.cancel()
+        preparingMic.value = false
         _voiceModeActive.value = false
         _isThinking.value = false
         neuralAudioPlayer.stop()
@@ -252,6 +272,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         val muted = !_micMuted.value
         _micMuted.value = muted
         if (muted) {
+            listeningJob?.cancel()
+            preparingMic.value = false
             speechManager.stopListening()
         } else if (!isSpeaking.value) {
             beginListening()
@@ -290,6 +312,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun refreshPreferences() {
+        _smartMode.value = settings.smartMode
         if (settings.serverIp != _serverIp.value || settings.serverToken != _serverToken.value) {
             if (settings.serverIp.isNotBlank()) updateServerConnection(settings.serverIp, settings.serverToken)
             else {
@@ -363,7 +386,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 deviceContext = ctx,
                 imageBase64 = photo?.base64,
                 imageMimeType = photo?.mimeType,
-                imageOcrText = photo?.ocrText
+                imageOcrText = photo?.ocrText,
+                voiceMode = _voiceModeActive.value,
+                speakResponse = settings.autoSpeakReplies || _voiceModeActive.value
             )
             return
         }
@@ -462,11 +487,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         super.onCleared()
         wsClient.disconnect()
         speechManager.shutdown()
+        neuralAudioPlayer.stop()
+        WakeEvents.microphoneBusy.value = false
         onDeviceEngine.close()
     }
 
     private companion object {
-        const val RELISTEN_DELAY_MS = 700L
+        const val RELISTEN_DELAY_MS = 1500L
 
         fun timestampNow(): String = java.text.SimpleDateFormat(
             "yyyy-MM-dd'T'HH:mm:ss",
@@ -474,7 +501,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         ).format(java.util.Date())
     }
 
-    private fun hasOnDeviceModel(): Boolean =
+    fun hasOnDeviceModel(): Boolean =
         File(settings.onDeviceModelPath).isFile ||
             File(getApplication<Application>().filesDir, "models/jarvis-on-device.litertlm").isFile
 }

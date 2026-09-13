@@ -23,7 +23,9 @@ __pycache__/
 server/jarvice.db
 server/jarvis.db
 server/rag_store.db
+server/voice_cache/
 *.db
+
 
 
 

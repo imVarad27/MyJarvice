@@ -173,4 +173,6 @@ def pre_cache_common_phrases():
                     pass
         logger.info("Neural voice warm-up complete for %d common phrases.", len(common_phrases))
 
-    asyncio.create_task(_warmup())
+    import threading
+    threading.Thread(target=lambda: asyncio.run(_warmup()), daemon=True).start()
+

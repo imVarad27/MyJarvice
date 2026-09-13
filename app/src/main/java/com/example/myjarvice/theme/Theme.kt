@@ -13,7 +13,7 @@ import androidx.compose.ui.platform.LocalContext
 
 // --- Obsidian Dark (Google Gemini / ChatGPT standard) ---
 private val DarkColors = darkColorScheme(
-    primary = JarvisCyan,
+    primary = Color(0xFF8DCBC3),
     onPrimary = Color(0xFF082F49),
     primaryContainer = Color(0xFF123C54),
     onPrimaryContainer = Color(0xFFBCE9FF),
@@ -40,7 +40,7 @@ private val DarkColors = darkColorScheme(
 
 // --- True Black (AMOLED) ---
 private val AmoledColors = darkColorScheme(
-    primary = JarvisCyan,
+    primary = Color(0xFF8DCBC3),
     primaryContainer = Color(0xFF123C54),
     onPrimaryContainer = Color(0xFFBCE9FF),
     secondaryContainer = Color(0xFF202C38),
@@ -67,7 +67,7 @@ private val AmoledColors = darkColorScheme(
 
 // --- Refined Light (Gemini Light) ---
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF03699E),
+    primary = Color(0xFF27645F),
     primaryContainer = Color(0xFFDDEFFB),
     onPrimaryContainer = Color(0xFF10354E),
     secondaryContainer = Color(0xFFE3EBF4),
@@ -82,7 +82,7 @@ private val LightColors = lightColorScheme(
     onSecondary = Color.White,
     tertiary = Color(0xFFD97706),
     onTertiary = Color.White,
-    background = Color(0xFFF8F9FA),
+    background = Color(0xFFFAFAF7),
     onBackground = Color(0xFF1F1F1F),
     surface = Color(0xFFFFFFFF),
     onSurface = Color(0xFF1F1F1F),

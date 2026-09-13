@@ -13,6 +13,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.myjarvice.data.ConnectionStatus
+import com.example.myjarvice.data.SmartMode
 import com.example.myjarvice.ui.icons.*
 
 /** Shared, accessible touch target for the app's code-drawn icons. */
@@ -28,18 +29,20 @@ internal fun ChatTopBar(
     onOpenDrawer: () -> Unit,
     onStatusClick: () -> Unit,
     onNewChat: () -> Unit,
-    onOpenInbox: () -> Unit
+    onOpenInbox: () -> Unit,
+    mode: SmartMode = SmartMode.AUTO
 ) {
     val colors = MaterialTheme.colorScheme
-    Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         ChatIconButton("Open conversation history", onOpenDrawer) { IconMenu(tint = colors.onSurfaceVariant) }
-        TextButton(onClick = onStatusClick, modifier = Modifier.weight(1f)) {
+        TextButton(onClick = onStatusClick, modifier = Modifier.weight(1f).semantics { contentDescription = "Choose response mode and connection" }) {
             Column(Modifier.fillMaxWidth()) {
-                Text("Jarvis", style = MaterialTheme.typography.titleLarge, color = colors.onSurface)
-                Text(when (connectionStatus) {
-                    ConnectionStatus.CONNECTED -> "PC connected"
-                    ConnectionStatus.CONNECTING -> "Connecting to PC…"
-                    else -> "PC offline · Connection settings"
+                Text("Jarvis ⌄", style = MaterialTheme.typography.titleLarge, color = colors.onSurface)
+                Text(when {
+                    mode == SmartMode.FAST_ON_DEVICE -> "On this phone"
+                    connectionStatus == ConnectionStatus.CONNECTED -> "${if (mode == SmartMode.AUTO) "Auto · " else ""}PC connected"
+                    connectionStatus == ConnectionStatus.CONNECTING -> "Connecting…"
+                    else -> "${if (mode == SmartMode.AUTO) "Auto" else "PC"} · PC offline"
                 }, style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -69,18 +72,20 @@ internal fun ChatComposer(
     onOpenPcExplorer: () -> Unit,
     onSend: () -> Unit,
     onQuickVoice: () -> Unit,
-    onVoiceMode: () -> Unit
+    onVoiceMode: () -> Unit,
+    pcConnected: Boolean = true
 ) {
     val colors = MaterialTheme.colorScheme
     Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(24.dp), color = colors.surface,
+        shape = RoundedCornerShape(28.dp), color = colors.surfaceContainerLow,
         border = androidx.compose.foundation.BorderStroke(1.dp, colors.outlineVariant)) {
         Column(Modifier.padding(4.dp)) {
             OutlinedTextField(value = textInput, onValueChange = onTextChange,
                 placeholder = { Text(if (canSendAttachment) "Ask about your attachment…" else "Message Jarvis…") },
                 modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Message input" },
                 maxLines = 4,
-                supportingText = { if (textInput.length >= 3600) Text("${textInput.length}/4,000 characters") },
+                textStyle = MaterialTheme.typography.bodyLarge,
+                supportingText = if (textInput.length >= 3600) ({ Text("${textInput.length}/4,000 characters") }) else null,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
                     unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent))
@@ -96,8 +101,8 @@ internal fun ChatComposer(
                         IconSend(tint = if (isThinking) colors.onSurfaceVariant else colors.onPrimary)
                     }
                 } else {
-                    FilledTonalButton(onClick = onVoiceMode, enabled = !isThinking, contentPadding = PaddingValues(horizontal = 16.dp)) {
-                        IconVoiceWaveform(tint = colors.onSecondaryContainer, size = 18.dp)
+                    Button(onClick = onVoiceMode, enabled = !isThinking, contentPadding = PaddingValues(horizontal = 16.dp)) {
+                        IconVoiceWaveform(tint = colors.onPrimary, size = 18.dp)
                         Spacer(Modifier.width(8.dp)); Text("Voice")
                     }
                 }
@@ -115,11 +120,16 @@ internal fun ChatComposer(
                 ToolRow("Choose a photo", "Attach an image from your phone", onChoosePhoto)
                 ToolRow("Attach text document", "Text or Markdown, up to 8,000 characters", onAttachFile)
                 HorizontalDivider(Modifier.padding(vertical = 12.dp))
-                Text("PC tools", style = MaterialTheme.typography.titleSmall)
-                ToolRow("Send a file to PC", "Transfer to your configured host", onSendFileToPc)
-                ToolRow("Browse PC files", "Find a file on your connected computer", onOpenPcExplorer)
+                Text("Personal assistant", style = MaterialTheme.typography.titleSmall)
+                ToolRow("Plan my day", "Open tasks and reminders · PC required", { onToolSelected("plan my day") }, pcConnected)
+                ToolRow("My tasks", "Review saved tasks · PC required", { onToolSelected("show my tasks") }, pcConnected)
+                ToolRow("Saved memories", "Review facts stored on this phone", { onToolSelected("show memories") })
+                HorizontalDivider(Modifier.padding(vertical = 12.dp))
+                Text(if (pcConnected) "Connected PC" else "PC tools · connect your PC to use", style = MaterialTheme.typography.titleSmall)
+                ToolRow("Send a file to PC", "Transfer to your configured host", onSendFileToPc, pcConnected)
+                ToolRow("Browse PC files", "Find a file on your connected computer", onOpenPcExplorer, pcConnected)
                 var moreTools by remember { mutableStateOf(false) }
-                TextButton(onClick = { moreTools = !moreTools }) { Text(if (moreTools) "Fewer tools" else "More PC tools") }
+                TextButton(onClick = { moreTools = !moreTools }, enabled = pcConnected) { Text(if (moreTools) "Fewer tools" else "More PC tools") }
                 if (moreTools) {
                     listOf(
                         "Daily briefing" to "Give me my executive morning briefing.",
@@ -138,8 +148,8 @@ internal fun ChatComposer(
 }
 
 @Composable
-private fun ToolRow(title: String, subtitle: String, onClick: () -> Unit) {
-    Surface(onClick = onClick, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+private fun ToolRow(title: String, subtitle: String, onClick: () -> Unit, enabled: Boolean = true) {
+    Surface(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(vertical = 14.dp, horizontal = 8.dp)) {
             Text(title, style = MaterialTheme.typography.titleSmall)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

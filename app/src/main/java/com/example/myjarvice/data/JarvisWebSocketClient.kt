@@ -97,6 +97,20 @@ class JarvisWebSocketClient {
 
     private var serverIp = ""
     private var serverToken = ""
+    private val streamingReplies = mutableMapOf<String, Int>()
+    private var awaitingReply = false
+    private var replyTimeout: Job? = null
+
+    private fun finishInterruptedReply() {
+        if (!awaitingReply) return
+        awaitingReply = false
+        replyTimeout?.cancel()
+        val error = JarvisMessage("JARVIS", "The PC connection was interrupted before the reply finished. Please try again.", "ERROR")
+        val items = _chatHistory.value.map { if (it.type == "PARTIAL") it.copy(type = "ERROR", text = it.text + "\n\n[Reply interrupted]") else it }
+        streamingReplies.clear()
+        _chatHistory.value = items + error
+        _latestResponse.value = error
+    }
 
     fun connect(rawIpOrUrl: String = "", pairingToken: String = "") {
         keepConnected = true
@@ -137,7 +151,23 @@ class JarvisWebSocketClient {
                     Log.d("JarvisWS", "Message received: $text")
 
                     val msgType = obj.optString("type", "RESPONSE")
+                    if (msgType != "PARTIAL" && msgType != "REMINDER_ALERT") {
+                        awaitingReply = false
+                        replyTimeout?.cancel()
+                    }
                     val messageText = obj.optString("text", "")
+                    val replyId = obj.optString("reply_id", "")
+                    if (msgType == "PARTIAL") {
+                        if (replyId.isNotBlank()) {
+                            val partial = JarvisMessage(sender = sender, text = messageText, type = "PARTIAL")
+                            val items = _chatHistory.value.toMutableList()
+                            val index = streamingReplies[replyId]
+                            if (index != null && index in items.indices) items[index] = partial
+                            else { streamingReplies[replyId] = items.size; items.add(partial) }
+                            _chatHistory.value = items
+                        }
+                        return
+                    }
                     val ts = obj.optString("timestamp", "")
                     val imagePayload = if (obj.has("image") && !obj.isNull("image")) obj.getString("image") else null
 
@@ -192,13 +222,18 @@ class JarvisWebSocketClient {
 
 
                     _latestResponse.value = msg
-                    _chatHistory.value = _chatHistory.value + msg
+                    val partialIndex = streamingReplies.remove(replyId)
+                    val items = _chatHistory.value.toMutableList()
+                    if (partialIndex != null && partialIndex in items.indices) items[partialIndex] = msg
+                    else items.add(msg)
+                    _chatHistory.value = items
                 } catch (e: Exception) {
                     Log.e("JarvisWS", "Error parsing message: ${e.message}")
                 }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                finishInterruptedReply()
                 _connectionStatus.value = ConnectionStatus.ERROR
                 Log.e("JarvisWS", "WebSocket Connection Failed to $wsUrl: ${t.message}")
 
@@ -206,6 +241,7 @@ class JarvisWebSocketClient {
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                finishInterruptedReply()
                 _connectionStatus.value = ConnectionStatus.DISCONNECTED
                 Log.d("JarvisWS", "WebSocket Closed: $reason ($code)")
                 if (keepConnected) scheduleReconnect()
@@ -229,7 +265,9 @@ class JarvisWebSocketClient {
         deviceContext: Map<String, Any> = emptyMap(),
         imageBase64: String? = null,
         imageMimeType: String? = null,
-        imageOcrText: String? = null
+        imageOcrText: String? = null,
+        voiceMode: Boolean = false,
+        speakResponse: Boolean = false
     ) {
         val userMsg = JarvisMessage(
             sender = "USER",
@@ -241,6 +279,9 @@ class JarvisWebSocketClient {
         _chatHistory.value = _chatHistory.value + userMsg
 
         val payload = JSONObject().apply {
+            put("stream_response", true)
+            put("voice_mode", voiceMode)
+            put("speak_response", speakResponse)
             put("query", query)
             put("text", query)
             put("voice_id", voiceId)
@@ -253,8 +294,13 @@ class JarvisWebSocketClient {
 
 
 
+        awaitingReply = true
+        replyTimeout?.cancel()
+        replyTimeout = scope.launch { delay(150_000); if (awaitingReply) { finishInterruptedReply(); webSocket?.cancel() } }
         val sent = webSocket?.send(payload.toString()) ?: false
         if (!sent) {
+            awaitingReply = false
+            replyTimeout?.cancel()
             val offlineMsg = JarvisMessage(
                 sender = "JARVIS (Offline)",
                 text = "Cannot reach Host Server ($serverIp). Please ensure the Python server is running.",
@@ -302,15 +348,18 @@ class JarvisWebSocketClient {
     }
 
     fun clearChat() {
+        streamingReplies.clear()
         _chatHistory.value = emptyList()
         _latestResponse.value = null
     }
 
     fun setChatHistory(messages: List<JarvisMessage>) {
+        streamingReplies.clear()
         _chatHistory.value = messages
     }
 
     fun disconnect() {
+        finishInterruptedReply()
         keepConnected = false
         reconnectJob?.cancel()
         webSocket?.close(1000, "User disconnected")
