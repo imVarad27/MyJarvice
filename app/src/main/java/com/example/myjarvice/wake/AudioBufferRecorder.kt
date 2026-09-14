@@ -25,6 +25,7 @@ class AudioBufferRecorder(
     private val bufferSizeSamples = (sampleRate * bufferSeconds).toInt()
     private val ringBuffer = ShortArray(bufferSizeSamples)
     private var writeHead = 0
+    private var totalWritten = 0L
     private val bufferLock = Any()
 
     private var audioRecord: AudioRecord? = null
@@ -88,6 +89,7 @@ class AudioBufferRecorder(
                                 ringBuffer[writeHead] = chunk[i]
                                 writeHead = (writeHead + 1) % bufferSizeSamples
                             }
+                            totalWritten += read
                         }
 
                         // Calculate RMS Amplitude
@@ -113,7 +115,10 @@ class AudioBufferRecorder(
      * Retrieves the most recent [durationMs] milliseconds of audio from the ring buffer.
      */
     fun getRecentAudio(durationMs: Int = 2000): ShortArray {
-        val numSamples = (sampleRate * (durationMs / 1000.0f)).toInt()
+        val requestedSamples = (sampleRate * (durationMs / 1000.0f)).toInt()
+        val numSamples = synchronized(bufferLock) {
+            min(requestedSamples, min(bufferSizeSamples.toLong(), totalWritten).toInt())
+        }
         val result = ShortArray(numSamples)
 
         synchronized(bufferLock) {
@@ -200,6 +205,14 @@ class AudioBufferRecorder(
             Log.i(TAG, "AudioBufferRecorder stopped.")
         } catch (e: Exception) {
             Log.w(TAG, "Error stopping AudioRecord: ${e.message}")
+        }
+    }
+
+    fun clear() {
+        synchronized(bufferLock) {
+            ringBuffer.fill(0)
+            writeHead = 0
+            totalWritten = 0
         }
     }
 

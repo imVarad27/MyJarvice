@@ -50,6 +50,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -65,6 +66,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.myjarvice.data.SettingsStore
 import com.example.myjarvice.data.SmartMode
 import com.example.myjarvice.data.SpeechManager
@@ -120,6 +124,19 @@ fun SettingsScreen(
     var voiceMatchEnabled by remember { mutableStateOf(settingsStore.voiceMatchEnabled) }
     var voiceMatchThreshold by remember { mutableFloatStateOf(settingsStore.voiceMatchThreshold) }
     var isEnrolled by remember { mutableStateOf(settingsStore.isVoiceProfileEnrolled) }
+    val lastVoiceMatchScore by WakeEvents.lastVoiceMatchScore.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isEnrolled = settingsStore.isVoiceProfileEnrolled
+                voiceMatchEnabled = settingsStore.voiceMatchEnabled && isEnrolled
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     var showVoiceDropdown by remember { mutableStateOf(false) }
     var showPersonalityDropdown by remember { mutableStateOf(false) }
@@ -421,7 +438,14 @@ fun SettingsScreen(
                     }
 
                     Spacer(Modifier.height(14.dp))
-                    Text("First setup downloads a 40 MB English wake model. Wake detection stays on this phone and uses the microphone and battery while enabled. Anyone saying the phrase can wake Jarvis.", color = scheme.onSurfaceVariant, fontSize = 12.sp)
+                    Text(
+                        if (voiceMatchEnabled && isEnrolled)
+                            "Wake detection and voice matching stay on this phone. Jarvis opens hands-free only when the enrolled voice matches."
+                        else
+                            "First setup downloads a 40 MB English wake model. Wake detection stays on this phone and uses the microphone and battery while enabled. Anyone saying the phrase can wake Jarvis.",
+                        color = scheme.onSurfaceVariant,
+                        fontSize = 12.sp
+                    )
                     Text("Say ‘Hey Jarvis’, pause for the voice screen, then speak. From other apps, allow pop-up access below or tap the Jarvis notification. Unlocking your phone may still be required.", color = scheme.onSurfaceVariant, fontSize = 12.sp)
                     Button(onClick = {
                         runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))) }
@@ -430,23 +454,27 @@ fun SettingsScreen(
                     HorizontalDivider(color = scheme.outline.copy(alpha = 0.2f))
                     Spacer(Modifier.height(12.dp))
 
-                    // Voice Match Biometric
+                    // Personal voice profile
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                            Text("Experimental voice profile", color = scheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text("Personal voice profile", color = scheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                             Text(
-                                "Not used to authenticate wake commands",
+                                when {
+                                    !isEnrolled -> "Set up three voice samples"
+                                    voiceMatchEnabled -> "Used for hands-free wake protection"
+                                    else -> "Saved on this phone · protection is off"
+                                },
                                 color = if (isEnrolled) scheme.primary else scheme.onSurfaceVariant,
                                 fontSize = 12.sp
                             )
                         }
                         Switch(
-                            checked = false,
-                            enabled = false,
+                            checked = voiceMatchEnabled,
+                            enabled = isEnrolled,
                             onCheckedChange = {
                                 voiceMatchEnabled = it
                                 settingsStore.voiceMatchEnabled = it
@@ -460,7 +488,6 @@ fun SettingsScreen(
                     // Calibration Button
                     Button(
                         onClick = onOpenVoiceMatch,
-                        enabled = false, // Wake detection is not speaker authentication.
                         colors = ButtonDefaults.buttonColors(containerColor = scheme.surfaceVariant),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier
@@ -470,7 +497,7 @@ fun SettingsScreen(
                         IconMicrophone(tint = scheme.primary, size = 16.dp)
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            if (isEnrolled) "Retrain Voice Profile" else "Calibrate Voice Profile (3 Steps)",
+                            if (isEnrolled) "Retrain voice profile" else "Set up voice profile",
                             color = scheme.primary,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 13.sp
@@ -505,6 +532,25 @@ fun SettingsScreen(
                             steps = 5,
                             colors = SliderDefaults.colors(thumbColor = scheme.primary, activeTrackColor = scheme.primary)
                         )
+                        Text(
+                            lastVoiceMatchScore?.let { "Last wake match: ${(it * 100).toInt()}%" }
+                                ?: "No wake attempts checked yet",
+                            color = scheme.onSurfaceVariant,
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            "Voice matching improves privacy, but it can make mistakes and is not a replacement for your phone lock or Android biometrics.",
+                            color = scheme.onSurfaceVariant,
+                            fontSize = 12.sp
+                        )
+                        TextButton(onClick = {
+                            settingsStore.clearVoiceProfile()
+                            voiceMatchEnabled = false
+                            isEnrolled = false
+                            WakeEvents.lastVoiceMatchScore.value = null
+                        }) {
+                            Text("Delete voice profile", color = scheme.error)
+                        }
                     }
                 }
 

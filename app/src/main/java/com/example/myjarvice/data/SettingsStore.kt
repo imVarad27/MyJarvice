@@ -129,12 +129,16 @@ class SettingsStore(context: Context) {
     val isVoiceProfileEnrolled: Boolean
         get() = prefs.getString(KEY_MASTER_VOICEPRINT, "").orEmpty().isNotBlank()
 
-    fun saveVoiceProfile(embedding: FloatArray) {
+    fun saveVoiceProfile(embedding: FloatArray): Boolean {
+        if (embedding.size != com.example.myjarvice.wake.VoiceprintMatcher.EMBEDDING_DIM ||
+            embedding.any { !it.isFinite() } || embedding.all { kotlin.math.abs(it) < 1e-8f }
+        ) return false
         val encoded = embedding.joinToString(",")
         prefs.edit()
             .putString(KEY_MASTER_VOICEPRINT, encoded)
             .putBoolean(KEY_VOICE_MATCH_ENABLED, true)
             .apply()
+        return true
     }
 
     fun getVoiceProfile(): FloatArray? {
@@ -143,6 +147,10 @@ class SettingsStore(context: Context) {
         return try {
             val parts = raw.split(",")
             FloatArray(parts.size) { parts[it].toFloat() }
+                .takeIf { profile ->
+                    profile.size == com.example.myjarvice.wake.VoiceprintMatcher.EMBEDDING_DIM &&
+                        profile.all { it.isFinite() }
+                }
         } catch (e: Exception) {
             null
         }

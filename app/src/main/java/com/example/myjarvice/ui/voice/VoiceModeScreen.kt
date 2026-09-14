@@ -72,7 +72,8 @@ fun VoiceModeScreen(
     onChangeVoice: () -> Unit,
     modifier: Modifier = Modifier,
     liveTranscript: String = "",
-    recognitionStatus: String = ""
+    recognitionStatus: String = "",
+    ownerVerified: Boolean = false
 ) {
     BackHandler(enabled = true) { onClose() }
     val colors = MaterialTheme.colorScheme
@@ -92,7 +93,12 @@ fun VoiceModeScreen(
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Voice", style = MaterialTheme.typography.titleMedium, color = colors.onSurface, modifier = Modifier.weight(1f))
+            Column(Modifier.weight(1f)) {
+                Text("Voice", style = MaterialTheme.typography.titleMedium, color = colors.onSurface)
+                if (ownerVerified) {
+                    Text("Owner voice recognized", style = MaterialTheme.typography.labelSmall, color = colors.primary)
+                }
+            }
             TopIconButton(onClick = onInfo, contentDescription = "Session info") { drawInfoIcon(it) }
             Spacer(Modifier.width(18.dp))
             TopIconButton(onClick = onShare, contentDescription = "Share transcript") { drawShareIcon(it) }

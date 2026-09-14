@@ -18,11 +18,9 @@ import kotlinx.coroutines.*
 import org.json.JSONObject
 import org.vosk.Model
 import org.vosk.Recognizer
-import org.vosk.android.RecognitionListener
-import org.vosk.android.SpeechService
 
 /** One offline recorder, explicitly started while the app is visible. */
-class WakeWordService : Service(), RecognitionListener {
+class WakeWordService : Service() {
     companion object {
         const val ACTION_START = "ACTION_START_WAKE_WORD"
         const val ACTION_STOP = "ACTION_STOP_WAKE_WORD"
@@ -49,8 +47,9 @@ class WakeWordService : Service(), RecognitionListener {
     private var initialization: Job? = null
     private var model: Model? = null
     private var recognizer: Recognizer? = null
-    private var speech: SpeechService? = null
+    private var recorder: AudioBufferRecorder? = null
     private var capturing = false
+    @Volatile private var matchInProgress = false
     private var promoted = false
     private var cooldownUntil = 0L
     override fun onCreate() {
@@ -85,7 +84,7 @@ class WakeWordService : Service(), RecognitionListener {
                     loaded = null
                 } finally { loaded?.close() }
                 recognizer = Recognizer(model, 16000f, "[\"hey jarvis\", \"hi jarvis\", \"okay jarvis\", \"ok jarvis\", \"[unk]\"]")
-                speech = SpeechService(recognizer, 16000f)
+                recorder = AudioBufferRecorder(sampleRate = 16000, bufferSeconds = 3.0f)
                 WakeEvents.microphoneBusy.collect { busy -> if (busy) pauseCapture() else resumeCapture() }
             } catch (e: CancellationException) { throw e
             } catch (e: Exception) {
@@ -97,38 +96,87 @@ class WakeWordService : Service(), RecognitionListener {
         return START_NOT_STICKY
     }
     private fun pauseCapture() {
-        if (capturing) speech?.stop()
+        if (capturing) recorder?.stop()
         capturing = false
         WakeEvents.captureReleased.value = true
         updateStatus("Paused while Jarvis is in use")
     }
     private fun resumeCapture() {
-        if (!requested || WakeEvents.microphoneBusy.value || capturing || SystemClock.elapsedRealtime() < cooldownUntil) return
+        if (!requested || WakeEvents.microphoneBusy.value || capturing || matchInProgress || SystemClock.elapsedRealtime() < cooldownUntil) return
         recognizer?.reset()
-        capturing = speech?.startListening(this) == true
+        recorder?.clear()
+        capturing = recorder?.start { audio, length, _ ->
+            val localRecognizer = recognizer ?: return@start
+            val result = if (localRecognizer.acceptWaveForm(audio, length)) {
+                localRecognizer.result
+            } else {
+                localRecognizer.partialResult
+            }
+            accept(result)
+        } == true
         WakeEvents.captureReleased.value = !capturing
         updateStatus(if (capturing) "Listening for Hey Jarvis" else "Microphone unavailable. Toggle off and on to retry.")
     }
     private fun accept(hypothesis: String?) {
         val data = runCatching { JSONObject(hypothesis.orEmpty()) }.getOrNull() ?: return
         val text = data.optString("partial", data.optString("text"))
-        if (!capturing || WakeEvents.microphoneBusy.value || !WakePhrase.matches(text) || SystemClock.elapsedRealtime() < cooldownUntil) return
+        if (!capturing || matchInProgress || WakeEvents.microphoneBusy.value || !WakePhrase.matches(text) || SystemClock.elapsedRealtime() < cooldownUntil) return
+        matchInProgress = true
+        val wakeAudio = recorder?.getRecentAudio(2600) ?: ShortArray(0)
+        scope.launch {
+            pauseCapture()
+            verifyAndActivate(wakeAudio)
+        }
+    }
+
+    private suspend fun verifyAndActivate(wakeAudio: ShortArray) {
+        val settingsStore = SettingsStore(this)
+        val profile = settingsStore.getVoiceProfile()
+        if (!settingsStore.voiceMatchEnabled) {
+            activateWake(ownerVerified = false)
+            return
+        }
+        if (profile == null) {
+            settingsStore.voiceMatchEnabled = false
+            WakeEvents.ownerVerified.value = false
+            updateStatus("Voice profile needs setup")
+            finishMatch(delayMs = 1800)
+            return
+        }
+
+        updateStatus("Checking your voice…")
+        val (matched, score) = withContext(Dispatchers.Default) {
+            if (VoiceprintMatcher.isUsableVoiceSample(wakeAudio)) {
+                VoiceprintMatcher.verify(profile, wakeAudio, settingsStore.voiceMatchThreshold)
+            } else Pair(false, 0f)
+        }
+        WakeEvents.lastVoiceMatchScore.value = score
+        if (matched) {
+            activateWake(ownerVerified = true)
+        } else {
+            WakeEvents.ownerVerified.value = false
+            cooldownUntil = SystemClock.elapsedRealtime() + 1800
+            updateStatus("Voice not recognized — tap the notification to open Jarvis")
+            finishMatch(delayMs = 1900)
+        }
+    }
+
+    private fun activateWake(ownerVerified: Boolean) {
         cooldownUntil = SystemClock.elapsedRealtime() + 4000
-        pauseCapture()
-        Log.i("WakeWordService", "Wake phrase detected")
+        WakeEvents.ownerVerified.value = ownerVerified
+        Log.i("WakeWordService", "Wake phrase accepted; ownerVerified=$ownerVerified")
         if (WakeEvents.appVisible.value) WakeEvents.voiceTrigger.value = true
         else if (Settings.canDrawOverlays(this)) runCatching { startActivity(voiceIntent()) }
-        updateStatus("Hey! Tap to speak to Jarvis")
-        scope.launch { delay(4200); resumeCapture() }
+        updateStatus(if (ownerVerified) "Voice recognized — listening for your request" else "Hey! Tap to speak to Jarvis")
+        finishMatch(delayMs = 4200)
     }
-    override fun onPartialResult(hypothesis: String?) = accept(hypothesis)
-    override fun onResult(hypothesis: String?) = accept(hypothesis)
-    override fun onFinalResult(hypothesis: String?) = Unit
-    override fun onTimeout() { pauseCapture(); resumeCapture() }
-    override fun onError(exception: Exception?) {
-        pauseCapture()
-        Log.w("WakeWordService", "Wake microphone interrupted", exception)
-        scope.launch { delay(2000); resumeCapture() }
+
+    private fun finishMatch(delayMs: Long) {
+        scope.launch {
+            delay(delayMs)
+            matchInProgress = false
+            resumeCapture()
+        }
     }
     private fun voiceIntent() = Intent(this, MainActivity::class.java)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
@@ -149,10 +197,10 @@ class WakeWordService : Service(), RecognitionListener {
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onDestroy() {
         scope.cancel()
-        speech?.stop()
-        speech?.shutdown()
+        recorder?.stop()
         recognizer?.close()
         model?.close()
+        WakeEvents.ownerVerified.value = false
         WakeEvents.captureReleased.value = true
         WakeEvents.running.value = false
         if (!requested) WakeEvents.status.value = "Off"

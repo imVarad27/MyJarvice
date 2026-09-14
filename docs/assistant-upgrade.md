@@ -10,9 +10,15 @@ Open Settings → Hands-free voice → Listen for Hey Jarvis. Grant microphone a
 
 The listener releases the microphone during command capture and pauses while Jarvis speaks. Wait for the ready tone before speaking; it now plays after Android reports the command microphone is ready. The voice screen shows partial transcription and recognition errors. Android is asked to allow three seconds of silence before ending a command, although recognition providers may apply their own timing.
 
-The wake listener stays active when you leave the app, with a persistent notification and a Stop listening action. Background wake can open Jarvis when Android permits it and display-over-other-apps access is granted; otherwise tap the notification. It cannot bypass the lock screen. After reboot/force-stop, open Jarvis again. OEM battery restrictions can stop background services; permit background activity in Android settings if needed. Always-on listening uses battery and memory and is optional. Voice profiles are experimental, not authentication: anyone can wake the app. Existing confirmations still apply to calls and email sending.
+The wake listener stays active when you leave the app, with a persistent notification and a Stop listening action. Background wake can open Jarvis when Android permits it and display-over-other-apps access is granted; otherwise tap the notification. It cannot bypass the lock screen. After reboot/force-stop, open Jarvis again. OEM battery restrictions can stop background services; permit background activity in Android settings if needed. Always-on listening uses battery and memory and is optional.
 
 The wake detector does not send microphone audio to the server. Subsequent command dictation uses Android's configured speech recognition service and may require a network connection.
+
+## Personal voice profile
+
+Open **Settings → Hands-free voice → Set up voice profile** and record the three prompts in a quiet place. The raw recordings are used in memory during setup and discarded; Jarvis stores only an app-private acoustic profile. When protection is enabled, the offline wake listener compares “Hey Jarvis” with that profile before opening hands-free voice. A matched session is labelled **Owner voice recognized**.
+
+If a manually opened voice session is not verified, Jarvis still answers ordinary questions but refuses calls, messages, memory changes, reminder changes, and sensitive PC commands. The user can type the action or start a new verified wake session. This is a convenience and privacy safeguard, not strong biometric authentication; Android screen lock and system biometrics remain the security boundary.
 
 ## Personal tasks (PC-connected mode)
 

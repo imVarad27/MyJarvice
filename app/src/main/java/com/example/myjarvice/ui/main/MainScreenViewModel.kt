@@ -23,6 +23,7 @@ import com.example.myjarvice.data.LocalCalculator
 import com.example.myjarvice.data.PhotoAttachment
 import com.example.myjarvice.data.VoiceOption
 import com.example.myjarvice.wake.WakeEvents
+import com.example.myjarvice.wake.VoiceActionPolicy
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.withTimeoutOrNull
@@ -91,6 +92,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     /** Full-screen, hands-free voice mode (the ChatGPT-style orb screen). */
     private val _voiceModeActive = MutableStateFlow(false)
     val voiceModeActive: StateFlow<Boolean> = _voiceModeActive.asStateFlow()
+    private val _voiceOwnerVerified = MutableStateFlow(false)
+    val voiceOwnerVerified: StateFlow<Boolean> = _voiceOwnerVerified.asStateFlow()
 
     /** While muted, voice mode stays open but the recogniser is not restarted. */
     private val _micMuted = MutableStateFlow(false)
@@ -250,7 +253,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    fun enterVoiceMode() {
+    fun enterVoiceMode(verifiedByWake: Boolean = false) {
+        _voiceOwnerVerified.value = verifiedByWake && WakeEvents.ownerVerified.value
         _voiceModeActive.value = true
         _micMuted.value = false
         if (!isListening.value && !isSpeaking.value) {
@@ -262,6 +266,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         listeningJob?.cancel()
         preparingMic.value = false
         _voiceModeActive.value = false
+        _voiceOwnerVerified.value = false
+        WakeEvents.ownerVerified.value = false
         _isThinking.value = false
         neuralAudioPlayer.stop()
         speechManager.stopListening()
@@ -331,6 +337,24 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     fun sendQuery(text: String, photo: PhotoAttachment? = null) {
         if (text.isBlank() || localRequestActive || _isThinking.value) return
 
+        val profileEnabled = settings.voiceMatchEnabled && settings.isVoiceProfileEnrolled
+        if (photo == null && VoiceActionPolicy.shouldBlock(
+                command = text,
+                voiceMode = _voiceModeActive.value,
+                profileEnabled = profileEnabled,
+                ownerVerified = _voiceOwnerVerified.value
+            )
+        ) {
+            wsClient.addLocalMessage(JarvisMessage(sender = "USER", text = text, type = "QUERY", timestamp = timestampNow()))
+            wsClient.addLocalMessage(JarvisMessage(
+                sender = "JARVIS (Voice protection)",
+                text = "I didn't verify the enrolled voice for this session, so I won't perform that action. Type it in chat or start with your verified ‘Hey Jarvis’. Questions still work normally.",
+                type = "ERROR",
+                timestamp = timestampNow()
+            ))
+            return
+        }
+
         // Explicit local tools never forward saved facts or document excerpts to a host.
         val command = text.trim()
         if (photo == null && (command.startsWith("calculate ", true) || command.startsWith("remember: ", true) ||
@@ -388,7 +412,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 imageMimeType = photo?.mimeType,
                 imageOcrText = photo?.ocrText,
                 voiceMode = _voiceModeActive.value,
-                speakResponse = settings.autoSpeakReplies || _voiceModeActive.value
+                speakResponse = settings.autoSpeakReplies || _voiceModeActive.value,
+                voiceProfileEnabled = profileEnabled,
+                speakerVerified = _voiceOwnerVerified.value
             )
             return
         }

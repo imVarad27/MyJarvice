@@ -9,6 +9,14 @@ import assistant_runtime as runtime
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_sensitive_voice_actions_are_classified_without_blocking_questions(self):
+        self.assertTrue(runtime.sensitive_voice_action("call Mom"))
+        self.assertTrue(runtime.sensitive_voice_action("lock my PC"))
+        self.assertTrue(runtime.sensitive_voice_action("add a reminder for 7"))
+        self.assertTrue(runtime.sensitive_voice_action("remind me at 7"))
+        self.assertFalse(runtime.sensitive_voice_action("how do phone calls work?"))
+        self.assertFalse(runtime.sensitive_voice_action("why is the sky blue?"))
+
     def test_bounded_fast_payload(self):
         payload = runtime.model_payload([], "test", True)
         self.assertFalse(payload["think"])

@@ -35,6 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -65,13 +66,14 @@ import com.example.myjarvice.theme.ArcGold
 import com.example.myjarvice.theme.JarvisBlue
 import com.example.myjarvice.theme.JarvisCyan
 import com.example.myjarvice.wake.AudioBufferRecorder
+import com.example.myjarvice.wake.WakeEvents
 import com.example.myjarvice.wake.VoiceprintMatcher
 import kotlinx.coroutines.launch
 
 private val ENROLLMENT_PROMPTS = listOf(
-    "Hey Jarvis, systems online",
-    "Hey Jarvis, status report",
-    "Hey Jarvis, what's on my agenda?"
+    "Hey Jarvis",
+    "Hey Jarvis, what’s on my agenda?",
+    "Hey Jarvis, help me plan my day"
 )
 
 @Composable
@@ -89,9 +91,18 @@ fun VoiceMatchEnrollmentScreen(
     var isRecording by remember { mutableStateOf(false) }
     var recordingProgress by remember { mutableFloatStateOf(0f) }
     var micRmsLevel by remember { mutableFloatStateOf(0f) }
-    var statusMessage by remember { mutableStateOf("Tap the Arc Core to begin calibration.") }
+    var statusMessage by remember { mutableStateOf("Find a quiet place, then tap the microphone.") }
 
     val recordedSamples = remember { mutableStateListOf<ShortArray>() }
+
+    DisposableEffect(Unit) {
+        WakeEvents.microphoneBusy.value = true
+        onDispose {
+            audioRecorder.stop()
+            speechManager.shutdown()
+            WakeEvents.microphoneBusy.value = false
+        }
+    }
 
     val scheme = MaterialTheme.colorScheme
 
@@ -151,8 +162,8 @@ fun VoiceMatchEnrollmentScreen(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "Help Jarvis recognize your voice",
-                    color = JarvisCyan,
+                    "Three short samples · processed on this phone",
+                    color = scheme.onSurfaceVariant,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -186,8 +197,8 @@ fun VoiceMatchEnrollmentScreen(
 
         if (currentStep < 3) {
             Text(
-                "PHASE ${currentStep + 1} OF 3",
-                color = ArcGold,
+                "SAMPLE ${currentStep + 1} OF 3",
+                color = scheme.primary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 2.sp
@@ -196,7 +207,7 @@ fun VoiceMatchEnrollmentScreen(
             Spacer(Modifier.height(8.dp))
 
             Text(
-                "Please speak the phrase clearly into the microphone:",
+                "Say this naturally in your normal voice:",
                 color = scheme.onSurfaceVariant,
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center
@@ -210,7 +221,7 @@ fun VoiceMatchEnrollmentScreen(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
                     .background(scheme.surface)
-                    .border(1.5.dp, JarvisCyan.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                    .border(1.dp, scheme.outline.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
                     .padding(20.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -243,14 +254,14 @@ fun VoiceMatchEnrollmentScreen(
                     )
                     .clickable(enabled = !isRecording) {
                         isRecording = true
-                        statusMessage = "Listening... speak now."
+                        statusMessage = "Listening… speak now."
                         scope.launch {
-                            val audioSample = audioRecorder.recordSample(durationMs = 2400) { progress, rms ->
+                            val audioSample = audioRecorder.recordSample(durationMs = 2600) { progress, rms ->
                                 recordingProgress = progress
                                 micRmsLevel = rms
                             }
 
-                            if (audioSample.isNotEmpty()) {
+                            if (VoiceprintMatcher.isUsableVoiceSample(audioSample)) {
                                 recordedSamples.add(audioSample)
                                 speechManager.playActivationTone()
                                 currentStep++
@@ -259,16 +270,22 @@ fun VoiceMatchEnrollmentScreen(
                                 isRecording = false
 
                                 if (currentStep < 3) {
-                                    statusMessage = "Sample captured. Ready for phase ${currentStep + 1}."
+                                    statusMessage = "Sample captured. Ready for sample ${currentStep + 1}."
                                 } else {
-                                    // Complete enrollment: compute and store master voiceprint
                                     val masterProfile = VoiceprintMatcher.enrollMasterProfile(recordedSamples)
-                                    settingsStore.saveVoiceProfile(masterProfile)
-                                    statusMessage = "Voiceprint calibrated and secured."
+                                    if (settingsStore.saveVoiceProfile(masterProfile)) {
+                                        statusMessage = "Your voice profile is ready."
+                                    } else {
+                                        currentStep = 0
+                                        recordedSamples.clear()
+                                        statusMessage = "Those samples could not create a profile. Please try again."
+                                    }
                                 }
                             } else {
                                 isRecording = false
-                                statusMessage = "Recording failed. Please try again."
+                                recordingProgress = 0f
+                                micRmsLevel = 0f
+                                statusMessage = "I couldn’t hear a clear voice. Move closer and try again."
                             }
                         }
                     }
@@ -293,7 +310,7 @@ fun VoiceMatchEnrollmentScreen(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            if (isRecording) "RECORDING" else "TAP TO\nSPEAK",
+                            if (isRecording) "LISTENING" else "TAP TO\nRECORD",
                             color = glowColor,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
@@ -339,13 +356,13 @@ fun VoiceMatchEnrollmentScreen(
                             .border(2.dp, ArcGold, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("🛡️", fontSize = 32.sp)
+                        Text("✓", fontSize = 32.sp, color = scheme.primary, fontWeight = FontWeight.Bold)
                     }
 
                     Spacer(Modifier.height(18.dp))
 
                     Text(
-                        "Voice Lock Activated",
+                        "Voice profile ready",
                         color = scheme.onSurface,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
@@ -354,7 +371,7 @@ fun VoiceMatchEnrollmentScreen(
                     Spacer(Modifier.height(8.dp))
 
                     Text(
-                        "Master voiceprint calculated and locked. JARVIS will now wake up and accept commands exclusively from your voice.",
+                        "Jarvis will compare future wake phrases with these samples on this phone. Sensitive spoken actions are blocked when the voice is not verified.",
                         color = scheme.onSurfaceVariant,
                         fontSize = 14.sp,
                         textAlign = TextAlign.Center,
@@ -374,7 +391,7 @@ fun VoiceMatchEnrollmentScreen(
                         ),
                         shape = RoundedCornerShape(14.dp)
                     ) {
-                        Text("Finish & Enable Voice Match", fontWeight = FontWeight.Bold)
+                        Text("Done", fontWeight = FontWeight.Bold)
                     }
                 }
             }

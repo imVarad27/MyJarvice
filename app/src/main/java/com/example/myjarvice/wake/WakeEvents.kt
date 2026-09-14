@@ -13,4 +13,8 @@ object WakeEvents {
     val appVisible = MutableStateFlow(false)
     val status = MutableStateFlow("Off")
     val running = MutableStateFlow(false)
+    /** True only for the current voice session after an enrolled wake phrase matched locally. */
+    val ownerVerified = MutableStateFlow(false)
+    /** Last local match score, for a useful status in Settings without uploading audio. */
+    val lastVoiceMatchScore = MutableStateFlow<Float?>(null)
 }

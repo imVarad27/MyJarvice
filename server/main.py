@@ -679,7 +679,9 @@ def generate_reply(
     image_b64: Optional[str] = None,
     image_ocr_text: str = "",
     on_text=None,
-    voice_mode: bool = False
+    voice_mode: bool = False,
+    voice_profile_enabled: bool = False,
+    speaker_verified: bool = False
 ) -> Tuple[str, Optional[Dict[str, Any]], Optional[Dict[str, Any]], Optional[str], List[Dict[str, str]]]:
     """Returns (reply_text, action, pending_email, image_payload, web_sources); action/pending_email/image_payload may be None."""
     name_set = maybe_store_name(user_text)
@@ -689,6 +691,13 @@ def generate_reply(
 
     # A photo question is always analysis, never an accidental device/PC action.
     has_photo = bool(image_b64)
+    if (voice_mode and voice_profile_enabled and not speaker_verified and
+            assistant_runtime.sensitive_voice_action(user_text)):
+        return (
+            "I didn't verify the enrolled voice for this session, so I won't perform that action. "
+            "Type it in chat or start with your verified Hey Jarvis.",
+            None, None, None, []
+        )
     if not has_photo:
         task_reply = assistant_runtime.task_command(user_text, DB_PATH)
         if task_reply is not None:
@@ -1052,7 +1061,8 @@ async def websocket_jarvis_endpoint(websocket: WebSocket):
                 try:
                     ai_response, action, pending_email, image_payload, web_sources = await asyncio.to_thread(
                         generate_reply, user_text, phone_context, history, image_b64, image_ocr_text[:6000],
-                        emit_text if streaming else None, msg.get("voice_mode") is True
+                        emit_text if streaming else None, msg.get("voice_mode") is True,
+                        msg.get("voice_profile_enabled") is True, msg.get("speaker_verified") is True
                     )
                 except Exception:
                     logger.exception("Reply generation failed")

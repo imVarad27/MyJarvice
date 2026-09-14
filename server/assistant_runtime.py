@@ -9,6 +9,20 @@ import urllib.request
 from contextlib import closing
 
 
+def sensitive_voice_action(text):
+    """Actions that need a matched profile when voice protection is enabled."""
+    command = text.strip().lower()
+    patterns = (
+        r"^(call|dial)\b",
+        r"^(send|email|mail|message)\b",
+        r"^(remember|forget|delete|remove)\b",
+        r"^(remind me|schedule)\b",
+        r"^(add|create|complete|finish|cancel|delete|remove)\s+(a\s+|my\s+)?(task|reminder|event)\b",
+        r"\b(lock|shutdown|shut down|restart|delete|remove)\b.*\b(pc|computer|laptop|file|folder)\b",
+    )
+    return any(re.search(pattern, command) for pattern in patterns)
+
+
 def model_payload(messages, model, stream=False):
     return {
         "model": model, "messages": messages, "stream": stream,

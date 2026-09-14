@@ -148,6 +148,7 @@ fun MainScreen(
     val serverToken by viewModel.serverToken.collectAsStateWithLifecycle()
     val pendingAction by viewModel.pendingAction.collectAsStateWithLifecycle()
     val voiceModeActive by viewModel.voiceModeActive.collectAsStateWithLifecycle()
+    val voiceOwnerVerified by viewModel.voiceOwnerVerified.collectAsStateWithLifecycle()
     val micMuted by viewModel.micMuted.collectAsStateWithLifecycle()
     val micLevel by viewModel.micLevel.collectAsStateWithLifecycle()
     val voices by viewModel.voices.collectAsStateWithLifecycle()
@@ -164,7 +165,7 @@ fun MainScreen(
         WakeEvents.voiceTrigger.collect { triggered ->
             if (triggered) {
                 WakeEvents.voiceTrigger.value = false
-                viewModel.enterVoiceMode()
+                viewModel.enterVoiceMode(verifiedByWake = true)
             }
         }
     }
@@ -642,6 +643,7 @@ fun MainScreen(
                 VoiceModeScreen(
                     liveTranscript = liveTranscript,
                     recognitionStatus = recognitionStatus,
+                    ownerVerified = voiceOwnerVerified,
                     isListening = isListening,
                     isSpeaking = isSpeaking,
                     isThinking = isThinking,

@@ -26,6 +26,12 @@ class VoiceprintMatcherTest {
     }
 
     @Test
+    fun sampleQuality_rejectsSilenceAndAcceptsClearVoice() {
+        assertFalse(VoiceprintMatcher.isUsableVoiceSample(ShortArray(16_000)))
+        assertTrue(VoiceprintMatcher.isUsableVoiceSample(generateSyntheticVoice(220.0, 1.2f)))
+    }
+
+    @Test
     fun computeEmbedding_producesNormalized192DimVector() {
         val voice = generateSyntheticVoice(220.0, 1.5f)
         val embedding = VoiceprintMatcher.computeEmbedding(voice)
@@ -106,4 +112,3 @@ class VoiceprintMatcherTest {
         assertFalse("Imposter must be rejected (score was $imposterScore)", isImposterMatch)
     }
 }
-

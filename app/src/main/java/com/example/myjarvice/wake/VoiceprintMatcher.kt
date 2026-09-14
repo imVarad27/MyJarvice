@@ -31,6 +31,21 @@ object VoiceprintMatcher {
     private const val NUM_CEPSTRAL = 24
     const val EMBEDDING_DIM = 192
 
+    /** Reject silent or clipped enrollment clips before they can become a profile. */
+    fun isUsableVoiceSample(samples: ShortArray): Boolean {
+        if (samples.size < SAMPLE_RATE) return false
+        var sumSq = 0.0
+        var clipped = 0
+        for (sample in samples) {
+            val value = sample.toDouble()
+            sumSq += value * value
+            if (kotlin.math.abs(sample.toInt()) >= 32_000) clipped++
+        }
+        val rms = sqrt(sumSq / samples.size)
+        val clippedRatio = clipped.toFloat() / samples.size
+        return rms >= 250.0 && clippedRatio < 0.03f
+    }
+
     private val hammingWindow: FloatArray by lazy {
         FloatArray(FRAME_LEN) { i ->
             (0.54 - 0.46 * cos(2.0 * PI * i / (FRAME_LEN - 1))).toFloat()

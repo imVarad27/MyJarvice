@@ -267,7 +267,9 @@ class JarvisWebSocketClient {
         imageMimeType: String? = null,
         imageOcrText: String? = null,
         voiceMode: Boolean = false,
-        speakResponse: Boolean = false
+        speakResponse: Boolean = false,
+        voiceProfileEnabled: Boolean = false,
+        speakerVerified: Boolean = false
     ) {
         val userMsg = JarvisMessage(
             sender = "USER",
@@ -282,6 +284,8 @@ class JarvisWebSocketClient {
             put("stream_response", true)
             put("voice_mode", voiceMode)
             put("speak_response", speakResponse)
+            put("voice_profile_enabled", voiceProfileEnabled)
+            put("speaker_verified", speakerVerified)
             put("query", query)
             put("text", query)
             put("voice_id", voiceId)
