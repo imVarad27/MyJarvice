@@ -28,6 +28,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.core.view.WindowCompat
 import com.example.myjarvice.theme.ThemeMode
+import com.example.myjarvice.theme.AssistantStyle
 import androidx.compose.ui.Modifier
 import com.example.myjarvice.data.SettingsStore
 import com.example.myjarvice.theme.MyJarviceTheme
@@ -47,6 +48,7 @@ class MainActivity : ComponentActivity() {
         if (launchedByWake) requestCorePermissions()
         if (intent?.getBooleanExtra(EXTRA_OPEN_INBOX, false) == true) inboxRequest = System.nanoTime()
         if (launchedByWake) WakeEvents.voiceTrigger.value = true
+        intent?.getStringExtra(EXTRA_OPEN_SESSION)?.let { WakeEvents.openSessionId.value = it }
 
         enableEdgeToEdge()
         setContent {
@@ -54,6 +56,7 @@ class MainActivity : ComponentActivity() {
 
             var themeMode by remember { mutableStateOf(settingsStore.themeMode) }
             var dynamicColor by remember { mutableStateOf(settingsStore.dynamicColor) }
+            var assistantStyle by remember { mutableStateOf(settingsStore.assistantStyle) }
             var wakeEnabled by remember { mutableStateOf(settingsStore.wakeWordEnabled) }
             DisposableEffect(lifecycle) {
                 val observer = LifecycleEventObserver { _, event ->
@@ -66,6 +69,7 @@ class MainActivity : ComponentActivity() {
                 wakeEnabled = granted
                 settingsStore.wakeWordEnabled = granted
                 if (granted) {
+                    settingsStore.voiceMatchEnabled = true
                     WakeWordService.start(applicationContext)
                     requestNotificationPermission()
                 } else Toast.makeText(this, "Microphone access is needed for hands-free voice.", Toast.LENGTH_LONG).show()
@@ -79,7 +83,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            MyJarviceTheme(themeMode = themeMode, dynamicColor = dynamicColor) {
+            MyJarviceTheme(themeMode = themeMode, dynamicColor = dynamicColor, assistantStyle = assistantStyle) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -89,13 +93,18 @@ class MainActivity : ComponentActivity() {
                         inboxRequest = inboxRequest,
                         themeMode = themeMode,
                         dynamicColor = dynamicColor,
+                        assistantStyle = assistantStyle,
+                        onAssistantStyle = { assistantStyle = it; settingsStore.assistantStyle = it },
                         onThemeMode = { themeMode = it; settingsStore.themeMode = it },
                         onDynamicColor = { dynamicColor = it; settingsStore.dynamicColor = it },
                         wakeEnabled = wakeEnabled,
                         onWakeEnabled = { enabled ->
-                            if (enabled && ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                            if (enabled && !settingsStore.isVoiceProfileEnrolled) {
+                                Toast.makeText(this, "Set up your personal voice profile first. Hands-free wake requires your voice.", Toast.LENGTH_LONG).show()
+                            } else if (enabled && ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                                 wakePermission.launch(Manifest.permission.RECORD_AUDIO)
                             } else {
+                                if (enabled) settingsStore.voiceMatchEnabled = true
                                 wakeEnabled = enabled
                                 settingsStore.wakeWordEnabled = enabled
                                 if (enabled) {
@@ -115,6 +124,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (intent.getBooleanExtra(EXTRA_OPEN_INBOX, false)) inboxRequest = System.nanoTime()
+        intent.getStringExtra(EXTRA_OPEN_SESSION)?.let { WakeEvents.openSessionId.value = it }
         if (intent.getBooleanExtra(EXTRA_START_VOICE, false)) {
             WakeEvents.voiceTrigger.value = true
         }
@@ -152,5 +162,6 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_START_VOICE = "start_voice"
         const val EXTRA_OPEN_INBOX = "open_inbox"
+        const val EXTRA_OPEN_SESSION = "open_session"
     }
 }

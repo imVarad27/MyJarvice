@@ -100,6 +100,7 @@ private val LightColors = lightColorScheme(
 fun MyJarvisTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     dynamicColor: Boolean = false,
+    assistantStyle: AssistantStyle = AssistantStyle.PIXEL,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
@@ -110,13 +111,21 @@ fun MyJarvisTheme(
     }
 
     val context = LocalContext.current
-    val colorScheme = when {
+    val baseColors = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         themeMode == ThemeMode.AMOLED -> AmoledColors
         dark -> DarkColors
         else -> LightColors
     }
+
+    val colorScheme = if (assistantStyle == AssistantStyle.JARVIS) baseColors.copy(
+        primary = if (dark) Color(0xFF6CD9EE) else Color(0xFF00677B),
+        onPrimary = if (dark) Color(0xFF003640) else Color.White,
+        primaryContainer = if (dark) Color(0xFF074652) else Color(0xFFC2F0FA),
+        onPrimaryContainer = if (dark) Color(0xFFC2F0FA) else Color(0xFF003640),
+        tertiary = if (dark) ArcGold else Color(0xFF855400)
+    ) else baseColors
 
     MaterialTheme(
         colorScheme = colorScheme,
@@ -130,5 +139,6 @@ fun MyJarvisTheme(
 fun MyJarviceTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     dynamicColor: Boolean = false,
+    assistantStyle: AssistantStyle = AssistantStyle.PIXEL,
     content: @Composable () -> Unit
-) = MyJarvisTheme(themeMode = themeMode, dynamicColor = dynamicColor, content = content)
+) = MyJarvisTheme(themeMode = themeMode, dynamicColor = dynamicColor, assistantStyle = assistantStyle, content = content)

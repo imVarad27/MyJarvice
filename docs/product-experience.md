@@ -13,13 +13,14 @@ These are interaction references, not pixel-for-pixel copies or claims that Jarv
 
 Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer competing labels. Chat remains the primary surface, not an overloaded dashboard.
 
-- Tap **Jarvis** to choose Auto, On this phone, or Your PC. The picker explains privacy, readiness and connection requirements.
+- Choose Auto, Phone model, or PC model directly inside either composer (or from the chat header). The picker explains privacy, readiness and connection requirements.
 - The empty chat offers planning, explanation, writing and local-memory prompts. The planning shortcut uses real saved tasks/reminders only when the PC route is available.
 - The composer has one attachment entry, dictation, and a primary send/voice action. It no longer reserves an empty supporting-text row.
 - The tool sheet groups attachments, personal-assistant shortcuts and PC tools. PC-dependent shortcuts are disabled without the appropriate connection/mode.
 - Conversation search matches titles and message text locally. Saved items retain their existing search and reminder controls.
 - Replies have a wider reading column, selectable basic bold/code/headings/bullets, and no animated avatar. Streaming hides premature action buttons and redundant thinking indicators.
 - Settings start as compact categories with explanatory subtitles. Voice respects the app theme and uses readable status and transcription text.
+- Appearance offers Pixel-inspired or original Jarvis accents. Verified “Hey Jarvis” opens a compact assistant popup on an unlocked phone, with typing, voice, route selection, dismiss and expand controls. Preview is explicitly manual and unverified; it does not bypass voice protection.
 
 ## What a personal assistant needs next
 

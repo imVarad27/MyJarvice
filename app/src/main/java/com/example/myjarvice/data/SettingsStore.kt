@@ -2,6 +2,7 @@ package com.example.myjarvice.data
 
 import android.content.Context
 import com.example.myjarvice.theme.ThemeMode
+import com.example.myjarvice.theme.AssistantStyle
 
 /** Chooses where Jarvis generates a response. */
 enum class SmartMode {
@@ -27,6 +28,12 @@ class SettingsStore(context: Context) {
         set(value) {
             prefs.edit().putBoolean(KEY_DYNAMIC, value).apply()
         }
+
+    var assistantStyle: AssistantStyle
+        get() = runCatching {
+            AssistantStyle.valueOf(prefs.getString("assistant_style", AssistantStyle.PIXEL.name).orEmpty())
+        }.getOrDefault(AssistantStyle.PIXEL)
+        set(value) { prefs.edit().putString("assistant_style", value.name).apply() }
 
     var wakeWordEnabled: Boolean
         get() = prefs.getBoolean(KEY_WAKE, false)
@@ -121,13 +128,13 @@ class SettingsStore(context: Context) {
      * Cosine similarity threshold for speaker verification (0.60 to 0.90, default 0.72).
      */
     var voiceMatchThreshold: Float
-        get() = prefs.getFloat(KEY_VOICE_MATCH_THRESHOLD, 0.72f)
+        get() = prefs.getFloat(KEY_VOICE_MATCH_THRESHOLD, 0.82f).coerceIn(0.78f, 0.90f)
         set(value) {
-            prefs.edit().putFloat(KEY_VOICE_MATCH_THRESHOLD, value).apply()
+            prefs.edit().putFloat(KEY_VOICE_MATCH_THRESHOLD, value.coerceIn(0.78f, 0.90f)).apply()
         }
 
     val isVoiceProfileEnrolled: Boolean
-        get() = prefs.getString(KEY_MASTER_VOICEPRINT, "").orEmpty().isNotBlank()
+        get() = getVoiceProfile() != null
 
     fun saveVoiceProfile(embedding: FloatArray): Boolean {
         if (embedding.size != com.example.myjarvice.wake.VoiceprintMatcher.EMBEDDING_DIM ||
@@ -136,12 +143,16 @@ class SettingsStore(context: Context) {
         val encoded = embedding.joinToString(",")
         prefs.edit()
             .putString(KEY_MASTER_VOICEPRINT, encoded)
+            .putInt("voice_profile_version", 2)
             .putBoolean(KEY_VOICE_MATCH_ENABLED, true)
             .apply()
         return true
     }
 
     fun getVoiceProfile(): FloatArray? {
+        // Keep the previous vector intact, but require fresh phrase-checked
+        // enrollment for the stricter wake path introduced in version 2.
+        if (prefs.getInt("voice_profile_version", 0) != 2) return null
         val raw = prefs.getString(KEY_MASTER_VOICEPRINT, null) ?: return null
         if (raw.isBlank()) return null
         return try {
@@ -149,7 +160,7 @@ class SettingsStore(context: Context) {
             FloatArray(parts.size) { parts[it].toFloat() }
                 .takeIf { profile ->
                     profile.size == com.example.myjarvice.wake.VoiceprintMatcher.EMBEDDING_DIM &&
-                        profile.all { it.isFinite() }
+                        profile.all { it.isFinite() } && profile.any { kotlin.math.abs(it) > 1e-8f }
                 }
         } catch (e: Exception) {
             null
@@ -159,6 +170,7 @@ class SettingsStore(context: Context) {
     fun clearVoiceProfile() {
         prefs.edit()
             .remove(KEY_MASTER_VOICEPRINT)
+            .remove("voice_profile_version")
             .putBoolean(KEY_VOICE_MATCH_ENABLED, false)
             .apply()
     }

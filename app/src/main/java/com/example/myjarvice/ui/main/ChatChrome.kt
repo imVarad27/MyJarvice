@@ -73,7 +73,9 @@ internal fun ChatComposer(
     onSend: () -> Unit,
     onQuickVoice: () -> Unit,
     onVoiceMode: () -> Unit,
-    pcConnected: Boolean = true
+    pcConnected: Boolean = true,
+    mode: SmartMode = SmartMode.AUTO,
+    onChooseModel: () -> Unit = {}
 ) {
     val colors = MaterialTheme.colorScheme
     Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -81,7 +83,7 @@ internal fun ChatComposer(
         border = androidx.compose.foundation.BorderStroke(1.dp, colors.outlineVariant)) {
         Column(Modifier.padding(4.dp)) {
             OutlinedTextField(value = textInput, onValueChange = onTextChange,
-                placeholder = { Text(if (canSendAttachment) "Ask about your attachment…" else "Message Jarvis…") },
+                placeholder = { Text(if (canSendAttachment) "Ask about your attachment…" else "Ask Jarvis…") },
                 modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Message input" },
                 maxLines = 4,
                 textStyle = MaterialTheme.typography.bodyLarge,
@@ -91,19 +93,19 @@ internal fun ChatComposer(
                     unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent))
             Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 ChatIconButton("Add attachment or tool", onToggleToolsMenu, !isThinking) { IconPlus(tint = colors.onSurfaceVariant) }
+                ComposerModelSelector(mode, onChooseModel, enabled = !isThinking, modifier = Modifier.weight(1f))
                 ChatIconButton(if (isListening) "Stop dictation" else "Dictate message", onQuickVoice, !isThinking) {
                     IconMicrophone(tint = if (isListening) colors.primary else colors.onSurfaceVariant)
                 }
-                Spacer(Modifier.weight(1f))
                 if (textInput.isNotBlank() || canSendAttachment) {
                     FilledIconButton(onClick = onSend, enabled = !isThinking,
                         modifier = Modifier.size(48.dp).semantics { contentDescription = "Send message" }) {
                         IconSend(tint = if (isThinking) colors.onSurfaceVariant else colors.onPrimary)
                     }
                 } else {
-                    Button(onClick = onVoiceMode, enabled = !isThinking, contentPadding = PaddingValues(horizontal = 16.dp)) {
-                        IconVoiceWaveform(tint = colors.onPrimary, size = 18.dp)
-                        Spacer(Modifier.width(8.dp)); Text("Voice")
+                    FilledIconButton(onClick = onVoiceMode, enabled = !isThinking,
+                        modifier = Modifier.size(48.dp).semantics { contentDescription = "Start voice conversation" }) {
+                        IconVoiceWaveform(tint = colors.onPrimary, size = 22.dp)
                     }
                 }
             }
@@ -145,6 +147,23 @@ internal fun ChatComposer(
             }
         }
     }
+}
+
+@Composable
+internal fun ComposerModelSelector(mode: SmartMode, onClick: () -> Unit, enabled: Boolean = true,
+    modifier: Modifier = Modifier) {
+    TextButton(onClick = onClick, enabled = enabled,
+        modifier = modifier.heightIn(min = 48.dp).semantics { contentDescription = "Choose AI model: ${modeLabel(mode)}" },
+        contentPadding = PaddingValues(horizontal = 10.dp)) {
+        Text("${modeLabel(mode)} ⌄", style = MaterialTheme.typography.labelLarge,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+internal fun modeLabel(mode: SmartMode) = when (mode) {
+    SmartMode.AUTO -> "Auto"
+    SmartMode.FAST_ON_DEVICE -> "Phone"
+    SmartMode.STRONG_HOST -> "PC"
 }
 
 @Composable

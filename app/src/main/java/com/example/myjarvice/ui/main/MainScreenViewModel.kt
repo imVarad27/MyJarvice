@@ -41,6 +41,9 @@ import java.io.File
 import java.util.UUID
 
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
+    private val microphoneOwner = UUID.randomUUID().toString()
+    private var popupSession = false
+    fun useAsPopup() { popupSession = true }
 
     val wsClient = JarvisWebSocketClient()
     val deviceContext = DeviceContextProvider(application.applicationContext)
@@ -124,7 +127,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             combine(isSpeaking, isListening, _voiceModeActive, _isThinking, preparingMic) { speaking, listening, voice, thinking, preparing ->
                 speaking || listening || voice || thinking || preparing
-            }.collect { WakeEvents.microphoneBusy.value = it }
+            }.collect { WakeEvents.setMicrophoneBusy(microphoneOwner, it) }
         }
         // Load existing session history into sidebar, but start with a clean new session on start
         _savedSessions.value = historyStore.loadAllSessions()
@@ -159,7 +162,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             wsClient.latestResponse.collect { msg ->
                 msg?.let {
                     if (it.sender != "USER" && !localRequestActive) _isThinking.value = false
-                    if (it.sender.startsWith("JARVIS", ignoreCase = true) && (settings.autoSpeakReplies || _voiceModeActive.value)) {
+                    if (it.sender.startsWith("JARVIS", ignoreCase = true) &&
+                        (!WakeEvents.popupVisible.value || popupSession) &&
+                        (settings.autoSpeakReplies || _voiceModeActive.value)) {
                         if (!it.audioB64.isNullOrBlank()) {
                             speechManager.stopSpeaking()
                             neuralAudioPlayer.playBase64Audio(it.audioB64)
@@ -213,6 +218,21 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         wsClient.setChatHistory(session.messages)
     }
 
+    fun openSessionById(id: String) {
+        historyStore.loadAllSessions().firstOrNull { it.id == id }?.let(::loadSession)
+    }
+
+    fun saveForHandoff(): String? {
+        val messages = chatHistory.value
+        if (messages.isEmpty() || _isThinking.value) return null
+        historyStore.saveSession(ChatSession(
+            id = currentSessionId,
+            title = messages.firstOrNull { it.sender == "USER" }?.text?.take(38) ?: "Conversation",
+            createdAt = sessionCreatedAt, updatedAt = System.currentTimeMillis(), messages = messages
+        ))
+        return currentSessionId
+    }
+
     fun deleteSession(sessionId: String) {
         historyStore.deleteSession(sessionId)
         _savedSessions.value = historyStore.loadAllSessions()
@@ -231,13 +251,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     private fun beginListening() {
         if (listeningJob?.isActive == true || isListening.value) return
         preparingMic.value = true
-        WakeEvents.microphoneBusy.value = true
+        WakeEvents.setMicrophoneBusy(microphoneOwner, true)
         listeningJob = viewModelScope.launch {
             try {
                 if (withTimeoutOrNull(1500) { WakeEvents.captureReleased.first { it } } != true) return@launch
                 speechManager.startListening(
                     onReady = { viewModelScope.launch { JarvisSoundFx.playWakeChime() } },
-                    onResult = { voiceText -> sendQuery(voiceText) },
+                    onResult = { voiceText -> sendQuery(voiceText, fromVoice = true) },
                     onNoResult = {
                         viewModelScope.launch {
                             delay(RELISTEN_DELAY_MS)
@@ -253,8 +273,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    fun enterVoiceMode(verifiedByWake: Boolean = false) {
-        _voiceOwnerVerified.value = verifiedByWake && WakeEvents.ownerVerified.value
+    fun enterVoiceMode(verifiedByWake: Boolean = false, matchedOwner: Boolean = WakeEvents.ownerVerified.value) {
+        _voiceOwnerVerified.value = verifiedByWake && matchedOwner
         _voiceModeActive.value = true
         _micMuted.value = false
         if (!isListening.value && !isSpeaking.value) {
@@ -284,6 +304,15 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         } else if (!isSpeaking.value) {
             beginListening()
         }
+    }
+
+    /** Editing is explicit user input; release dictation without closing the popup. */
+    fun pauseVoiceForTyping() {
+        _micMuted.value = true
+        listeningJob?.cancel()
+        preparingMic.value = false
+        speechManager.stopListening()
+        stopSpeaking()
     }
 
     fun selectVoice(voiceId: String) = speechManager.applyVoice(voiceId)
@@ -334,13 +363,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    fun sendQuery(text: String, photo: PhotoAttachment? = null) {
+    fun sendQuery(text: String, photo: PhotoAttachment? = null, fromVoice: Boolean = false) {
         if (text.isBlank() || localRequestActive || _isThinking.value) return
 
         val profileEnabled = settings.voiceMatchEnabled && settings.isVoiceProfileEnrolled
         if (photo == null && VoiceActionPolicy.shouldBlock(
                 command = text,
-                voiceMode = _voiceModeActive.value,
+                voiceMode = fromVoice,
                 profileEnabled = profileEnabled,
                 ownerVerified = _voiceOwnerVerified.value
             )
@@ -411,7 +440,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 imageBase64 = photo?.base64,
                 imageMimeType = photo?.mimeType,
                 imageOcrText = photo?.ocrText,
-                voiceMode = _voiceModeActive.value,
+                voiceMode = fromVoice,
                 speakResponse = settings.autoSpeakReplies || _voiceModeActive.value,
                 voiceProfileEnabled = profileEnabled,
                 speakerVerified = _voiceOwnerVerified.value
@@ -514,7 +543,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         wsClient.disconnect()
         speechManager.shutdown()
         neuralAudioPlayer.stop()
-        WakeEvents.microphoneBusy.value = false
+        WakeEvents.setMicrophoneBusy(microphoneOwner, false)
         onDeviceEngine.close()
     }
 

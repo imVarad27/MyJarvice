@@ -6,7 +6,7 @@ Configure `JARVIS_MODEL`, `JARVIS_CONTEXT_SIZE`, `JARVIS_MAX_TOKENS`, and `JARVI
 
 ## Hands-free setup
 
-Open Settings → Hands-free voice → Listen for Hey Jarvis. Grant microphone and notification access. The first setup downloads the official Vosk small English model (about 40 MB, Apache 2.0) from https://alphacephei.com/vosk/models/. Afterwards wake detection is offline. Watch for “Listening for Hey Jarvis”. Say “Hey Jarvis”, pause for the voice screen, then give the command. This is two-stage listening, not capture of a command spoken in the same breath as the wake phrase.
+Open Settings → Hands-free voice → Set up voice profile first, then enable Listen for Hey Jarvis. Grant microphone and notification access. The first setup downloads the official Vosk small English model (about 40 MB, Apache 2.0) from https://alphacephei.com/vosk/models/. Afterwards wake detection is offline. Watch for “Listening for Hey Jarvis”. Say exactly “Hey Jarvis”, pause for the popup and ready tone, then give the command. “Hi Jarvis”, “Okay Jarvis”, mentions inside sentences, and same-breath commands are rejected. Completed word recognition and an enrolled acoustic match are both required; partial transcripts cannot activate the popup.
 
 The listener releases the microphone during command capture and pauses while Jarvis speaks. Wait for the ready tone before speaking; it now plays after Android reports the command microphone is ready. The voice screen shows partial transcription and recognition errors. Android is asked to allow three seconds of silence before ending a command, although recognition providers may apply their own timing.
 
@@ -16,7 +16,15 @@ The wake detector does not send microphone audio to the server. Subsequent comma
 
 ## Personal voice profile
 
-Open **Settings → Hands-free voice → Set up voice profile** and record the three prompts in a quiet place. The raw recordings are used in memory during setup and discarded; Jarvis stores only an app-private acoustic profile. When protection is enabled, the offline wake listener compares “Hey Jarvis” with that profile before opening hands-free voice. A matched session is labelled **Owner voice recognized**.
+Open **Settings → Hands-free voice → Set up voice profile** and record “Hey Jarvis” three times in a quiet place. Each sample must pass phrase recognition and match the other samples. The raw recordings are used in memory during setup and discarded; Jarvis stores only an app-private acoustic profile. Automatic wake always requires voice protection and a valid profile. Disabling protection or deleting the profile stops the listener. Existing profiles require re-enrollment for the new phrase-validated, silence-trimmed pipeline; the old vector is retained until replaced or explicitly deleted.
+
+This lightweight acoustic matcher can reject the owner or accept a similar voice or recording. It is not secure speaker authentication and cannot guarantee owner-only activation. Keep the phone lock enabled and test in your actual environment.
+
+## Assistant popup and appearance
+
+On an unlocked phone, a verified wake opens a compact translucent Jarvis card rather than replacing the current screen with full chat. Background display requires Android's display-over-other-apps permission; otherwise use the notification. A notification or Settings → Preview Jarvis popup opens an unverified manual session, never a fabricated owner match. Expand transfers the saved conversation to full chat. Typing pauses dictation, and dismissing the popup releases its microphone ownership.
+
+Both composers offer Auto, Phone model, and PC model. The picker explains readiness and connection requirements and saves the route as the default; it does not download a model or start a disconnected server. Appearance offers Pixel-inspired calm surfaces or Jarvis cyan/amber accents, alongside the existing light/dark/AMOLED settings.
 
 If a manually opened voice session is not verified, Jarvis still answers ordinary questions but refuses calls, messages, memory changes, reminder changes, and sensitive PC commands. The user can type the action or start a new verified wake session. This is a convenience and privacy safeguard, not strong biometric authentication; Android screen lock and system biometrics remain the security boundary.
 
@@ -37,4 +45,6 @@ From `server`: `python -m unittest test_assistant_runtime -v`.
 
 From the project root: `gradlew.bat :app:assembleDebug :app:testDebugUnitTest :app:lintDebug`.
 
-On a phone, verify wake detection, mic handoff, spoken reply, return to listening after exiting voice mode, background wake, notification stop, and app reopen. Acoustic accuracy and battery behavior require testing on the actual phone in its usual environment. The real-device test confirmed wake detection but initially captured an incomplete question; the subsequent microphone lifecycle and live-transcription revision still needs a complete spoken-turn retest.
+On a phone, verify wake detection, mic handoff, spoken reply, return to listening after exiting voice mode, background wake, notification stop, and app reopen. Acoustic accuracy and battery behavior require testing on the actual phone in its usual environment.
+
+2026-09-16: debug build, 23 JVM tests, compile-only instrumentation and lint completed successfully (lint warnings remain, no errors). Updated the connected RMX2061 with `adb install -r`; chat file metadata remained unchanged during the update and blank UI checks. Manually checked the approved blank popup, model picker, Phone → Auto selection, keyboard accessibility and dismissal. The user confirmed the new enrollment completed and the wake popup captured the spoken question. Different-speaker rejection, recordings, noisy environments, locked/background behaviour and sustained battery usage have not been established by this test.

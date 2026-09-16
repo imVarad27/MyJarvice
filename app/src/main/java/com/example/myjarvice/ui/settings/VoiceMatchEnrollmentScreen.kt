@@ -68,12 +68,18 @@ import com.example.myjarvice.theme.JarvisCyan
 import com.example.myjarvice.wake.AudioBufferRecorder
 import com.example.myjarvice.wake.WakeEvents
 import com.example.myjarvice.wake.VoiceprintMatcher
+import com.example.myjarvice.wake.WakeEnrollmentValidator
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.first
 
 private val ENROLLMENT_PROMPTS = listOf(
     "Hey Jarvis",
-    "Hey Jarvis, what’s on my agenda?",
-    "Hey Jarvis, help me plan my day"
+    "Hey Jarvis",
+    "Hey Jarvis"
 )
 
 @Composable
@@ -96,11 +102,11 @@ fun VoiceMatchEnrollmentScreen(
     val recordedSamples = remember { mutableStateListOf<ShortArray>() }
 
     DisposableEffect(Unit) {
-        WakeEvents.microphoneBusy.value = true
+        WakeEvents.setMicrophoneBusy("enrollment", true)
         onDispose {
             audioRecorder.stop()
             speechManager.shutdown()
-            WakeEvents.microphoneBusy.value = false
+            WakeEvents.setMicrophoneBusy("enrollment", false)
         }
     }
 
@@ -125,7 +131,7 @@ fun VoiceMatchEnrollmentScreen(
     }
 
     val glowColor by animateColorAsState(
-        targetValue = if (currentStep == 3) ArcGold else if (isRecording) JarvisCyan else JarvisBlue,
+        targetValue = scheme.primary,
         label = "glowColor"
     )
 
@@ -179,8 +185,8 @@ fun VoiceMatchEnrollmentScreen(
         ) {
             for (i in 0 until 3) {
                 val stepColor = when {
-                    i < currentStep -> JarvisCyan
-                    i == currentStep -> ArcGold
+                    i < currentStep -> scheme.primary
+                    i == currentStep -> scheme.tertiary
                     else -> scheme.outline.copy(alpha = 0.3f)
                 }
                 Box(
@@ -256,36 +262,55 @@ fun VoiceMatchEnrollmentScreen(
                         isRecording = true
                         statusMessage = "Listening… speak now."
                         scope.launch {
+                            if (withTimeoutOrNull(2500) { WakeEvents.captureReleased.first { it } } != true) {
+                                isRecording = false
+                                statusMessage = "The wake microphone is still busy. Please retry."
+                                return@launch
+                            }
                             val audioSample = audioRecorder.recordSample(durationMs = 2600) { progress, rms ->
                                 recordingProgress = progress
                                 micRmsLevel = rms
                             }
 
-                            if (VoiceprintMatcher.isUsableVoiceSample(audioSample)) {
+                            statusMessage = "Checking the wake phrase… first setup may download the 40 MB recognition model."
+                            val phraseChecked = try { WakeEnrollmentValidator.check(context, audioSample) }
+                            catch (error: CancellationException) { throw error }
+                            catch (error: Exception) {
+                                isRecording = false
+                                statusMessage = "Voice setup failed: ${error.message ?: "check your internet connection and retry"}"
+                                return@launch
+                            }
+                            if (VoiceprintMatcher.isUsableVoiceSample(audioSample) && phraseChecked) {
                                 recordedSamples.add(audioSample)
                                 speechManager.playActivationTone()
-                                currentStep++
                                 recordingProgress = 0f
                                 micRmsLevel = 0f
-                                isRecording = false
 
-                                if (currentStep < 3) {
+                                if (recordedSamples.size < 3) {
+                                    currentStep++
+                                    isRecording = false
                                     statusMessage = "Sample captured. Ready for sample ${currentStep + 1}."
                                 } else {
-                                    val masterProfile = VoiceprintMatcher.enrollMasterProfile(recordedSamples)
-                                    if (settingsStore.saveVoiceProfile(masterProfile)) {
+                                    val samples = recordedSamples.toList()
+                                    val masterProfile = withContext(Dispatchers.Default) { VoiceprintMatcher.enrollMasterProfile(samples) }
+                                    val consistent = withContext(Dispatchers.Default) {
+                                        samples.all { VoiceprintMatcher.verify(masterProfile, it, settingsStore.voiceMatchThreshold).first }
+                                    }
+                                    if (consistent && settingsStore.saveVoiceProfile(masterProfile)) {
+                                        currentStep = 3
                                         statusMessage = "Your voice profile is ready."
                                     } else {
                                         currentStep = 0
                                         recordedSamples.clear()
-                                        statusMessage = "Those samples could not create a profile. Please try again."
+                                        statusMessage = "Those voice samples differed too much. Try again in a quiet place using your normal voice."
                                     }
+                                    isRecording = false
                                 }
                             } else {
                                 isRecording = false
                                 recordingProgress = 0f
                                 micRmsLevel = 0f
-                                statusMessage = "I couldn’t hear a clear voice. Move closer and try again."
+                                statusMessage = "I didn’t clearly hear only ‘Hey Jarvis’. Say those two words naturally and retry."
                             }
                         }
                     }

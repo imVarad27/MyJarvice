@@ -31,6 +31,15 @@ class VoiceprintMatcherTest {
         assertTrue(VoiceprintMatcher.isUsableVoiceSample(generateSyntheticVoice(220.0, 1.2f)))
     }
 
+    @Test fun trimsSilenceWithoutSavingOrChangingTheVoice() {
+        val voice = generateSyntheticVoice(220.0, 1.2f)
+        val padded = ShortArray(16_000) + voice + ShortArray(16_000)
+        val trimmed = VoiceprintMatcher.trimSilence(padded)
+        assertTrue(trimmed.size < padded.size)
+        assertTrue(VoiceprintMatcher.isUsableVoiceSample(trimmed))
+        assertEquals(0, VoiceprintMatcher.trimSilence(ShortArray(16_000)).size)
+    }
+
     @Test
     fun computeEmbedding_producesNormalized192DimVector() {
         val voice = generateSyntheticVoice(220.0, 1.5f)

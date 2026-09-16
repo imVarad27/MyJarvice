@@ -35,7 +35,7 @@ class ShareReceiverActivity : ComponentActivity() {
         setContent {
             val state by importer.state.collectAsState()
             val settings = remember { SettingsStore(applicationContext) }
-            MyJarvisTheme(themeMode = settings.themeMode, dynamicColor = settings.dynamicColor) {
+            MyJarvisTheme(themeMode = settings.themeMode, dynamicColor = settings.dynamicColor, assistantStyle = settings.assistantStyle) {
                 Surface(Modifier.fillMaxSize()) {
                     Column(Modifier.safeDrawingPadding().fillMaxSize().padding(32.dp),
                         verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {

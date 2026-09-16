@@ -15,14 +15,15 @@ data class ChatSession(
 )
 
 class ChatHistoryStore(context: Context) {
+    companion object { private val storageLock = Any() }
 
     private val file = File(context.filesDir, "jarvis_chat_sessions.json")
+    private val atomicFile = android.util.AtomicFile(file)
 
-    @Synchronized
-    fun loadAllSessions(): List<ChatSession> {
-        if (!file.exists()) return emptyList()
+    fun loadAllSessions(): List<ChatSession> = synchronized(storageLock) {
+        if (!file.exists() && !File(file.path + ".bak").exists()) return emptyList()
         return try {
-            val text = file.readText()
+            val text = atomicFile.openRead().bufferedReader().use { it.readText() }
             if (text.isBlank()) return emptyList()
 
             val jsonArray = JSONArray(text)
@@ -88,8 +89,7 @@ class ChatHistoryStore(context: Context) {
         }
     }
 
-    @Synchronized
-    fun saveSession(session: ChatSession) {
+    fun saveSession(session: ChatSession): Unit = synchronized(storageLock) {
         if (session.messages.isEmpty()) return
         try {
             val sessions = loadAllSessions().toMutableList()
@@ -107,8 +107,7 @@ class ChatHistoryStore(context: Context) {
         }
     }
 
-    @Synchronized
-    fun deleteSession(sessionId: String) {
+    fun deleteSession(sessionId: String): Unit = synchronized(storageLock) {
         try {
             val sessions = loadAllSessions().filterNot { it.id == sessionId }
             persistSessions(sessions)
@@ -117,10 +116,9 @@ class ChatHistoryStore(context: Context) {
         }
     }
 
-    @Synchronized
-    fun clearAll() {
+    fun clearAll(): Unit = synchronized(storageLock) {
         try {
-            if (file.exists()) file.delete()
+            atomicFile.delete()
         } catch (e: Exception) {
             Log.e("ChatHistoryStore", "Error clearing sessions: ${e.message}", e)
         }
@@ -167,6 +165,13 @@ class ChatHistoryStore(context: Context) {
             }
             jsonArray.put(obj)
         }
-        file.writeText(jsonArray.toString(2))
+        val output = atomicFile.startWrite()
+        try {
+            output.write(jsonArray.toString(2).toByteArray(Charsets.UTF_8))
+            atomicFile.finishWrite(output)
+        } catch (error: Exception) {
+            atomicFile.failWrite(output)
+            throw error
+        }
     }
 }

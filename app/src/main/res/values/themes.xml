@@ -2,4 +2,13 @@
 <resources>
 
     <style name="Theme.MyJarvice" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.JarvisPopup" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:backgroundDimAmount">0.32</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#27645F</item>
+    </style>
 </resources>

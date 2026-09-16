@@ -7,6 +7,8 @@ import android.media.MediaRecorder
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.CancellationException
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.log10
 import kotlin.math.max
@@ -43,7 +45,8 @@ class AudioBufferRecorder(
      * [onFrame] is an optional callback receiving each chunk of raw audio and its RMS level in dB.
      */
     @SuppressLint("MissingPermission")
-    fun start(onFrame: ((ShortArray, Int, Float) -> Unit)? = null): Boolean {
+    fun start(onError: ((Exception) -> Unit)? = null,
+        onFrame: ((ShortArray, Int, Float) -> Unit)? = null): Boolean {
         if (isRecording.get()) return true
 
         val minBufSize = AudioRecord.getMinBufferSize(sampleRate, CHANNEL_CONFIG, AUDIO_FORMAT)
@@ -76,12 +79,18 @@ class AudioBufferRecorder(
             }
 
             audioRecord?.startRecording()
+            val activeRecord = audioRecord ?: return false
             isRecording.set(true)
 
             recordingThread = Thread({
                 val chunk = ShortArray(readBufferSize)
+                try {
                 while (isRecording.get()) {
-                    val read = audioRecord?.read(chunk, 0, chunk.size) ?: -1
+                    val read = activeRecord.read(chunk, 0, chunk.size)
+                    if (read <= 0) {
+                        if (isRecording.get()) error("Microphone read failed ($read)")
+                        break
+                    }
                     if (read > 0) {
                         // Append to rolling circular buffer
                         synchronized(bufferLock) {
@@ -96,6 +105,9 @@ class AudioBufferRecorder(
                         val rmsDb = calculateRms(chunk, read)
                         onFrame?.invoke(chunk, read, rmsDb)
                     }
+                }
+                } catch (error: Exception) {
+                    if (isRecording.get()) onError?.invoke(error)
                 }
             }, "JarvisAudioBufferThread").apply {
                 priority = Thread.MAX_PRIORITY
@@ -170,8 +182,10 @@ class AudioBufferRecorder(
             val startTime = System.currentTimeMillis()
 
             while (samplesRecorded < totalSamples) {
+                ensureActive()
                 val toRead = min(chunk.size, totalSamples - samplesRecorded)
                 val read = record.read(chunk, 0, toRead)
+                check(read > 0) { "Microphone read failed ($read)" }
                 if (read > 0) {
                     System.arraycopy(chunk, 0, recorded, samplesRecorded, read)
                     samplesRecorded += read
@@ -183,6 +197,8 @@ class AudioBufferRecorder(
                     }
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Error recording enrollment sample: ${e.message}", e)
         } finally {
@@ -191,22 +207,29 @@ class AudioBufferRecorder(
                 record?.release()
             } catch (ignored: Exception) {}
         }
-        recorded
+        recorded.copyOf(samplesRecorded)
     }
 
-    fun stop() {
+    fun stop(): Boolean {
         isRecording.set(false)
+        val worker = recordingThread
+        val record = audioRecord
         try {
-            recordingThread?.interrupt()
-            recordingThread = null
-            audioRecord?.stop()
-            audioRecord?.release()
-            audioRecord = null
+            record?.stop()
+            worker?.interrupt()
+            if (worker != null && worker !== Thread.currentThread()) worker.join(1000)
             Log.i(TAG, "AudioBufferRecorder stopped.")
         } catch (e: Exception) {
             Log.w(TAG, "Error stopping AudioRecord: ${e.message}")
+        } finally {
+            runCatching { record?.release() }
+            audioRecord = null
+            if (worker?.isAlive != true) recordingThread = null
         }
+        return worker?.isAlive != true
     }
+
+    fun isReleased(): Boolean = recordingThread?.isAlive != true
 
     fun clear() {
         synchronized(bufferLock) {

@@ -11,9 +11,9 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * On-Device Speaker Verification & Voiceprint Biometric Engine.
+ * Experimental on-device acoustic matching; not secure biometric authentication.
  *
- * Implements a high-precision acoustic feature extraction pipeline:
+ * Implements a lightweight acoustic feature extraction pipeline:
  * 1. Pre-emphasis filtering (high-frequency boost)
  * 2. Hamming windowing & STFT framing (25ms window, 10ms stride at 16kHz)
  * 3. 40-channel Mel Filterbank log-energy computation
@@ -33,7 +33,7 @@ object VoiceprintMatcher {
 
     /** Reject silent or clipped enrollment clips before they can become a profile. */
     fun isUsableVoiceSample(samples: ShortArray): Boolean {
-        if (samples.size < SAMPLE_RATE) return false
+        if (samples.size < SAMPLE_RATE * 2 / 5) return false
         var sumSq = 0.0
         var clipped = 0
         for (sample in samples) {
@@ -44,6 +44,25 @@ object VoiceprintMatcher {
         val rms = sqrt(sumSq / samples.size)
         val clippedRatio = clipped.toFloat() / samples.size
         return rms >= 250.0 && clippedRatio < 0.03f
+    }
+
+    /** Compare the voice rather than differing amounts of leading/trailing silence. */
+    fun trimSilence(samples: ShortArray): ShortArray {
+        val frame = SAMPLE_RATE / 50
+        var first = -1
+        var last = -1
+        for (start in samples.indices step frame) {
+            val end = min(samples.size, start + frame)
+            var sum = 0.0
+            for (i in start until end) sum += samples[i].toDouble() * samples[i]
+            if (sqrt(sum / (end - start)) >= 250.0) {
+                if (first < 0) first = start
+                last = end
+            }
+        }
+        if (first < 0) return ShortArray(0)
+        val padding = SAMPLE_RATE / 10
+        return samples.copyOfRange(max(0, first - padding), min(samples.size, last + padding))
     }
 
     private val hammingWindow: FloatArray by lazy {
@@ -59,7 +78,8 @@ object VoiceprintMatcher {
     /**
      * Extracts a normalized 192-dimensional acoustic speaker embedding from 16kHz PCM audio.
      */
-    fun computeEmbedding(pcmSamples: ShortArray): FloatArray {
+    fun computeEmbedding(audio: ShortArray): FloatArray {
+        val pcmSamples = trimSilence(audio)
         if (pcmSamples.size < FRAME_LEN) {
             return FloatArray(EMBEDDING_DIM)
         }

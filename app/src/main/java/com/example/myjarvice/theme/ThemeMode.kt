@@ -13,3 +13,9 @@ enum class ThemeMode(val label: String) {
     DARK("Dark"),
     AMOLED("AMOLED")
 }
+
+/** Pixel-inspired Material surfaces or Jarvis's own cyan-and-amber identity. */
+enum class AssistantStyle(val label: String) {
+    PIXEL("Pixel"),
+    JARVIS("Jarvis")
+}

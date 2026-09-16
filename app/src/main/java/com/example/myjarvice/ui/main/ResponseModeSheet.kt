@@ -21,13 +21,13 @@ internal fun ResponseModeSheet(mode: SmartMode, connection: ConnectionStatus, ha
     val colors = MaterialTheme.colorScheme
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
-            Text("How Jarvis responds", style = MaterialTheme.typography.headlineMedium)
-            Text("Choose what matters for this conversation.", style = MaterialTheme.typography.bodyMedium,
+            Text("Choose AI model", style = MaterialTheme.typography.headlineMedium)
+            Text("Choose where Jarvis runs. Your choice is saved as the default.", style = MaterialTheme.typography.bodyMedium,
                 color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp, bottom = 20.dp))
             listOf(
                 Triple(SmartMode.AUTO, "Auto", "Use your PC when connected. Fall back to the phone model when available."),
-                Triple(SmartMode.FAST_ON_DEVICE, "On this phone", "Text replies stay on this device. ${if (hasLocalModel) "Model ready." else "Import a model in Settings first."}"),
-                Triple(SmartMode.STRONG_HOST, "Your PC", "Use the stronger PC model, web search and PC tools. ${if (connection == ConnectionStatus.CONNECTED) "Connected." else "PC connection required."}")
+                Triple(SmartMode.FAST_ON_DEVICE, "Phone model", "Text replies stay on this device. ${if (hasLocalModel) "Imported model ready." else "Import a model in Settings first."}"),
+                Triple(SmartMode.STRONG_HOST, "PC model", "Use the model configured on your paired PC, web search and PC tools. ${if (connection == ConnectionStatus.CONNECTED) "Connected." else "PC connection required."}")
             ).forEach { (value, title, detail) ->
                 Surface(shape = RoundedCornerShape(16.dp), color = if (mode == value) colors.secondaryContainer else colors.surfaceContainerLow,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {

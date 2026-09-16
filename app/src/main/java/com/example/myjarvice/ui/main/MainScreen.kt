@@ -162,6 +162,14 @@ fun MainScreen(
 
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(viewModel) {
+        WakeEvents.popupVisible.collect { visible -> if (visible) viewModel.exitVoiceMode() }
+    }
+    LaunchedEffect(viewModel) {
+        WakeEvents.openSessionId.collect { id ->
+            if (id != null) { viewModel.openSessionById(id); WakeEvents.openSessionId.value = null }
+        }
+    }
+    LaunchedEffect(viewModel) {
         WakeEvents.voiceTrigger.collect { triggered ->
             if (triggered) {
                 WakeEvents.voiceTrigger.value = false
@@ -572,6 +580,8 @@ fun MainScreen(
 
                     // Floating Bottom Input Bar
                     ChatComposer(
+                        mode = smartMode,
+                        onChooseModel = { showResponseModes = true },
                         pcConnected = connectionStatus == ConnectionStatus.CONNECTED && smartMode != com.example.myjarvice.data.SmartMode.FAST_ON_DEVICE,
                         textInput = textInput,
                         onTextChange = { textInput = it.take(4000) },
@@ -981,7 +991,7 @@ private fun PromptSuggestionCard(
  * Server Configuration Dialog
  */
 @Composable
-private fun ServerConfigDialog(
+internal fun ServerConfigDialog(
     currentIp: String,
     currentToken: String,
     onConnect: (String, String) -> Unit,

@@ -73,6 +73,7 @@ import com.example.myjarvice.data.SettingsStore
 import com.example.myjarvice.data.SmartMode
 import com.example.myjarvice.data.SpeechManager
 import com.example.myjarvice.theme.ThemeMode
+import com.example.myjarvice.theme.AssistantStyle
 import com.example.myjarvice.ui.icons.IconDocument
 import com.example.myjarvice.ui.icons.IconMicrophone
 import com.example.myjarvice.ui.icons.IconSparkles
@@ -88,6 +89,8 @@ import java.io.File
 fun SettingsScreen(
     themeMode: ThemeMode,
     dynamicColor: Boolean,
+    assistantStyle: AssistantStyle,
+    onAssistantStyle: (AssistantStyle) -> Unit,
     onThemeMode: (ThemeMode) -> Unit,
     onDynamicColor: (Boolean) -> Unit,
     wakeEnabled: Boolean,
@@ -230,6 +233,14 @@ fun SettingsScreen(
 
 
                 SettingsCard {
+                    Text("Assistant style", style = MaterialTheme.typography.titleSmall)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ThemeChip("Pixel", assistantStyle == AssistantStyle.PIXEL) { onAssistantStyle(AssistantStyle.PIXEL) }
+                        ThemeChip("Jarvis", assistantStyle == AssistantStyle.JARVIS) { onAssistantStyle(AssistantStyle.JARVIS) }
+                    }
+                    Text("Pixel uses calm Material surfaces. Jarvis adds a cyan-and-amber arc identity. Both are still Jarvis.",
+                        style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                    HorizontalDivider(Modifier.padding(vertical = 14.dp))
                     Text("Theme Mode", color = scheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.height(10.dp))
 
@@ -442,15 +453,18 @@ fun SettingsScreen(
                         if (voiceMatchEnabled && isEnrolled)
                             "Wake detection and voice matching stay on this phone. Jarvis opens hands-free only when the enrolled voice matches."
                         else
-                            "First setup downloads a 40 MB English wake model. Wake detection stays on this phone and uses the microphone and battery while enabled. Anyone saying the phrase can wake Jarvis.",
+                            "Set up and enable your voice profile first. Automatic wake will not open Jarvis without it. First setup downloads a 40 MB English recognition model.",
                         color = scheme.onSurfaceVariant,
                         fontSize = 12.sp
                     )
-                    Text("Say ‘Hey Jarvis’, pause for the voice screen, then speak. From other apps, allow pop-up access below or tap the Jarvis notification. Unlocking your phone may still be required.", color = scheme.onSurfaceVariant, fontSize = 12.sp)
+                    Text("Say only ‘Hey Jarvis’, pause for the popup and ready tone, then speak. Hi/Okay Jarvis and sentences mentioning Jarvis do not count. Your phone must be unlocked.", color = scheme.onSurfaceVariant, fontSize = 12.sp)
                     Button(onClick = {
                         runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))) }
                             .onFailure { Toast.makeText(context, "Open Android Settings → Apps → Jarvis → Display over other apps", Toast.LENGTH_LONG).show() }
-                    }) { Text("Allow wake from other apps") }
+                    }) { Text("Allow Jarvis popup over other apps") }
+                    TextButton(onClick = {
+                        context.startActivity(Intent(context, com.example.myjarvice.AssistantPopupActivity::class.java))
+                    }) { Text("Preview Jarvis popup") }
                     HorizontalDivider(color = scheme.outline.copy(alpha = 0.2f))
                     Spacer(Modifier.height(12.dp))
 
@@ -478,6 +492,7 @@ fun SettingsScreen(
                             onCheckedChange = {
                                 voiceMatchEnabled = it
                                 settingsStore.voiceMatchEnabled = it
+                                if (!it) onWakeEnabled(false)
                             },
                             colors = SwitchDefaults.colors(checkedThumbColor = scheme.onPrimary, checkedTrackColor = scheme.primary)
                         )
@@ -513,9 +528,8 @@ fun SettingsScreen(
                             Text("Match Sensitivity", color = scheme.onSurface, fontSize = 13.sp)
                             Text(
                                 when {
-                                    voiceMatchThreshold >= 0.78f -> "Strict"
-                                    voiceMatchThreshold >= 0.70f -> "Standard"
-                                    else -> "Lenient"
+                                    voiceMatchThreshold >= 0.86f -> "Very strict"
+                                    else -> "Strict"
                                 },
                                 color = scheme.primary,
                                 fontSize = 13.sp,
@@ -528,7 +542,7 @@ fun SettingsScreen(
                                 voiceMatchThreshold = it
                                 settingsStore.voiceMatchThreshold = it
                             },
-                            valueRange = 0.60f..0.85f,
+                            valueRange = 0.78f..0.90f,
                             steps = 5,
                             colors = SliderDefaults.colors(thumbColor = scheme.primary, activeTrackColor = scheme.primary)
                         )
@@ -545,6 +559,7 @@ fun SettingsScreen(
                         )
                         TextButton(onClick = {
                             settingsStore.clearVoiceProfile()
+                            onWakeEnabled(false)
                             voiceMatchEnabled = false
                             isEnrolled = false
                             WakeEvents.lastVoiceMatchScore.value = null

@@ -13,6 +13,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.example.myjarvice.theme.ThemeMode
+import com.example.myjarvice.theme.AssistantStyle
 import com.example.myjarvice.ui.main.MainScreen
 import com.example.myjarvice.ui.settings.SettingsScreen
 import com.example.myjarvice.ui.splash.SplashScreen
@@ -24,6 +25,8 @@ fun MainNavigation(
     inboxRequest: Long = 0L,
     themeMode: ThemeMode,
     dynamicColor: Boolean,
+    assistantStyle: AssistantStyle,
+    onAssistantStyle: (AssistantStyle) -> Unit,
     onThemeMode: (ThemeMode) -> Unit,
     onDynamicColor: (Boolean) -> Unit,
     wakeEnabled: Boolean,
@@ -69,6 +72,8 @@ fun MainNavigation(
                 SettingsScreen(
                     themeMode = themeMode,
                     dynamicColor = dynamicColor,
+                    assistantStyle = assistantStyle,
+                    onAssistantStyle = onAssistantStyle,
                     onThemeMode = onThemeMode,
                     onDynamicColor = onDynamicColor,
                     wakeEnabled = wakeEnabled,

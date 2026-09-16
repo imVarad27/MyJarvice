@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
 import android.provider.Settings
+import com.example.myjarvice.AssistantPopupActivity
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -29,6 +30,13 @@ class WakeWordService : Service() {
         @Volatile private var requested = false
         fun start(context: Context) {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
+            val settings = SettingsStore(context)
+            if (!settings.isVoiceProfileEnrolled || !settings.voiceMatchEnabled) {
+                requested = false
+                WakeEvents.status.value = "Set up and enable your personal voice profile first"
+                if (WakeEvents.running.value) context.stopService(Intent(context, WakeWordService::class.java))
+                return
+            }
             requested = true
             try {
                 ContextCompat.startForegroundService(context, Intent(context, WakeWordService::class.java).setAction(ACTION_START))
@@ -83,7 +91,9 @@ class WakeWordService : Service() {
                     model = loaded
                     loaded = null
                 } finally { loaded?.close() }
-                recognizer = Recognizer(model, 16000f, "[\"hey jarvis\", \"hi jarvis\", \"okay jarvis\", \"ok jarvis\", \"[unk]\"]")
+                // Free transcription avoids a tiny grammar forcing unrelated sounds
+                // into the only known wake phrase. Only completed results can wake.
+                recognizer = Recognizer(model, 16000f).apply { setWords(true) }
                 recorder = AudioBufferRecorder(sampleRate = 16000, bufferSeconds = 3.0f)
                 WakeEvents.microphoneBusy.collect { busy -> if (busy) pauseCapture() else resumeCapture() }
             } catch (e: CancellationException) { throw e
@@ -96,30 +106,48 @@ class WakeWordService : Service() {
         return START_NOT_STICKY
     }
     private fun pauseCapture() {
-        if (capturing) recorder?.stop()
+        val released = if (capturing) recorder?.stop() != false else true
         capturing = false
-        WakeEvents.captureReleased.value = true
+        WakeEvents.captureReleased.value = released
         updateStatus("Paused while Jarvis is in use")
     }
     private fun resumeCapture() {
         if (!requested || WakeEvents.microphoneBusy.value || capturing || matchInProgress || SystemClock.elapsedRealtime() < cooldownUntil) return
+        if (recorder?.isReleased() == false) {
+            scope.launch { delay(200); resumeCapture() }
+            return
+        }
+        WakeEvents.captureReleased.value = true
         recognizer?.reset()
         recorder?.clear()
-        capturing = recorder?.start { audio, length, _ ->
-            val localRecognizer = recognizer ?: return@start
-            val result = if (localRecognizer.acceptWaveForm(audio, length)) {
-                localRecognizer.result
-            } else {
-                localRecognizer.partialResult
+        if (!SettingsStore(this).voiceMatchEnabled || !SettingsStore(this).isVoiceProfileEnrolled) {
+            updateStatus("Voice profile required for hands-free wake")
+            stopSelf()
+            return
+        }
+        capturing = recorder?.start(onError = { error ->
+            scope.launch {
+                pauseCapture()
+                Log.w("WakeWordService", "Wake recorder interrupted", error)
+                delay(2000)
+                resumeCapture()
             }
-            accept(result)
+        }) { audio, length, _ ->
+            val localRecognizer = recognizer ?: return@start
+            if (localRecognizer.acceptWaveForm(audio, length)) accept(localRecognizer.result)
         } == true
         WakeEvents.captureReleased.value = !capturing
         updateStatus(if (capturing) "Listening for Hey Jarvis" else "Microphone unavailable. Toggle off and on to retry.")
     }
     private fun accept(hypothesis: String?) {
         val data = runCatching { JSONObject(hypothesis.orEmpty()) }.getOrNull() ?: return
-        val text = data.optString("partial", data.optString("text"))
+        val text = data.optString("text")
+        val recognizedWords = data.optJSONArray("result") ?: return
+        val words = (0 until recognizedWords.length()).map { index ->
+            val word = recognizedWords.getJSONObject(index)
+            word.optString("word") to word.optDouble("conf", 0.0)
+        }
+        if (!WakePhrase.confidentWords(words)) return
         if (!capturing || matchInProgress || WakeEvents.microphoneBusy.value || !WakePhrase.matches(text) || SystemClock.elapsedRealtime() < cooldownUntil) return
         matchInProgress = true
         val wakeAudio = recorder?.getRecentAudio(2600) ?: ShortArray(0)
@@ -132,14 +160,9 @@ class WakeWordService : Service() {
     private suspend fun verifyAndActivate(wakeAudio: ShortArray) {
         val settingsStore = SettingsStore(this)
         val profile = settingsStore.getVoiceProfile()
-        if (!settingsStore.voiceMatchEnabled) {
-            activateWake(ownerVerified = false)
-            return
-        }
-        if (profile == null) {
-            settingsStore.voiceMatchEnabled = false
+        if (!settingsStore.voiceMatchEnabled || profile == null) {
             WakeEvents.ownerVerified.value = false
-            updateStatus("Voice profile needs setup")
+            updateStatus("Voice profile required — wake ignored")
             finishMatch(delayMs = 1800)
             return
         }
@@ -151,7 +174,7 @@ class WakeWordService : Service() {
             } else Pair(false, 0f)
         }
         WakeEvents.lastVoiceMatchScore.value = score
-        if (matched) {
+        if (matched && WakeActivationPolicy.permits(profile != null, settingsStore.voiceMatchEnabled, score, settingsStore.voiceMatchThreshold)) {
             activateWake(ownerVerified = true)
         } else {
             WakeEvents.ownerVerified.value = false
@@ -165,9 +188,13 @@ class WakeWordService : Service() {
         cooldownUntil = SystemClock.elapsedRealtime() + 4000
         WakeEvents.ownerVerified.value = ownerVerified
         Log.i("WakeWordService", "Wake phrase accepted; ownerVerified=$ownerVerified")
-        if (WakeEvents.appVisible.value) WakeEvents.voiceTrigger.value = true
-        else if (Settings.canDrawOverlays(this)) runCatching { startActivity(voiceIntent()) }
-        updateStatus(if (ownerVerified) "Voice recognized — listening for your request" else "Hey! Tap to speak to Jarvis")
+        val locked = getSystemService(KeyguardManager::class.java).isKeyguardLocked
+        if (!locked && (WakeEvents.appVisible.value || Settings.canDrawOverlays(this))) {
+            runCatching { startActivity(popupIntent(verified = true)) }
+                .onFailure { Log.w("WakeWordService", "Popup launch restricted", it) }
+        }
+        updateStatus(if (locked) "Voice matched — unlock your phone and tap to open Jarvis"
+            else "Voice matched — tap if the popup did not open")
         finishMatch(delayMs = 4200)
     }
 
@@ -178,15 +205,15 @@ class WakeWordService : Service() {
             resumeCapture()
         }
     }
-    private fun voiceIntent() = Intent(this, MainActivity::class.java)
+    private fun popupIntent(verified: Boolean = false) = Intent(this, AssistantPopupActivity::class.java)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        .putExtra(MainActivity.EXTRA_START_VOICE, true)
+        .putExtra(AssistantPopupActivity.EXTRA_VERIFIED_WAKE, verified)
     private fun notification(text: String): Notification {
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle("Hey Jarvis").setContentText(text)
-            .setContentIntent(PendingIntent.getActivity(this, 0, voiceIntent(), flags))
+            .setContentIntent(PendingIntent.getActivity(this, 0, popupIntent(), flags))
             .addAction(0, "Stop listening", PendingIntent.getService(this, 1, Intent(this, WakeWordService::class.java).setAction(ACTION_STOP), flags))
             .setOnlyAlertOnce(true).setOngoing(true).build()
     }
