@@ -133,6 +133,7 @@ fun SettingsScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
+                onDeviceModelPath = settingsStore.onDeviceModelPath
                 isEnrolled = settingsStore.isVoiceProfileEnrolled
                 voiceMatchEnabled = settingsStore.voiceMatchEnabled && isEnrolled
             }
@@ -151,28 +152,21 @@ fun SettingsScreen(
         if (uri == null) return@rememberLauncherForActivityResult
         coroutineScope.launch {
             importingModel = true
+            val library = com.example.myjarvice.data.LocalModelLibrary(context)
+            val hadActiveModel = library.activeModel() != null
+            library.fallbackModel()
             val outcome = withContext(Dispatchers.IO) {
                 runCatching {
-                    val modelDir = File(context.filesDir, "models").apply { mkdirs() }
-                    val destination = File(modelDir, "jarvis-on-device.litertlm")
-                    val atomic = android.util.AtomicFile(destination)
-                    val output = atomic.startWrite()
-                    try {
-                        context.contentResolver.openInputStream(uri)?.use { input ->
-                            check(input.copyTo(output) > 0) { "The selected model is empty" }
-                        } ?: error("Unable to open the selected model")
-                        atomic.finishWrite(output)
-                    } catch (error: Exception) {
-                        atomic.failWrite(output)
-                        throw error
-                    }
-                    destination.absolutePath
-                }
+                    library.importCandidate(uri).absolutePath
+                }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
             }
             outcome.onSuccess { path ->
-                onDeviceModelPath = path
-                settingsStore.onDeviceModelPath = path
-                Toast.makeText(context, "On-device model imported", Toast.LENGTH_SHORT).show()
+                if (!hadActiveModel) {
+                    onDeviceModelPath = path
+                    settingsStore.onDeviceModelPath = path
+                    settingsStore.localFallbackModelPath = path
+                }
+                Toast.makeText(context, if (hadActiveModel) "Candidate added. Current model kept; compare it in Settings." else "On-device model imported", Toast.LENGTH_LONG).show()
             }.onFailure { error ->
                 Toast.makeText(context, "Model import failed: ${error.message}", Toast.LENGTH_LONG).show()
             }
@@ -722,7 +716,7 @@ fun SettingsScreen(
                         IconDocument(tint = scheme.primary, size = 16.dp)
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            if (onDeviceModelPath.isBlank() && transferredModelPath.isBlank()) "Import LiteRT-LM Model" else "Replace On-device Model",
+                            if (onDeviceModelPath.isBlank() && transferredModelPath.isBlank()) "Import LiteRT-LM Model" else "Add model · keep current model",
                             color = scheme.primary,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 13.sp
@@ -731,6 +725,11 @@ fun SettingsScreen(
                     if (importingModel) {
                         LinearProgressIndicator(Modifier.fillMaxWidth())
                         Text("Importing model… Keep Jarvis open.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    TextButton(onClick = {
+                        context.startActivity(Intent(context, com.example.myjarvice.LocalModelBenchmarkActivity::class.java))
+                    }, enabled = !importingModel, modifier = Modifier.fillMaxWidth()) {
+                        Text("Compare local models")
                     }
                     val displayedModelPath = onDeviceModelPath.ifBlank { transferredModelPath }
                     if (displayedModelPath.isNotBlank()) {

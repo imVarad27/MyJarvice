@@ -115,6 +115,11 @@ class SettingsStore(context: Context) {
         get() = prefs.getString(KEY_ON_DEVICE_MODEL_PATH, "") ?: ""
         set(value) { prefs.edit().putString(KEY_ON_DEVICE_MODEL_PATH, value.trim()).apply() }
 
+    /** First working local model stays available when candidates are added. */
+    var localFallbackModelPath: String
+        get() = prefs.getString("local_fallback_model_path", "") ?: ""
+        set(value) { prefs.edit().putString("local_fallback_model_path", value.trim()).apply() }
+
     /**
      * Voice Match: Restricts wake-word activation exclusively to the enrolled user's voice.
      */

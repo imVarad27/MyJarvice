@@ -42,7 +42,8 @@ internal fun ChatFeed(
     isThinking: Boolean,
     onCopy: (String) -> Unit,
     onSpeak: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    processingLabel: String = ""
 ) {
     val listState = rememberLazyListState()
     val streaming = chatHistory.lastOrNull()?.type == "PARTIAL"
@@ -76,7 +77,7 @@ internal fun ChatFeed(
 
         if (showThinking) {
             item {
-                ThinkingIndicator()
+                ThinkingIndicator(processingLabel)
             }
         }
     }
@@ -403,7 +404,7 @@ private fun FullscreenImageDialog(
 }
 
 @Composable
-private fun ThinkingIndicator() {
+private fun ThinkingIndicator(processingLabel: String = "") {
     val scheme = MaterialTheme.colorScheme
     var elapsedSeconds by remember { mutableStateOf(0) }
     LaunchedEffect(Unit) {
@@ -444,6 +445,7 @@ private fun ThinkingIndicator() {
         ) {
             Text(
                 when {
+                    processingLabel.isNotBlank() -> processingLabel + if (elapsedSeconds >= 8) " · ${elapsedSeconds}s" else ""
                     elapsedSeconds >= 20 -> "Taking a little longer… ${elapsedSeconds}s"
                     elapsedSeconds >= 8 -> "Still working on it… ${elapsedSeconds}s"
                     else -> "Thinking it through…"

@@ -365,6 +365,10 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     fun sendQuery(text: String, photo: PhotoAttachment? = null, fromVoice: Boolean = false) {
         if (text.isBlank() || localRequestActive || _isThinking.value) return
+        if (com.example.myjarvice.data.LocalBenchmarkRuntime.active.value) {
+            _responseRoute.value = "Local model comparison running · stop it before chatting"
+            return
+        }
 
         val profileEnabled = settings.voiceMatchEnabled && settings.isVoiceProfileEnrolled
         if (photo == null && VoiceActionPolicy.shouldBlock(
@@ -485,7 +489,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                     query = localPrompt,
                     chatHistory = chatHistory.value.dropLast(1),
                     personality = settings.aiPersonality,
-                    temperature = settings.temperature
+                    temperature = settings.temperature,
+                    onStage = { _responseRoute.value = it }
                 )
             }
             _isThinking.value = false

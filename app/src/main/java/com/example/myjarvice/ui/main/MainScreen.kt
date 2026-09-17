@@ -498,6 +498,7 @@ fun MainScreen(
                             ChatFeed(
                                 chatHistory = chatHistory,
                                 isThinking = isThinking,
+                                processingLabel = responseRoute,
                                 onCopy = { text ->
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                     clipboard.setPrimaryClip(ClipData.newPlainText("JARVIS", text))

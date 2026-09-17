@@ -58,6 +58,7 @@ fun AssistantPopupScreen(model: MainScreenViewModel, verifiedWake: Boolean,
     val listening by model.isListening.collectAsStateWithLifecycle()
     val speaking by model.isSpeaking.collectAsStateWithLifecycle()
     val thinking by model.isThinking.collectAsStateWithLifecycle()
+    val route by model.responseRoute.collectAsStateWithLifecycle()
     val transcript by model.liveTranscript.collectAsStateWithLifecycle()
     val status by model.recognitionStatus.collectAsStateWithLifecycle()
     val owner by model.voiceOwnerVerified.collectAsStateWithLifecycle()
@@ -107,11 +108,11 @@ fun AssistantPopupScreen(model: MainScreenViewModel, verifiedWake: Boolean,
                         (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                             .setPrimaryClip(ClipData.newPlainText("Jarvis reply", it))
                     }, onSpeak = model::speak,
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 230.dp))
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 230.dp), processingLabel = route)
                 }
                 if (listening || speaking || thinking || (!muted && status.isNotBlank())) {
                     Text(when {
-                        thinking -> "Thinking…"
+                        thinking -> route
                         speaking -> "Speaking…"
                         listening && transcript.isNotBlank() -> transcript
                         else -> status

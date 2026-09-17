@@ -107,21 +107,30 @@ class LocalKnowledgeStore(private val context: Context) {
 
     companion object {
         private val lock = Any()
-        private val stopWords = setOf("the", "is", "a", "an", "in", "to", "of", "and", "what", "my", "me", "about", "does", "say", "please", "from", "document")
+        private val stopWords = setOf("the", "is", "a", "an", "in", "to", "of", "and", "what", "my", "me", "about", "does", "say", "please", "from", "document", "documents", "find", "search", "saved", "memory", "memories", "library", "inbox", "explain", "tell", "more", "when", "how", "that", "this", "with", "for")
         private fun terms(text: String) = Regex("[\\p{L}\\p{N}]+").findAll(text.lowercase())
-            .map { it.value }.filter { it.length > 1 && it !in stopWords }.toSet()
+            .map { it.value }.filter { it.length > 1 && it !in stopWords }.map {
+                when (it) { "examination", "examinations", "exams" -> "exam"; else -> it }
+            }.toSet()
 
         /** Bounded lexical retrieval: no extra embedding model or network required. */
         fun rank(query: String, entries: List<KnowledgeEntry>): List<KnowledgeHit> {
             val keywords = terms(query)
             if (keywords.isEmpty()) return emptyList()
-            return entries.flatMap { entry ->
+            data class Passage(val hit: KnowledgeHit, val body: Set<String>, val title: Set<String>)
+            val passages = entries.flatMap { entry ->
                 entry.text.windowed(700, 550, partialWindows = true).mapIndexed { index, chunk ->
-                    val score = terms(chunk + " " + entry.name).intersect(keywords).size
-                    score to KnowledgeHit(
-                        if (entry.memory) "Saved memory" else "${entry.name} · passage ${index + 1}", chunk
-                    )
+                    Passage(KnowledgeHit(if (entry.memory) "Saved memory" else "${entry.name} · passage ${index + 1}", chunk), terms(chunk), if (entry.memory) emptySet() else terms(entry.name))
                 }
+            }
+            val weights = keywords.associateWith { word ->
+                kotlin.math.ln(1.0 + (passages.size + 1.0) / (1.0 + passages.count { word in it.body || word in it.title }))
+            }
+            return passages.map { passage ->
+                val score = keywords.sumOf { word -> (weights[word] ?: 0.0) *
+                    ((if (word in passage.body) 1.0 else 0.0) + (if (word in passage.title) 0.35 else 0.0)) } /
+                    kotlin.math.sqrt(maxOf(1, passage.body.size).toDouble())
+                score to passage.hit
             }.filter { it.first > 0 }.sortedByDescending { it.first }.take(3).map { it.second }
         }
     }

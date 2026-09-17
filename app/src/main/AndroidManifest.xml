@@ -90,6 +90,7 @@
             android:theme="@style/Theme.JarvisPopup" />
 
         <!-- Android Share-sheet entry point for text, links, photos, and voice notes. -->
+        <activity android:name=".LocalModelBenchmarkActivity" android:exported="false" />
         <activity
             android:name=".ShareReceiverActivity"
             android:exported="true"
