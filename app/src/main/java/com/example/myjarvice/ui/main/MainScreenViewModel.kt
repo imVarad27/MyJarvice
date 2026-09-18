@@ -20,6 +20,8 @@ import com.example.myjarvice.data.SpeechManager
 import com.example.myjarvice.data.SmartMode
 import com.example.myjarvice.data.LocalKnowledgeStore
 import com.example.myjarvice.data.LocalCalculator
+import com.example.myjarvice.data.SafePhoneAction
+import com.example.myjarvice.data.SafePhoneActionParser
 import com.example.myjarvice.data.PhotoAttachment
 import com.example.myjarvice.data.VoiceOption
 import com.example.myjarvice.wake.WakeEvents
@@ -181,10 +183,10 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             wsClient.latestAction.collect { action ->
                 action?.let {
-                    if (it.type.equals("CALL", ignoreCase = true)) {
+                    if (it.type.equals("CALL", ignoreCase = true) || it.type.equals("WHATSAPP", ignoreCase = true)) {
                         _pendingAction.value = it
                     } else {
-                        // Safe actions (open app, camera, maps, flashlight, alarm, whatsapp) execute immediately
+                        // Allowlisted low-risk actions (open app, camera, maps, flashlight, alarms) execute immediately.
                         actionExecutor.execute(it)
                         viewModelScope.launch { JarvisSoundFx.playSuccessChime() }
                     }
@@ -325,7 +327,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         val action = _pendingAction.value ?: return
         _pendingAction.value = null
         if (approved) {
-            actionExecutor.execute(action)
+            if (action.id.startsWith("local:")) {
+                if (action.type == "CALL" || action.type == "WHATSAPP") {
+                    actionExecutor.execute(action)
+                } else actionExecutor.executeLocalSafe(SafePhoneAction(action.type, action.query, true))
+                    .onSuccess { result -> wsClient.addLocalMessage(JarvisMessage(sender = "JARVIS (Phone)", text = result, timestamp = timestampNow())) }
+                    .onFailure { error -> wsClient.addLocalMessage(JarvisMessage(sender = "JARVIS (Phone)", text = error.message ?: "Phone action failed.", type = "ERROR", timestamp = timestampNow())) }
+            } else actionExecutor.execute(action)
             viewModelScope.launch { JarvisSoundFx.playSuccessChime() }
         }
     }
@@ -390,6 +398,23 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
         // Explicit local tools never forward saved facts or document excerpts to a host.
         val command = text.trim()
+        if (photo == null) {
+            SafePhoneActionParser.parse(command)?.let { phoneAction ->
+                wsClient.addLocalMessage(JarvisMessage(sender = "USER", text = text, type = "QUERY", timestamp = timestampNow()))
+                _responseRoute.value = "Phone action · stays on this device"
+                if (phoneAction.requiresConfirmation) {
+                    _pendingAction.value = JarvisAction("local:${UUID.randomUUID()}", phoneAction.type, phoneAction.query)
+                    wsClient.addLocalMessage(JarvisMessage(sender = "JARVIS (Phone)", text = "I can do that, but I need your confirmation first.", timestamp = timestampNow()))
+                } else {
+                    val result = actionExecutor.executeLocalSafe(phoneAction)
+                    result.fold(
+                        onSuccess = { reply -> wsClient.addLocalMessage(JarvisMessage(sender = "JARVIS (Phone)", text = reply, timestamp = timestampNow())) },
+                        onFailure = { error -> wsClient.addLocalMessage(JarvisMessage(sender = "JARVIS (Phone)", text = error.message ?: "Phone action failed.", type = "ERROR", timestamp = timestampNow())) }
+                    )
+                }
+                return
+            }
+        }
         if (photo == null && (command.startsWith("calculate ", true) || command.startsWith("remember: ", true) ||
             command.equals("show memories", true) || command.startsWith("search documents:", true))) {
             localRequestActive = true

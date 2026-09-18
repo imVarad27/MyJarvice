@@ -21,6 +21,24 @@ import androidx.core.content.ContextCompat
  */
 class DeviceActionExecutor(private val context: Context) {
 
+    /** Executes only an action produced by SafePhoneActionParser. */
+    fun executeLocalSafe(action: SafePhoneAction): Result<String> = runCatching {
+        when (action.type) {
+            "DEVICE_STATUS" -> {
+                val values = DeviceContextProvider(context).getDeviceContext()
+                "Battery ${values["battery_level"] ?: "unknown"} · " +
+                    (if (values["is_charging"] == true) "charging" else "not charging") +
+                    " · ${values["connection_type"] ?: "connection unknown"} · ${values["time"] ?: "time unavailable"}"
+            }
+            "FLASHLIGHT" -> { toggleFlashlight(action.query); "Flashlight command completed (${action.query})." }
+            "OPEN_APP" -> { openApp(action.query); "Opening ${action.query}." }
+            "NAVIGATE" -> { navigateTo(action.query); "Opening directions to ${action.query}." }
+            "SET_ALARM" -> { setAlarm(action.query); "Opening the alarm confirmation for ${action.query}." }
+            "SET_TIMER" -> { setTimer(action.query); "Opening the timer confirmation for ${action.query}." }
+            else -> error("This phone action is not allowlisted.")
+        }
+    }
+
     /** Common voice-name → package aliases for reliability. */
     private val appAliases = mapOf(
         "whatsapp" to "com.whatsapp",
@@ -186,6 +204,30 @@ class DeviceActionExecutor(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Error setting alarm: ${e.message}")
             toast("Failed to set alarm")
+        }
+    }
+
+    private fun setTimer(durationQuery: String) {
+        try {
+            val amount = Regex("(\\d+(?:\\.\\d+)?)").find(durationQuery)?.groupValues?.get(1)?.toDoubleOrNull()
+                ?: error("Tell me the timer duration, for example ten minutes.")
+            val lower = durationQuery.lowercase()
+            val seconds = when {
+                "hour" in lower -> amount * 3600
+                "second" in lower -> amount
+                else -> amount * 60
+            }
+            require(seconds in 1.0..86_400.0) { "Use a timer between one second and 24 hours." }
+            val intent = Intent(AlarmClock.ACTION_SET_TIMER).apply {
+                putExtra(AlarmClock.EXTRA_LENGTH, seconds.toInt())
+                putExtra(AlarmClock.EXTRA_MESSAGE, "JARVIS Timer")
+                putExtra(AlarmClock.EXTRA_SKIP_UI, false)
+            }
+            launch(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting timer: ${e.message}")
+            toast(e.message ?: "Failed to set timer")
+            throw e
         }
     }
 

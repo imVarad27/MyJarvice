@@ -15,6 +15,10 @@ Calculate (18 + 7) * 4
 Search documents: physics examination
 ```
 
+## Safe phone actions
+
+Explicit local commands can read phone status or start a low-risk Android flow without loading the language model: `phone status`, `what is my battery?`, `turn the flashlight on/off`, `open YouTube`, `directions to Central Park`, `set an alarm for 7 PM`, and `start a timer for 10 minutes`. The app uses an allowlist and bounded arguments; ordinary questions are not interpreted as actions. Android's alarm/timer UI remains visible for review. Calls and WhatsApp messages enter the existing confirmation dialog, and server-directed calls/messages use the same confirmation gate. No arbitrary package names, shell commands, file paths, or hidden background actions are accepted.
+
 The calculator supports decimal numbers, unary signs, parentheses, and `+ - * /` with decimal64 precision. It rejects invalid expressions and division by zero; it never executes code.
 
 Fast mode retrieves up to three matching passages or saved facts and supplies them to the on-device model. Retrieval uses length-normalized, rarity-weighted lexical matching, not semantic embeddings: specific keywords work best. Generic search words are ignored and exam/examination share a keyword. Common follow-ups such as “explain that” include the previous user topic in the retrieval query. The response includes a list of retrieved sources; that list is evidence supplied to the model, not proof that every generated claim is correct. Inspect the original text or use `Search documents:` for exact excerpts.
