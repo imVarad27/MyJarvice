@@ -47,11 +47,11 @@ fun VoiceInfoDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Session Info", color = MaterialTheme.colorScheme.primary) },
+        title = { Text("Voice session") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 InfoRow("PC", serverIp.ifBlank { "Not configured" })
-                InfoRow("Link", connectionStatus.name)
+                InfoRow("Connection", connectionStatus.name.lowercase().replaceFirstChar { it.uppercase() })
                 InfoRow("Messages", messageCount.toString())
                 InfoRow("Voice", voiceLabel)
                 Spacer(Modifier.size(10.dp))
@@ -92,7 +92,7 @@ fun VoicePickerDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Change Voice", color = MaterialTheme.colorScheme.primary) },
+        title = { Text("Choose a voice") },
         text = {
             if (voices.isEmpty()) {
                 Text(

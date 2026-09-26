@@ -1,61 +1,6 @@
-<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-
-    <!-- Outer Tech Glow Ring -->
-    <path
-        android:pathData="M 54,20 A 34,34 0 1,0 54,88 A 34,34 0 1,0 54,20 Z"
-        android:strokeWidth="1.5"
-        android:strokeColor="#3300F0FF"
-        android:fillColor="#00000000" />
-
-    <!-- Outer Dashed Segmented Reactor Ring -->
-    <path
-        android:pathData="M 54,24 A 30,30 0 1,0 54,84 A 30,30 0 1,0 54,24 Z"
-        android:strokeWidth="3"
-        android:strokeColor="#00F0FF"
-        android:fillColor="#00000000" />
-
-    <!-- 10 Radial Energy Coil Nodes -->
-    <!-- Top -->
-    <path android:pathData="M 52,21 h4 v7 h-4 z" android:fillColor="#00F0FF" />
-    <!-- Bottom -->
-    <path android:pathData="M 52,80 h4 v7 h-4 z" android:fillColor="#00F0FF" />
-    <!-- Left -->
-    <path android:pathData="M 21,52 v4 h7 v-4 z" android:fillColor="#00F0FF" />
-    <!-- Right -->
-    <path android:pathData="M 80,52 v4 h7 v-4 z" android:fillColor="#00F0FF" />
-    <!-- Diagonals -->
-    <path android:pathData="M 30.5,30.5 l5,5 l-2.8,2.8 l-5,-5 z" android:fillColor="#00F0FF" />
-    <path android:pathData="M 72.5,30.5 l5,5 l-2.8,2.8 l-5,-5 z" android:fillColor="#00F0FF" />
-    <path android:pathData="M 30.5,72.5 l5,-5 l2.8,2.8 l-5,5 z" android:fillColor="#00F0FF" />
-    <path android:pathData="M 72.5,72.5 l5,-5 l2.8,2.8 l-5,5 z" android:fillColor="#00F0FF" />
-
-    <!-- Inner Metallic Ring -->
-    <path
-        android:pathData="M 54,34 A 20,20 0 1,0 54,74 A 20,20 0 1,0 54,34 Z"
-        android:strokeWidth="2.5"
-        android:strokeColor="#00A8FF"
-        android:fillColor="#00000000" />
-
-    <!-- Core Tri-Spoke Arc Generator -->
-    <path
-        android:pathData="M 54,39 L 66,61 L 42,61 Z"
-        android:strokeWidth="2"
-        android:strokeColor="#FFC700"
-        android:fillColor="#1500F0FF" />
-
-    <!-- Inner Glowing Energy Core -->
-    <path
-        android:pathData="M 54,43 A 11,11 0 1,0 54,65 A 11,11 0 1,0 54,43 Z"
-        android:fillColor="#00F0FF" />
-
-    <!-- Bright Arc Core Center -->
-    <path
-        android:pathData="M 54,48 A 6,6 0 1,0 54,60 A 6,6 0 1,0 54,48 Z"
-        android:fillColor="#FFFFFF" />
-
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Orbital J. Artwork remains inside the adaptive icon safe zone. -->
+    <path android:pathData="M65,36L65,60C65,70 59,76 50,76C42,76 36,71 35,64" android:strokeColor="#C2F0DE" android:strokeWidth="9" android:strokeLineCap="round" android:fillColor="@android:color/transparent" />
+    <path android:pathData="M36,48C38,39 44,33 53,32" android:strokeColor="#63C8AB" android:strokeWidth="5" android:strokeLineCap="round" android:fillColor="@android:color/transparent" />
+    <path android:pathData="M76,47A4,4 0,1 1,76,55A4,4 0,1 1,76,47" android:fillColor="#C2F0DE" />
 </vector>

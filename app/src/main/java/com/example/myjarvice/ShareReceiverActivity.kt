@@ -9,6 +9,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,8 +39,10 @@ class ShareReceiverActivity : ComponentActivity() {
             val settings = remember { SettingsStore(applicationContext) }
             MyJarvisTheme(themeMode = settings.themeMode, dynamicColor = settings.dynamicColor, assistantStyle = settings.assistantStyle) {
                 Surface(Modifier.fillMaxSize()) {
-                    Column(Modifier.safeDrawingPadding().fillMaxSize().padding(32.dp),
+                    Column(Modifier.safeDrawingPadding().fillMaxSize().verticalScroll(rememberScrollState()).padding(32.dp),
                         verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                        com.example.myjarvice.ui.JarvisBrandMark(Modifier.size(72.dp))
+                        Spacer(Modifier.height(24.dp))
                         Text(if (!state.done) "Saving to Jarvis…" else if (state.saved > 0) "Saved for later" else "Couldn't save these items", style = MaterialTheme.typography.headlineSmall)
                         Spacer(Modifier.height(16.dp))
                         if (!state.done) CircularProgressIndicator()

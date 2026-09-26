@@ -4,6 +4,8 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -135,7 +138,7 @@ fun PcExplorerDialog(
                             Text(
                                 "Browse & download files from your computer",
                                 color = scheme.onSurfaceVariant,
-                                fontSize = 11.sp
+                                fontSize = 13.sp
                             )
                         }
                     }
@@ -160,10 +163,10 @@ fun PcExplorerDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     val presets = listOf(
-                        "projects" to "💻 Workspace",
-                        "downloads" to "📥 Downloads",
-                        "documents" to "📄 Documents",
-                        "desktop" to "🖥️ Desktop"
+                        "projects" to "Workspace",
+                        "downloads" to "Downloads",
+                        "documents" to "Documents",
+                        "desktop" to "Desktop"
                     )
                     items(presets) { (key, label) ->
                         val isSelected = selectedPreset == key
@@ -180,7 +183,8 @@ fun PcExplorerDialog(
                                     selectedPreset = key
                                     loadDirectory(preset = key)
                                 }
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                .heightIn(min = 48.dp)
+                                .padding(horizontal = 12.dp, vertical = 12.dp)
                         ) {
                             Text(
                                 label,
@@ -248,7 +252,7 @@ fun PcExplorerDialog(
                     } else if (errorMessage != null) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Failed to connect to PC", color = Color(0xFFEF4444), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Failed to connect to PC", color = scheme.error, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                                 Spacer(Modifier.height(4.dp))
                                 Text(errorMessage ?: "", color = scheme.onSurfaceVariant, fontSize = 12.sp)
                                 Spacer(Modifier.height(12.dp))
@@ -292,6 +296,7 @@ fun PcExplorerDialog(
                                                 selectedFile = if (selectedFile?.path == item.path) null else item
                                             }
                                         }
+                                        .heightIn(min = 56.dp)
                                         .padding(horizontal = 10.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
@@ -315,7 +320,7 @@ fun PcExplorerDialog(
                                                 Text(
                                                     "${formatFileSize(item.sizeBytes)} • ${item.mtime}",
                                                     color = scheme.onSurfaceVariant,
-                                                    fontSize = 10.sp
+                                                    fontSize = 12.sp
                                                 )
                                             }
                                         }
@@ -340,6 +345,8 @@ fun PcExplorerDialog(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .heightIn(max = 280.dp)
+                            .verticalScroll(rememberScrollState())
                             .clip(RoundedCornerShape(12.dp))
                             .background(scheme.surfaceVariant)
                             .padding(12.dp)
@@ -354,9 +361,9 @@ fun PcExplorerDialog(
                         )
                         Spacer(Modifier.height(8.dp))
 
-                        Row(
+                        Column(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             // ⬇️ Download to Phone Button
                             Button(
@@ -381,12 +388,12 @@ fun PcExplorerDialog(
                                 enabled = !isDownloading,
                                 colors = ButtonDefaults.buttonColors(containerColor = scheme.primary),
                                 shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                             ) {
                                 Text(
-                                    if (isDownloading) "Saving..." else "⬇ Download",
+                                    if (isDownloading) "Saving..." else "Download",
                                     color = scheme.onPrimary,
-                                    fontSize = 11.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
@@ -406,10 +413,10 @@ fun PcExplorerDialog(
                                 colors = ButtonDefaults.buttonColors(containerColor = scheme.surface),
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier
-                                    .weight(1f)
+                                    .fillMaxWidth().heightIn(min = 48.dp)
                                     .border(1.dp, scheme.outline.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
                             ) {
-                                Text("🖥️ Open on PC", color = scheme.onSurface, fontSize = 11.sp)
+                                Text("Open on PC", color = scheme.onSurface, fontSize = 13.sp)
                             }
 
                             // 💬 Ask JARVIS Button
@@ -421,10 +428,10 @@ fun PcExplorerDialog(
                                 colors = ButtonDefaults.buttonColors(containerColor = scheme.surface),
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier
-                                    .weight(1f)
+                                    .fillMaxWidth().heightIn(min = 48.dp)
                                     .border(1.dp, scheme.outline.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
                             ) {
-                                Text("💬 Ask JARVIS", color = scheme.primary, fontSize = 11.sp)
+                                Text("Ask Jarvis", color = scheme.primary, fontSize = 13.sp)
                             }
                         }
                     }

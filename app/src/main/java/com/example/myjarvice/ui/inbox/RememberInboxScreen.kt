@@ -96,60 +96,63 @@ fun RememberInboxScreen(store: RememberInboxStore, onDismiss: () -> Unit, onAskJ
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         BackHandler(selected != null) { selectedId = null }
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.safeDrawingPadding().imePadding().fillMaxSize().widthIn(max = 900.dp)) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { if (selected != null) selectedId = null else onDismiss() }) {
-                        Text(if (selected != null) "Back" else "Close")
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                Column(Modifier.safeDrawingPadding().imePadding().widthIn(max = 760.dp).fillMaxSize()) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { if (selected != null) selectedId = null else onDismiss() }) {
+                            Text(if (selected != null) "Back" else "Close")
+                        }
+                        Text(if (selected != null) "Saved item" else "Saved", style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    Text(if (selected != null) "Saved item" else "Saved", style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                error?.let { message ->
-                    Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth().padding(16.dp), shape = RoundedCornerShape(12.dp)) {
-                        Column(Modifier.padding(12.dp)) {
-                            Text(message, color = MaterialTheme.colorScheme.onErrorContainer)
-                            TextButton(onClick = { error = null; revision++ }) { Text("Dismiss") }
+                    error?.let { message ->
+                        Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth().padding(16.dp), shape = RoundedCornerShape(12.dp)) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text(message, color = MaterialTheme.colorScheme.onErrorContainer)
+                                TextButton(onClick = { error = null; revision++ }) { Text("Dismiss") }
+                            }
                         }
                     }
-                }
-                if (selected != null) {
-                    InboxDetail(selected, onAskJarvis = { onAskJarvis(selected) },
-                        onRemind = { reminderItem = selected }, onDelete = { deleteItem = selected })
-                } else {
-                    Text("Your notes, links, photos, and voice notes. Saved on this phone.",
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
-                    OutlinedTextField(query, { query = it }, label = { Text("Search saved items") }, singleLine = true,
-                        trailingIcon = { if (query.isNotEmpty()) TextButton(onClick = { query = "" }) { Text("Clear") } },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), shape = RoundedCornerShape(16.dp))
-                    LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        item { FilterChip(selected = kind == null, onClick = { kind = null }, label = { Text("All") }) }
-                        items(RememberKind.entries) { type ->
-                            FilterChip(selected = kind == type.name, onClick = { kind = type.name }, label = { Text(type.label()) })
+                    if (selected != null) {
+                        InboxDetail(selected, onAskJarvis = { onAskJarvis(selected) },
+                            onRemind = { reminderItem = selected }, onDelete = { deleteItem = selected })
+                    } else {
+                        Text("Your notes, links, photos, and voice notes. Saved on this phone.",
+                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+                        OutlinedTextField(query, { query = it }, label = { Text("Search saved items") }, singleLine = true,
+                            trailingIcon = { if (query.isNotEmpty()) TextButton(onClick = { query = "" }) { Text("Clear") } },
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), shape = RoundedCornerShape(16.dp))
+                        LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            item { FilterChip(selected = kind == null, onClick = { kind = null }, label = { Text("All") }) }
+                            items(RememberKind.entries) { type ->
+                                FilterChip(selected = kind == type.name, onClick = { kind = type.name }, label = { Text(type.label()) })
+                            }
                         }
-                    }
-                    if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-                    if (!loading && visible.isEmpty()) {
-                        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(32.dp),
-                            verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(if (entries.isEmpty()) "Keep something worth coming back to" else "No matching items",
-                                style = MaterialTheme.typography.titleMedium)
-                            Spacer(Modifier.height(8.dp))
-                            Text(if (entries.isEmpty()) "In another app, tap Share and choose Jarvis. Your saved item will appear here."
-                                else "Try a different word or choose All to search every type.",
-                                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    } else LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        items(visible, key = { it.id }) { item ->
-                            OutlinedCard(onClick = { selectedId = item.id }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
-                                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text(item.kind.label() + " · " + formatInboxTime(item.createdAt), style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    Text(item.summary, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                                    item.reminderAt?.let { Text("Reminder · " + formatInboxTime(it), style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.primary) }
-                                    Text("Open item", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+                        if (!loading && visible.isEmpty()) {
+                            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(32.dp),
+                                verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                                com.example.myjarvice.ui.JarvisBrandMark(Modifier.size(64.dp))
+                                Spacer(Modifier.height(20.dp))
+                                Text(if (entries.isEmpty()) "Keep something worth coming back to" else "No matching items",
+                                    style = MaterialTheme.typography.titleMedium)
+                                Spacer(Modifier.height(8.dp))
+                                Text(if (entries.isEmpty()) "In another app, tap Share and choose Jarvis. Your saved item will appear here."
+                                    else "Try a different word or choose All to search every type.",
+                                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        } else LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            items(visible, key = { it.id }) { item ->
+                                OutlinedCard(onClick = { selectedId = item.id }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+                                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(item.kind.label() + " · " + formatInboxTime(item.createdAt), style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        Text(item.summary, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                                        item.reminderAt?.let { Text("Reminder · " + formatInboxTime(it), style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.primary) }
+                                    }
                                 }
                             }
                         }

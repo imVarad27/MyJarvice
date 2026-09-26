@@ -100,9 +100,9 @@ fun VoiceModeScreen(
                 }
             }
             TopIconButton(onClick = onInfo, contentDescription = "Session info") { drawInfoIcon(it) }
-            Spacer(Modifier.width(18.dp))
+            Spacer(Modifier.width(4.dp))
             TopIconButton(onClick = onShare, contentDescription = "Share transcript") { drawShareIcon(it) }
-            Spacer(Modifier.width(18.dp))
+            Spacer(Modifier.width(4.dp))
             TopIconButton(onClick = onChangeVoice, contentDescription = "Change voice") { drawSlidersIcon(it, colors.background) }
         }
 
@@ -148,7 +148,7 @@ fun VoiceModeScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 24.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(32.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
             CircleControl(
@@ -177,6 +177,7 @@ private fun VoiceOrb(
     isThinking: Boolean,
     micLevel: Float
 ) {
+    val colors = MaterialTheme.colorScheme
     val transition = rememberInfiniteTransition(label = "orb")
 
     // Thinking gets its own tempo — a steady, deliberate pulse that reads as work in
@@ -215,7 +216,7 @@ private fun VoiceOrb(
     )
 
     Box(
-        modifier = Modifier.size(300.dp),
+        modifier = Modifier.size(260.dp),
         contentAlignment = Alignment.Center
     ) {
         Canvas(
@@ -230,7 +231,7 @@ private fun VoiceOrb(
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        Color(0xFF4FA8FF).copy(alpha = 0.28f),
+                        colors.primary.copy(alpha = 0.28f),
                         Color.Transparent
                     ),
                     center = center,
@@ -245,10 +246,10 @@ private fun VoiceOrb(
                 brush = Brush.radialGradient(
                     colors = listOf(
                         Color(0xFFFFFFFF),
-                        Color(0xFFDCEEFF),
-                        Color(0xFF7FC4FF),
-                        Color(0xFF2E86E0),
-                        Color(0xFF0B4DA2)
+                        colors.primaryContainer,
+                        colors.primary,
+                        colors.primary,
+                        colors.onPrimaryContainer
                     ),
                     center = Offset(center.x - radius * 0.28f, center.y - radius * 0.38f),
                     radius = radius * 1.55f

@@ -48,6 +48,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -485,7 +486,8 @@ fun MainScreen(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxWidth()
+                            .fillMaxWidth(),
+                        contentAlignment = Alignment.TopCenter
                     ) {
                         if (chatHistory.isEmpty()) {
                             EmptyChatHero(
@@ -507,7 +509,7 @@ fun MainScreen(
                                 onSpeak = { text ->
                                     if (isSpeaking) viewModel.stopSpeaking() else viewModel.speak(text)
                                 },
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier.widthIn(max = 760.dp).fillMaxSize()
                             )
                         }
                     }
@@ -580,68 +582,72 @@ fun MainScreen(
                     }
 
                     // Floating Bottom Input Bar
-                    ChatComposer(
-                        mode = smartMode,
-                        onChooseModel = { showResponseModes = true },
-                        pcConnected = connectionStatus == ConnectionStatus.CONNECTED && smartMode != com.example.myjarvice.data.SmartMode.FAST_ON_DEVICE,
-                        textInput = textInput,
-                        onTextChange = { textInput = it.take(4000) },
-                        canSendAttachment = attachedFileContent != null || attachedPhoto != null,
-                        isListening = isListening,
-                        isThinking = isThinking || attachmentBusy,
-                        showToolsMenu = showToolsMenu,
-                        onToggleToolsMenu = { showToolsMenu = !showToolsMenu },
-                        onToolSelected = { toolPrompt ->
-                            showToolsMenu = false
-                            viewModel.sendQuery(toolPrompt)
-                        },
-                        onAttachFile = {
-                            showToolsMenu = false
-                            filePickerLauncher.launch("*/*")
-                        },
-                        onTakePhoto = {
-                            showToolsMenu = false
-                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                                val imageFile = File(context.cacheDir, "camera/${UUID.randomUUID()}.jpg").apply { parentFile?.mkdirs() }
-                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", imageFile)
-                                pendingCameraPath = uri.toString()
-                                runCatching { cameraLauncher.launch(uri) }.onFailure {
-                                    Toast.makeText(context, "No camera app is available. Choose a photo instead.", Toast.LENGTH_LONG).show()
-                                }
-                            } else {
-                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-                            }
-                        },
-                        onChoosePhoto = {
-                            showToolsMenu = false
-                            imagePickerLauncher.launch("image/*")
-                        },
-                        onSendFileToPc = {
-                            showToolsMenu = false
-                            fileDropLauncher.launch("*/*")
-                        },
-                        onOpenPcExplorer = {
-                            showToolsMenu = false
-                            showPcExplorer = true
-                        },
-                        onSend = {
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Column(Modifier.widthIn(max = 760.dp)) {
+                            ChatComposer(
+                                mode = smartMode,
+                                onChooseModel = { showResponseModes = true },
+                                pcConnected = connectionStatus == ConnectionStatus.CONNECTED && smartMode != com.example.myjarvice.data.SmartMode.FAST_ON_DEVICE,
+                                textInput = textInput,
+                                onTextChange = { textInput = it.take(4000) },
+                                canSendAttachment = attachedFileContent != null || attachedPhoto != null,
+                                isListening = isListening,
+                                isThinking = isThinking || attachmentBusy,
+                                showToolsMenu = showToolsMenu,
+                                onToggleToolsMenu = { showToolsMenu = !showToolsMenu },
+                                onToolSelected = { toolPrompt ->
+                                    showToolsMenu = false
+                                    viewModel.sendQuery(toolPrompt)
+                                },
+                                onAttachFile = {
+                                    showToolsMenu = false
+                                    filePickerLauncher.launch("*/*")
+                                },
+                                onTakePhoto = {
+                                    showToolsMenu = false
+                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                                        val imageFile = File(context.cacheDir, "camera/${UUID.randomUUID()}.jpg").apply { parentFile?.mkdirs() }
+                                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", imageFile)
+                                        pendingCameraPath = uri.toString()
+                                        runCatching { cameraLauncher.launch(uri) }.onFailure {
+                                            Toast.makeText(context, "No camera app is available. Choose a photo instead.", Toast.LENGTH_LONG).show()
+                                        }
+                                    } else {
+                                        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                                    }
+                                },
+                                onChoosePhoto = {
+                                    showToolsMenu = false
+                                    imagePickerLauncher.launch("image/*")
+                                },
+                                onSendFileToPc = {
+                                    showToolsMenu = false
+                                    fileDropLauncher.launch("*/*")
+                                },
+                                onOpenPcExplorer = {
+                                    showToolsMenu = false
+                                    showPcExplorer = true
+                                },
+                                onSend = {
 
-                            if (textInput.isNotBlank() || attachedFileContent != null || attachedPhoto != null) {
-                                val fullQuery = if (attachedFileName != null) {
-                                    val question = textInput.ifBlank { "Help me understand this document." }
-                                    val header = "$question\n\n[Attached text: ${attachedFileName?.take(80)}]\n"
-                                    header + attachedFileContent.orEmpty().take((4000 - header.length).coerceAtLeast(0))
-                                } else textInput.ifBlank { "What can you tell me about this photo?" }
-                                viewModel.sendQuery(fullQuery.take(4000), attachedPhoto)
-                                textInput = ""
-                                attachedFileName = null
-                                attachedFileContent = null
-                                attachedPhoto = null
-                            }
-                        },
-                        onQuickVoice = { startVoice(false) },
-                        onVoiceMode = { startVoice(true) }
-                    )
+                                    if (textInput.isNotBlank() || attachedFileContent != null || attachedPhoto != null) {
+                                        val fullQuery = if (attachedFileName != null) {
+                                            val question = textInput.ifBlank { "Help me understand this document." }
+                                            val header = "$question\n\n[Attached text: ${attachedFileName?.take(80)}]\n"
+                                            header + attachedFileContent.orEmpty().take((4000 - header.length).coerceAtLeast(0))
+                                        } else textInput.ifBlank { "What can you tell me about this photo?" }
+                                        viewModel.sendQuery(fullQuery.take(4000), attachedPhoto)
+                                        textInput = ""
+                                        attachedFileName = null
+                                        attachedFileContent = null
+                                        attachedPhoto = null
+                                    }
+                                },
+                                onQuickVoice = { startVoice(false) },
+                                onVoiceMode = { startVoice(true) }
+                            )
+                        }
+                    }
                 }
             }
 
@@ -822,12 +828,13 @@ private fun HistoryDrawerContent(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
                     .clickable { onClearAllHistory() }
+                    .heightIn(min = 48.dp)
                     .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconTrash(tint = Color(0xFFEF4444), size = 16.dp)
+                IconTrash(tint = scheme.error, size = 16.dp)
                 Spacer(Modifier.width(12.dp))
-                Text("Clear conversations", color = Color(0xFFEF4444), fontSize = 13.sp)
+                Text("Clear conversations", color = scheme.error, fontSize = 13.sp)
             }
         }
     }
@@ -837,7 +844,7 @@ private fun HistoryDrawerContent(
  * Empty Chat State Hero (JARVIS 1.0 with PC Automation & Web Search Shortcuts)
  */
 @Composable
-private fun EmptyChatHero(
+internal fun EmptyChatHero(
     onPromptSelected: (String) -> Unit,
     pcAvailable: Boolean = false
 ) {
@@ -853,12 +860,15 @@ private fun EmptyChatHero(
 
     Column(
         modifier = Modifier
+            .widthIn(max = 640.dp)
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.Center
     ) {
+        com.example.myjarvice.ui.JarvisBrandMark(Modifier.size(64.dp))
+        Spacer(Modifier.height(24.dp))
         Text(
             greeting,
             color = scheme.onSurfaceVariant,
@@ -948,7 +958,7 @@ private fun PromptSuggestionCard(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
             .background(scheme.surfaceContainerLow)
-            .border(1.dp, scheme.outline.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+            .border(1.dp, scheme.outlineVariant, RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
             .padding(14.dp)
     ) {
@@ -956,7 +966,7 @@ private fun PromptSuggestionCard(
             modifier = Modifier
                 .size(32.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(scheme.surfaceVariant),
+                .background(scheme.primaryContainer),
             contentAlignment = Alignment.Center
         ) {
             item.icon()
@@ -1004,9 +1014,9 @@ internal fun ServerConfigDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Host Connection", color = scheme.onSurface, fontWeight = FontWeight.SemiBold) },
+        title = { Text("Connect your PC", color = scheme.onSurface, fontWeight = FontWeight.SemiBold) },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(
                     "For Wi-Fi, enter this PC's reserved local address. USB debugging uses localhost.",
                     color = scheme.onSurfaceVariant,

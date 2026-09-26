@@ -122,12 +122,10 @@ private fun LocalModelComparisonScreen(viewModel: LocalModelComparisonViewModel,
     val baseline = fallback?.let { state.reports[it.path] }
     Surface(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 20.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = onBack) { Text("Back") }
-                TextButton(onClick = { picker.launch(arrayOf("*/*")) }, enabled = !state.busy && !state.importing) { Text("Add model") }
-            }
+            com.example.myjarvice.ui.JarvisPageHeader("Model comparison", "Find the right fit for your phone", onBack)
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Local model lab", style = MaterialTheme.typography.headlineMedium)
+                OutlinedButton(onClick = { picker.launch(arrayOf("*/*")) }, enabled = !state.busy && !state.importing,
+                    modifier = Modifier.fillMaxWidth()) { Text("Add model") }
                 Text("Compare accuracy, response time and observed memory on this phone. Tests use synthetic prompts only—no chats, saved facts or tools.", style = MaterialTheme.typography.bodyMedium)
                 Text("Active: ${File(state.active).name.ifBlank { "No model" }}", color = MaterialTheme.colorScheme.primary)
                 if (state.models.isEmpty()) Text("Add a compatible .litertlm model to begin.")

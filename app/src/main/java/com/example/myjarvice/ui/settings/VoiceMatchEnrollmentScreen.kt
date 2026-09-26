@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -144,37 +145,7 @@ fun VoiceMatchEnrollmentScreen(
             .padding(horizontal = 24.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Top Header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .semantics { contentDescription = "Back from voice setup" }
-                    .clip(CircleShape)
-                    .clickable { onBack() },
-                contentAlignment = Alignment.Center
-            ) {
-                Text("←", color = scheme.onBackground, fontSize = 24.sp)
-            }
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text(
-                    "Set up your voice",
-                    color = scheme.onBackground,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    "Three short samples · processed on this phone",
-                    color = scheme.onSurfaceVariant,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
+        com.example.myjarvice.ui.JarvisPageHeader("Set up your voice", "Three samples, saved on this phone", onBack)
 
         Spacer(Modifier.height(20.dp))
 
@@ -203,11 +174,11 @@ fun VoiceMatchEnrollmentScreen(
 
         if (currentStep < 3) {
             Text(
-                "SAMPLE ${currentStep + 1} OF 3",
+                "Sample ${currentStep + 1} of 3",
                 color = scheme.primary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp
+                letterSpacing = 0.2.sp
             )
 
             Spacer(Modifier.height(8.dp))
@@ -320,7 +291,7 @@ fun VoiceMatchEnrollmentScreen(
                     CircularProgressIndicator(
                         progress = { recordingProgress },
                         modifier = Modifier.size(150.dp),
-                        color = JarvisCyan,
+                        color = scheme.primary,
                         strokeWidth = 5.dp
                     )
                 }
@@ -335,7 +306,7 @@ fun VoiceMatchEnrollmentScreen(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            if (isRecording) "LISTENING" else "TAP TO\nRECORD",
+                            if (isRecording) "Listening" else "Tap to\nrecord",
                             color = glowColor,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
@@ -349,7 +320,7 @@ fun VoiceMatchEnrollmentScreen(
 
             Text(
                 statusMessage,
-                color = if (isRecording) JarvisCyan else scheme.onSurfaceVariant,
+                color = if (isRecording) scheme.primary else scheme.onSurfaceVariant,
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(horizontal = 16.dp)
@@ -370,15 +341,15 @@ fun VoiceMatchEnrollmentScreen(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(24.dp))
                         .background(scheme.surface)
-                        .border(1.5.dp, ArcGold.copy(alpha = 0.8f), RoundedCornerShape(24.dp))
+                        .border(1.5.dp, scheme.primary.copy(alpha = 0.8f), RoundedCornerShape(24.dp))
                         .padding(28.dp)
                 ) {
                     Box(
                         modifier = Modifier
                             .size(70.dp)
                             .clip(CircleShape)
-                            .background(ArcGold.copy(alpha = 0.15f))
-                            .border(2.dp, ArcGold, CircleShape),
+                            .background(scheme.primary.copy(alpha = 0.15f))
+                            .border(2.dp, scheme.primary, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Text("✓", fontSize = 32.sp, color = scheme.primary, fontWeight = FontWeight.Bold)
@@ -409,10 +380,10 @@ fun VoiceMatchEnrollmentScreen(
                         onClick = onFinished,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(50.dp),
+                            .heightIn(min = 50.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = JarvisCyan,
-                            contentColor = Color.Black
+                            containerColor = scheme.primary,
+                            contentColor = scheme.onPrimary
                         ),
                         shape = RoundedCornerShape(14.dp)
                     ) {

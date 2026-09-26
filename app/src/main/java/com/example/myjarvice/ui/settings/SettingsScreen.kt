@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -83,6 +84,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+
+private val settingsDescriptions = mapOf(
+    "Appearance" to "Light, dark, AMOLED and wallpaper colors",
+    "Voice & speech" to "Voice, pace and spoken replies",
+    "Hands-free voice" to "Hey Jarvis, voice match and microphone",
+    "AI & personal knowledge" to "Phone model, memory and documents",
+    "PC connection" to "Pair your computer · Wi-Fi and host address",
+    "Data & storage" to "Saved items and conversation history",
+    "About Jarvis" to "App information"
+)
+
+private fun matchesSettingsSearch(title: String, query: String): Boolean =
+    query.isBlank() || ("$title ${settingsDescriptions[title].orEmpty()}").contains(query.trim(), ignoreCase = true)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -184,46 +198,25 @@ fun SettingsScreen(
             .imePadding()
             .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
-        // Top Bar
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .semantics { contentDescription = "Back from settings" }
-                    .clip(CircleShape)
-                    .background(scheme.surface)
-                    .border(1.dp, scheme.outline.copy(alpha = 0.3f), CircleShape)
-                    .clickable { onBack() },
-                contentAlignment = Alignment.Center
-            ) {
-                Text("←", color = scheme.onBackground, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            }
-            Spacer(Modifier.width(14.dp))
-            Column {
-                Text(
-                    "Settings",
-                    color = scheme.onBackground,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    "Make Jarvis work your way",
-                    color = scheme.onSurfaceVariant,
-                    fontSize = 12.sp
-                )
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
+        com.example.myjarvice.ui.JarvisPageHeader("Settings", "Make Jarvis work your way", onBack)
+        var sectionQuery by rememberSaveable { mutableStateOf("") }
+        OutlinedTextField(value = sectionQuery, onValueChange = { sectionQuery = it },
+            placeholder = { Text("Find a setting") }, singleLine = true,
+            modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
+            trailingIcon = { if (sectionQuery.isNotEmpty()) TextButton(onClick = { sectionQuery = "" }) { Text("Clear") } })
+        Spacer(Modifier.height(16.dp))
 
         // ==========================================
         // 1. APPEARANCE & THEME
         // ==========================================
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            SettingsSection("Appearance", initiallyExpanded = false) {
+            if (settingsDescriptions.keys.none { matchesSettingsSearch(it, sectionQuery) }) {
+                Text("No settings found", style = MaterialTheme.typography.titleMedium)
+                Text("Try voice, model, appearance, or PC.", style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                TextButton(onClick = { sectionQuery = "" }) { Text("Show all settings") }
+            }
+            SettingsSection("Appearance", initiallyExpanded = false, query = sectionQuery) {
 
 
                 SettingsCard {
@@ -232,7 +225,7 @@ fun SettingsScreen(
                         ThemeChip("Pixel", assistantStyle == AssistantStyle.PIXEL) { onAssistantStyle(AssistantStyle.PIXEL) }
                         ThemeChip("Jarvis", assistantStyle == AssistantStyle.JARVIS) { onAssistantStyle(AssistantStyle.JARVIS) }
                     }
-                    Text("Pixel uses calm Material surfaces. Jarvis adds a cyan-and-amber arc identity. Both are still Jarvis.",
+                    Text("Pixel uses calm Material surfaces. Jarvis adds cyan and amber accents. Both are still Jarvis.",
                         style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                     HorizontalDivider(Modifier.padding(vertical = 14.dp))
                     Text("Theme Mode", color = scheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
@@ -276,7 +269,7 @@ fun SettingsScreen(
 
 
             }
-            SettingsSection("Voice & speech", initiallyExpanded = false) {
+            SettingsSection("Voice & speech", initiallyExpanded = false, query = sectionQuery) {
 
 
                 SettingsCard {
@@ -421,7 +414,7 @@ fun SettingsScreen(
 
 
             }
-            SettingsSection("Hands-free voice", initiallyExpanded = false) {
+            SettingsSection("Hands-free voice", initiallyExpanded = false, query = sectionQuery) {
 
 
                 SettingsCard {
@@ -567,7 +560,7 @@ fun SettingsScreen(
 
 
             }
-            SettingsSection("AI & personal knowledge", initiallyExpanded = false) {
+            SettingsSection("AI & personal knowledge", initiallyExpanded = false, query = sectionQuery) {
 
 
                 LocalKnowledgePanel()
@@ -746,7 +739,7 @@ fun SettingsScreen(
 
 
             }
-            SettingsSection("PC connection", initiallyExpanded = false) {
+            SettingsSection("PC connection", initiallyExpanded = false, query = sectionQuery) {
 
 
                 SettingsCard {
@@ -756,7 +749,8 @@ fun SettingsScreen(
                             serverIp = it
                             settingsStore.serverIp = it
                         },
-                        label = { Text("Host Server IP:Port") },
+                        label = { Text("PC address") },
+                        supportingText = { Text("For example, 192.168.1.10:8000") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -788,7 +782,7 @@ fun SettingsScreen(
 
 
             }
-            SettingsSection("Data & storage", initiallyExpanded = false) {
+            SettingsSection("Data & storage", initiallyExpanded = false, query = sectionQuery) {
 
                     SettingsCard {
                         Text("Conversation history", style = MaterialTheme.typography.titleSmall)
@@ -799,7 +793,7 @@ fun SettingsScreen(
                     Spacer(Modifier.height(16.dp))
 
             }
-            SettingsSection("About Jarvis", initiallyExpanded = false) {
+            SettingsSection("About Jarvis", initiallyExpanded = false, query = sectionQuery) {
 
 
                 SettingsCard {
@@ -815,7 +809,7 @@ fun SettingsScreen(
                     Text(
                         "Chat, save ideas, and find what you need. AI capabilities depend on your installed phone model and configured PC.",
                         color = scheme.onSurfaceVariant,
-                        fontSize = 11.sp,
+                        fontSize = 13.sp,
                         lineHeight = 16.sp
                     )
                 }
@@ -828,26 +822,20 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SettingsSection(title: String, initiallyExpanded: Boolean = false, content: @Composable () -> Unit) {
+private fun SettingsSection(title: String, initiallyExpanded: Boolean = false, query: String = "", content: @Composable () -> Unit) {
     var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
-    val subtitle = when (title) {
-        "Appearance" -> "Theme and display"
-        "Voice & speech" -> "Voice, pace and spoken replies"
-        "Hands-free voice" -> "Hey Jarvis and microphone access"
-        "AI & personal knowledge" -> "Models, preferences and local memory"
-        "PC connection" -> "Pair your computer"
-        "Data & storage" -> "Manage local files"
-        else -> "App information"
-    }
+    val subtitle = settingsDescriptions[title].orEmpty()
+    if (!matchesSettingsSearch(title, query)) return
     androidx.compose.material3.Surface(
         onClick = { expanded = !expanded },
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(20.dp),
+        color = if (expanded) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f).padding(end = 12.dp)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
-                if (!expanded) Text(subtitle, style = MaterialTheme.typography.bodySmall,
+                Text(subtitle, style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
             }
             Text(if (expanded) "−" else "+", style = MaterialTheme.typography.titleLarge,
@@ -865,7 +853,7 @@ private fun SettingsCard(content: @Composable () -> Unit) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(scheme.surface)
-            .border(1.dp, scheme.outline.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+            .border(1.dp, scheme.outlineVariant, RoundedCornerShape(16.dp))
             .padding(16.dp)
     ) {
         content()

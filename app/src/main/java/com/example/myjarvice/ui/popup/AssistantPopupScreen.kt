@@ -9,7 +9,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -21,11 +20,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
@@ -92,7 +88,7 @@ fun AssistantPopupScreen(model: MainScreenViewModel, verifiedWake: Boolean,
                     Surface(color = colors.outlineVariant, shape = RoundedCornerShape(4.dp), modifier = Modifier.fillMaxSize()) {}
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    JarvisMark(colors.primary, colors.tertiary, Modifier.size(32.dp))
+                    com.example.myjarvice.ui.JarvisBrandMark(Modifier.size(40.dp))
                     Column(Modifier.weight(1f).padding(start = 10.dp)) {
                         Text("Jarvis", style = MaterialTheme.typography.titleMedium)
                         Text(if (owner) "Wake voice matched" else "Your personal assistant",
@@ -171,15 +167,4 @@ fun AssistantPopupScreen(model: MainScreenViewModel, verifiedWake: Boolean,
     email?.let { draft -> EmailApprovalDialog(draft,
         onApprove = { model.resolvePendingEmail(draft.id, true) },
         onDiscard = { model.resolvePendingEmail(draft.id, false) }) }
-}
-
-@Composable
-private fun JarvisMark(primary: Color, accent: Color, modifier: Modifier) {
-    Canvas(modifier) {
-        drawCircle(primary.copy(alpha = .12f))
-        drawArc(primary, -65f, 280f, false, topLeft = Offset(size.width * .12f, size.height * .12f),
-            size = androidx.compose.ui.geometry.Size(size.width * .76f, size.height * .76f),
-            style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
-        drawCircle(accent, radius = size.minDimension * .11f)
-    }
 }

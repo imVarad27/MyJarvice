@@ -42,9 +42,9 @@ fun LocalKnowledgePanel() {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) perform { store.importDocument(uri) }
     }
-    Card(Modifier.fillMaxWidth()) {
+    OutlinedCard(Modifier.fillMaxWidth(), colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Make Jarvis yours", style = MaterialTheme.typography.titleMedium)
+            Text("Memory & documents", style = MaterialTheme.typography.titleMedium)
             Text("Save a preference or bring your notes. Jarvis can use them in local replies.", style = MaterialTheme.typography.bodyMedium)
             Text("Private to this phone · never added to server requests", style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary)
@@ -73,7 +73,7 @@ fun LocalKnowledgePanel() {
                             color = MaterialTheme.colorScheme.primary)
                         Text(if (entry.memory) entry.text else entry.name, maxLines = 4, overflow = TextOverflow.Ellipsis)
                     }
-                    TextButton(enabled = !busy, onClick = { pendingDelete = entry }) { Text("Delete") }
+                    TextButton(enabled = !busy, onClick = { pendingDelete = entry }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
                 }
             }
         }

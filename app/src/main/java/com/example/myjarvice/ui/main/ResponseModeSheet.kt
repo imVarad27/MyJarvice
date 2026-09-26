@@ -29,13 +29,14 @@ internal fun ResponseModeSheet(mode: SmartMode, connection: ConnectionStatus, ha
                 Triple(SmartMode.FAST_ON_DEVICE, "Phone model", "Text replies stay on this device. ${if (hasLocalModel) "Imported model ready." else "Import a model in Settings first."}"),
                 Triple(SmartMode.STRONG_HOST, "PC model", "Use the model configured on your paired PC, web search and PC tools. ${if (connection == ConnectionStatus.CONNECTED) "Connected." else "PC connection required."}")
             ).forEach { (value, title, detail) ->
-                Surface(shape = RoundedCornerShape(16.dp), color = if (mode == value) colors.secondaryContainer else colors.surfaceContainerLow,
+                Surface(shape = RoundedCornerShape(20.dp), color = if (mode == value) colors.primaryContainer else colors.surfaceContainerLow,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (mode == value) colors.primary else colors.outlineVariant),
                     modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
                     Row(Modifier.selectable(selected = mode == value, role = Role.RadioButton, onClick = { onSelect(value) })
                         .padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(title, style = MaterialTheme.typography.titleMedium)
-                            Text(detail, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant,
+                            Text(detail, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant,
                                 modifier = Modifier.padding(top = 4.dp))
                         }
                         RadioButton(selected = mode == value, onClick = null)

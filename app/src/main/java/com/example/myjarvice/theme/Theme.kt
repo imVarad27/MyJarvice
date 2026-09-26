@@ -3,6 +3,9 @@ package com.example.myjarvice.theme
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -14,9 +17,9 @@ import androidx.compose.ui.platform.LocalContext
 // --- Obsidian Dark (Google Gemini / ChatGPT standard) ---
 private val DarkColors = darkColorScheme(
     primary = Color(0xFF8DCBC3),
-    onPrimary = Color(0xFF082F49),
-    primaryContainer = Color(0xFF123C54),
-    onPrimaryContainer = Color(0xFFBCE9FF),
+    onPrimary = Color(0xFF082F29),
+    primaryContainer = Color(0xFF203E37),
+    onPrimaryContainer = Color(0xFFC2F0DE),
     secondaryContainer = Color(0xFF263746),
     onSecondaryContainer = Color(0xFFDBEAFE),
     surfaceContainerLowest = Color(0xFF101112),
@@ -41,8 +44,8 @@ private val DarkColors = darkColorScheme(
 // --- True Black (AMOLED) ---
 private val AmoledColors = darkColorScheme(
     primary = Color(0xFF8DCBC3),
-    primaryContainer = Color(0xFF123C54),
-    onPrimaryContainer = Color(0xFFBCE9FF),
+    primaryContainer = Color(0xFF203E37),
+    onPrimaryContainer = Color(0xFFC2F0DE),
     secondaryContainer = Color(0xFF202C38),
     onSecondaryContainer = Color(0xFFDBEAFE),
     surfaceContainerLowest = Color.Black,
@@ -50,7 +53,7 @@ private val AmoledColors = darkColorScheme(
     surfaceContainer = Color(0xFF101012),
     surfaceContainerHigh = Color(0xFF181A1E),
     surfaceContainerHighest = Color(0xFF22252A),
-    onPrimary = Color(0xFF082F49),
+    onPrimary = Color(0xFF082F29),
     secondary = JarvisBlue,
     onSecondary = Color(0xFF172554),
     tertiary = ArcGold,
@@ -68,15 +71,15 @@ private val AmoledColors = darkColorScheme(
 // --- Refined Light (Gemini Light) ---
 private val LightColors = lightColorScheme(
     primary = Color(0xFF27645F),
-    primaryContainer = Color(0xFFDDEFFB),
-    onPrimaryContainer = Color(0xFF10354E),
+    primaryContainer = Color(0xFFDCEEE5),
+    onPrimaryContainer = Color(0xFF183E33),
     secondaryContainer = Color(0xFFE3EBF4),
     onSecondaryContainer = Color(0xFF20364C),
     surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFF5F7FA),
-    surfaceContainer = Color(0xFFF0F3F7),
-    surfaceContainerHigh = Color(0xFFEAF0F5),
-    surfaceContainerHighest = Color(0xFFE3E9EF),
+    surfaceContainerLow = Color(0xFFF3F4EF),
+    surfaceContainer = Color(0xFFEDEFE9),
+    surfaceContainerHigh = Color(0xFFE7EAE3),
+    surfaceContainerHighest = Color(0xFFE1E5DC),
     onPrimary = Color.White,
     secondary = Color(0xFF2563EB),
     onSecondary = Color.White,
@@ -86,10 +89,10 @@ private val LightColors = lightColorScheme(
     onBackground = Color(0xFF1F1F1F),
     surface = Color(0xFFFFFFFF),
     onSurface = Color(0xFF1F1F1F),
-    surfaceVariant = Color(0xFFECEEF1),
+    surfaceVariant = Color(0xFFE8ECE5),
     onSurfaceVariant = Color(0xFF5E6266),
     outline = Color(0xFF747C88),
-    outlineVariant = Color(0xFFD3D9E2)
+    outlineVariant = Color(0xFFD8DED5)
 )
 
 /**
@@ -130,6 +133,8 @@ fun MyJarvisTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
+        shapes = Shapes(extraSmall = RoundedCornerShape(8.dp), small = RoundedCornerShape(12.dp),
+            medium = RoundedCornerShape(16.dp), large = RoundedCornerShape(24.dp), extraLarge = RoundedCornerShape(32.dp)),
         content = content
     )
 }

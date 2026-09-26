@@ -317,7 +317,7 @@ private fun JarvisMessageBubble(
                 ) {
                     IconCopy(tint = scheme.onSurfaceVariant, size = 14.dp)
                     Spacer(Modifier.width(4.dp))
-                    Text("Copy", color = scheme.onSurfaceVariant, fontSize = 11.sp)
+                    Text("Copy", color = scheme.onSurfaceVariant, style = MaterialTheme.typography.labelLarge)
                 }
 
                 Row(
@@ -330,14 +330,14 @@ private fun JarvisMessageBubble(
                 ) {
                     IconSpeaker(tint = scheme.onSurfaceVariant, size = 14.dp)
                     Spacer(Modifier.width(4.dp))
-                    Text("Listen", color = scheme.onSurfaceVariant, fontSize = 11.sp)
+                    Text("Listen", color = scheme.onSurfaceVariant, style = MaterialTheme.typography.labelLarge)
                 }
 
                 val time = formatTimestamp(msg.timestamp)
                 if (time.isNotBlank()) {
                     Text(
                         time,
-                        color = scheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        color = scheme.onSurfaceVariant,
                         fontSize = 11.sp
                     )
                 }

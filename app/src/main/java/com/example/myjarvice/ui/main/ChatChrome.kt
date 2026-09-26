@@ -37,7 +37,7 @@ internal fun ChatTopBar(
         ChatIconButton("Open conversation history", onOpenDrawer) { IconMenu(tint = colors.onSurfaceVariant) }
         TextButton(onClick = onStatusClick, modifier = Modifier.weight(1f).semantics { contentDescription = "Choose response mode and connection" }) {
             Column(Modifier.fillMaxWidth()) {
-                Text("Jarvis ⌄", style = MaterialTheme.typography.titleLarge, color = colors.onSurface)
+                Text("Jarvis", style = MaterialTheme.typography.titleLarge, color = colors.onSurface)
                 Text(when {
                     mode == SmartMode.FAST_ON_DEVICE -> "On this phone"
                     connectionStatus == ConnectionStatus.CONNECTED -> "${if (mode == SmartMode.AUTO) "Auto · " else ""}PC connected"
@@ -79,9 +79,9 @@ internal fun ChatComposer(
 ) {
     val colors = MaterialTheme.colorScheme
     Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(28.dp), color = colors.surfaceContainerLow,
+        shape = RoundedCornerShape(28.dp), color = colors.surfaceContainerLowest,
         border = androidx.compose.foundation.BorderStroke(1.dp, colors.outlineVariant)) {
-        Column(Modifier.padding(4.dp)) {
+        Column(Modifier.padding(8.dp)) {
             OutlinedTextField(value = textInput, onValueChange = onTextChange,
                 placeholder = { Text(if (canSendAttachment) "Ask about your attachment…" else "Ask Jarvis…") },
                 modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Message input" },
@@ -173,10 +173,16 @@ internal fun modeLabel(mode: SmartMode) = when (mode) {
 
 @Composable
 private fun ToolRow(title: String, subtitle: String, onClick: () -> Unit, enabled: Boolean = true) {
-    Surface(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(vertical = 14.dp, horizontal = 8.dp)) {
+    val colors = MaterialTheme.colorScheme
+    Surface(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(16.dp),
+        color = colors.surfaceContainerLow,
+        contentColor = if (enabled) colors.onSurface else colors.onSurface.copy(alpha = 0.38f),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Column(Modifier.padding(vertical = 14.dp, horizontal = 16.dp)) {
             Text(title, style = MaterialTheme.typography.titleSmall)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium,
+                color = if (enabled) colors.onSurfaceVariant else colors.onSurface.copy(alpha = 0.38f),
+                modifier = Modifier.padding(top = 4.dp))
         }
     }
 }
