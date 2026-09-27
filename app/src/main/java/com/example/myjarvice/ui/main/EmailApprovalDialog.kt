@@ -26,7 +26,7 @@ fun EmailApprovalDialog(draft: PendingEmail, onApprove: () -> Unit, onDiscard: (
                             style = MaterialTheme.typography.bodyLarge)
                     }
                 }
-                Text("Nothing is sent until you approve.", style = MaterialTheme.typography.bodyMedium,
+                Text("Nothing is sent until you approve. Approval is one-time and expires if you wait too long.", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },

@@ -27,6 +27,48 @@ def get_preset_paths() -> Dict[str, str]:
     }
 
 
+def get_allowed_roots() -> List[str]:
+    """Directories which the paired phone is permitted to explore.
+
+    A phone must not be able to turn a valid pairing token into unrestricted
+    host file-system access.  Keep this small and make new roots an explicit
+    product decision.
+    """
+    presets = get_preset_paths()
+    return [
+        os.path.realpath(os.path.abspath(path))
+        for path in (*presets.values(), ensure_drop_dir())
+    ]
+
+
+def _canonical(path: str) -> str:
+    return os.path.normcase(os.path.realpath(os.path.abspath(path)))
+
+
+def is_allowed_path(path: str) -> bool:
+    candidate = _canonical(path)
+    for root in get_allowed_roots():
+        try:
+            if os.path.commonpath([candidate, _canonical(root)]) == _canonical(root):
+                return True
+        except ValueError:  # Different Windows drive letters.
+            continue
+    return False
+
+
+def require_allowed_existing_path(path: str, *, directory: bool = False) -> str:
+    if not path:
+        raise ValueError("A path is required")
+    resolved = _canonical(path)
+    if not os.path.exists(resolved):
+        raise FileNotFoundError("Path not found")
+    if directory and not os.path.isdir(resolved):
+        raise NotADirectoryError("A folder is required")
+    if not is_allowed_path(resolved):
+        raise PermissionError("That path is outside Jarvis's approved PC folders")
+    return resolved
+
+
 def ensure_drop_dir() -> str:
     """Ensures the ~/Downloads/JarvisDrop folder exists."""
     if not os.path.exists(DROP_DIR):
@@ -39,7 +81,10 @@ def save_uploaded_file(file_bytes: bytes, filename: str, destination_dir: Option
     Saves an uploaded file to the drop directory.
     Handles duplicate filenames by appending timestamp/counter.
     """
-    target_dir = destination_dir if destination_dir and os.path.exists(destination_dir) else ensure_drop_dir()
+    target_dir = (
+        require_allowed_existing_path(destination_dir, directory=True)
+        if destination_dir else ensure_drop_dir()
+    )
 
     # Clean filename
     clean_name = os.path.basename(filename).strip()
@@ -77,15 +122,14 @@ def browse_directory(path: Optional[str] = None, preset: Optional[str] = None) -
     presets = get_preset_paths()
 
     target_path = None
-    if preset and preset.lower() in presets:
-        target_path = presets[preset.lower()]
-    elif path and os.path.exists(path):
-        target_path = os.path.abspath(path)
+    if preset:
+        if preset.lower() not in presets:
+            raise ValueError("Unknown PC folder shortcut")
+        target_path = require_allowed_existing_path(presets[preset.lower()], directory=True)
+    elif path:
+        target_path = require_allowed_existing_path(path, directory=True)
     else:
-        target_path = presets["projects"]
-
-    if not os.path.exists(target_path):
-        target_path = presets["downloads"]
+        target_path = require_allowed_existing_path(presets["projects"], directory=True)
 
     entries = []
     try:
@@ -115,7 +159,7 @@ def browse_directory(path: Optional[str] = None, preset: Optional[str] = None) -
     entries.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
 
     parent_path = os.path.dirname(target_path)
-    if parent_path == target_path:  # At root drive (e.g. D:\)
+    if parent_path == target_path or not is_allowed_path(parent_path):
         parent_path = None
 
     return {
@@ -130,8 +174,10 @@ def browse_directory(path: Optional[str] = None, preset: Optional[str] = None) -
 
 def open_path_on_pc(path: str) -> Dict[str, Any]:
     """Launches a file or folder on the host PC using the default Windows application."""
-    if not os.path.exists(path):
-        return {"status": "error", "message": f"Path not found: {path}"}
+    try:
+        path = require_allowed_existing_path(path)
+    except (FileNotFoundError, PermissionError, ValueError) as exc:
+        return {"status": "error", "message": str(exc)}
 
     try:
         os.startfile(os.path.abspath(path))

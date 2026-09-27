@@ -16,6 +16,7 @@
 local.properties
 
 # Python
+.venv/
 __pycache__/
 *.pyc
 

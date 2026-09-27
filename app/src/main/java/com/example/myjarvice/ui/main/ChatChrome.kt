@@ -79,8 +79,8 @@ internal fun ChatComposer(
 ) {
     val colors = MaterialTheme.colorScheme
     Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(28.dp), color = colors.surfaceContainerLowest,
-        border = androidx.compose.foundation.BorderStroke(1.dp, colors.outlineVariant)) {
+        shape = RoundedCornerShape(28.dp), color = colors.surfaceContainerLow,
+        border = androidx.compose.foundation.BorderStroke(1.dp, colors.primary.copy(alpha = 0.3f))) {
         Column(Modifier.padding(8.dp)) {
             OutlinedTextField(value = textInput, onValueChange = onTextChange,
                 placeholder = { Text(if (canSendAttachment) "Ask about your attachment…" else "Ask Jarvis…") },

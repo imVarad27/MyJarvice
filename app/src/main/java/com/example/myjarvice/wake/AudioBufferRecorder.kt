@@ -31,6 +31,7 @@ class AudioBufferRecorder(
     private val bufferLock = Any()
 
     private var audioRecord: AudioRecord? = null
+    @Volatile private var sampleRecord: AudioRecord? = null
     private var recordingThread: Thread? = null
     private val isRecording = AtomicBoolean(false)
 
@@ -148,6 +149,8 @@ class AudioBufferRecorder(
     @SuppressLint("MissingPermission")
     suspend fun recordSample(
         durationMs: Int = 2000,
+        stopAfterSpeech: Boolean = false,
+        onReady: (() -> Unit)? = null,
         onProgress: ((progress: Float, rmsDb: Float) -> Unit)? = null
     ): ShortArray = withContext(Dispatchers.IO) {
         val totalSamples = (sampleRate * (durationMs / 1000.0f)).toInt()
@@ -155,8 +158,10 @@ class AudioBufferRecorder(
         var samplesRecorded = 0
 
         val minBufSize = AudioRecord.getMinBufferSize(sampleRate, CHANNEL_CONFIG, AUDIO_FORMAT)
-        val readSize = max(minBufSize, 1024)
+        check(minBufSize > 0) { "Microphone format is unavailable" }
+        val readSize = EnrollmentAudio.FRAME_SAMPLES
         val chunk = ShortArray(readSize)
+        val endpoint = EnrollmentEndpoint()
 
         var record: AudioRecord? = null
         try {
@@ -165,7 +170,7 @@ class AudioBufferRecorder(
                 sampleRate,
                 CHANNEL_CONFIG,
                 AUDIO_FORMAT,
-                readSize * 2
+                max(minBufSize, readSize * 2)
             )
             if (record.state != AudioRecord.STATE_INITIALIZED) {
                 record.release()
@@ -174,12 +179,16 @@ class AudioBufferRecorder(
                     sampleRate,
                     CHANNEL_CONFIG,
                     AUDIO_FORMAT,
-                    readSize * 2
+                    max(minBufSize, readSize * 2)
                 )
             }
 
+            check(record.state == AudioRecord.STATE_INITIALIZED) { "Microphone could not be initialized" }
+            sampleRecord = record
+            ensureActive()
             record.startRecording()
-            val startTime = System.currentTimeMillis()
+            check(record.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "Microphone is not recording" }
+            withContext(Dispatchers.Main) { onReady?.invoke() }
 
             while (samplesRecorded < totalSamples) {
                 ensureActive()
@@ -195,22 +204,24 @@ class AudioBufferRecorder(
                     withContext(Dispatchers.Main) {
                         onProgress?.invoke(progress, rms)
                     }
+                    if (stopAfterSpeech && endpoint.accept(chunk, read)) break
                 }
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "Error recording enrollment sample: ${e.message}", e)
+            throw e
         } finally {
-            try {
-                record?.stop()
-                record?.release()
-            } catch (ignored: Exception) {}
+            sampleRecord = null
+            runCatching { record?.stop() }
+            runCatching { record?.release() }
         }
         recorded.copyOf(samplesRecorded)
     }
 
     fun stop(): Boolean {
+        runCatching { sampleRecord?.stop() }
         isRecording.set(false)
         val worker = recordingThread
         val record = audioRecord

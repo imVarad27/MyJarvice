@@ -5,6 +5,7 @@ import logging
 import datetime
 import os
 import re
+import secrets
 import smtplib
 import sqlite3
 import ssl
@@ -13,7 +14,7 @@ import urllib.error
 import uuid as uuid_lib
 from email.message import EmailMessage
 from typing import Dict, Any, List, Optional, Tuple
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, status, UploadFile, File, Form, Query, HTTPException, Body
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, status, UploadFile, File, Query, HTTPException, Body, Depends, Header
 from fastapi.responses import FileResponse, JSONResponse
 from rag_engine import rag_engine, query_personal_documents
 import pc_controller
@@ -23,6 +24,7 @@ import routine_briefing
 import file_manager
 import neural_voice
 import assistant_runtime
+from action_ledger import EmailApprovalLedger
 
 
 
@@ -63,6 +65,14 @@ def _load_dotenv() -> None:
 _load_dotenv()
 DEFAULT_MODEL = os.environ.get("JARVIS_MODEL", DEFAULT_MODEL)
 
+
+def positive_int_from_env(name: str, default: int, minimum: int) -> int:
+    try:
+        return max(minimum, int(os.environ.get(name, str(default))))
+    except ValueError:
+        logger.warning("Ignoring invalid %s value; using %d", name, default)
+        return default
+
 # Set JARVIS_VISION_MODEL in server/.env if your text model and vision model are
 # different. Jarvis verifies Ollama's advertised capability before it sends pixels.
 VISION_MODEL = os.environ.get("JARVIS_VISION_MODEL", DEFAULT_MODEL)
@@ -72,12 +82,14 @@ SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("SMTP_USER", "")
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
 SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER)
-JARVICE_API_TOKEN = os.environ.get("JARVICE_API_TOKEN", "").strip()
+JARVICE_API_TOKEN = os.environ.get("JARVIS_API_TOKEN", os.environ.get("JARVICE_API_TOKEN", "")).strip()
 MAX_MESSAGE_CHARS = 4_000
+MAX_UPLOAD_BYTES = 200 * 1024 * 1024
+EMAIL_APPROVAL_TTL_SECONDS = positive_int_from_env("JARVIS_EMAIL_APPROVAL_TTL_SECONDS", 900, 60)
 
-# Drafts awaiting the user's explicit approval, keyed by draft id. Nothing is ever
-# sent from here without an APPROVE_EMAIL message arriving for that exact id.
-PENDING_EMAILS: Dict[str, Dict[str, str]] = {}
+# Drafts and approval state must survive a server restart.  The ledger also makes
+# each approval one-use, preventing replay of an old APPROVE_EMAIL message.
+email_ledger = EmailApprovalLedger(DB_PATH, EMAIL_APPROVAL_TTL_SECONDS)
 
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 
@@ -586,14 +598,14 @@ def build_email_draft(user_text: str, address: str) -> tuple:
         )
 
     draft = draft_email_content(user_text, address)
-    draft_id = uuid_lib.uuid4().hex
+    stored_draft = email_ledger.create(recipient, draft["subject"], draft["body"])
     pending = {
-        "id": draft_id,
-        "to": recipient,
-        "subject": draft["subject"],
-        "body": draft["body"],
+        "id": stored_draft.id,
+        "to": stored_draft.to,
+        "subject": stored_draft.subject,
+        "body": stored_draft.body,
+        "expires_at": stored_draft.expires_at,
     }
-    PENDING_EMAILS[draft_id] = pending
 
     return (
         f"I've drafted an email to {recipient}, {address}. "
@@ -890,32 +902,67 @@ def generate_reply(
 
 
 def handle_email_verdict(verdict: Dict[str, Any]) -> str:
-    """Sends (or discards) a draft. A draft is consumed either way, so an approval
-    can never be replayed to send the same mail twice."""
+    """Sends or discards a durable one-use draft after explicit approval."""
     draft_id = str(verdict.get("id", ""))
     approved = bool(verdict.get("approved"))
 
-    pending = PENDING_EMAILS.pop(draft_id, None)
-    if not pending:
+    if not approved:
+        state = email_ledger.discard(draft_id)
+        if state == "discarded":
+            logger.info("Email draft %s discarded by user.", draft_id)
+            return "Discarded, Sir. Nothing was sent."
+        if state == "expired":
+            return "That email approval expired. Please request a new draft."
         return "That draft has already been dealt with, Sir."
 
-    if not approved:
-        logger.info(f"Email draft {draft_id} discarded by user.")
-        return "Discarded, Sir. Nothing was sent."
+    state, pending = email_ledger.claim_for_send(draft_id)
+    if state != "executing" or pending is None:
+        if state == "expired":
+            return "That email approval expired. Please request a new draft."
+        if state == "missing":
+            return "I couldn't find that email draft, Sir."
+        return "That draft has already been dealt with, Sir."
 
     try:
-        send_email_smtp(pending["to"], pending["subject"], pending["body"])
+        send_email_smtp(pending.to, pending.subject, pending.body)
     except Exception as exc:
-        logger.error(f"Failed to send email: {exc}")
-        return f"I couldn't send it, Sir — the mail server refused: {exc}"
+        email_ledger.mark_failed(draft_id, str(exc))
+        logger.error("Failed to send email draft %s: %s", draft_id, exc)
+        return "I couldn't send it, Sir. Nothing will be retried automatically; please create a new draft if you want to try again."
 
-    logger.info(f"Email sent to {pending['to']}")
-    return f"Sent to {pending['to']}, Sir."
+    if not email_ledger.mark_sent(draft_id):
+        logger.critical("Email %s was submitted to SMTP but could not be recorded as sent", draft_id)
+        return f"The message was submitted to {pending.to}, but I could not confirm its final status. I will not resend it automatically."
+    logger.info("Email sent to %s", pending.to)
+    return f"Sent to {pending.to}, Sir."
 
 
 # ==========================================================================
 #  HTTP + WebSocket
 # ==========================================================================
+def require_pairing_token(authorization: str = Header(default="")) -> None:
+    """Authenticate every REST operation that can access the host PC."""
+    if not JARVICE_API_TOKEN:
+        logger.error("Rejected REST request because JARVICE_API_TOKEN is not configured")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Host pairing is not configured")
+    if not secrets.compare_digest(authorization, f"Bearer {JARVICE_API_TOKEN}"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid pairing token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+def raise_file_http_error(exc: Exception) -> None:
+    if isinstance(exc, PermissionError):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    if isinstance(exc, FileNotFoundError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if isinstance(exc, (ValueError, NotADirectoryError)):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="File operation failed") from exc
+
+
 @app.get("/")
 def get_root():
     return {"status": "JARVIS Host Server Online", "time": datetime.datetime.now().isoformat()}
@@ -933,39 +980,62 @@ def get_apk():
 
 # --- File Transfer & Remote Explorer REST Endpoints ---
 @app.post("/api/files/upload")
-async def api_upload_file(file: UploadFile = File(...), destination: Optional[str] = Form(None)):
+async def api_upload_file(
+    file: UploadFile = File(...),
+    _auth: None = Depends(require_pairing_token),
+):
     """Receives uploaded files from phone and saves to Downloads/JarvisDrop."""
     try:
-        content = await file.read()
-        res = file_manager.save_uploaded_file(content, file.filename or "drop_file.bin", destination)
+        content = await file.read(MAX_UPLOAD_BYTES + 1)
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File is larger than the 200 MB safety limit")
+        res = file_manager.save_uploaded_file(content, file.filename or "drop_file.bin")
         return JSONResponse(content=res)
+    except HTTPException:
+        raise
+    except (PermissionError, FileNotFoundError, ValueError, NotADirectoryError) as exc:
+        raise_file_http_error(exc)
     except Exception as e:
         logger.error("Upload failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Upload failed") from e
 
 
 @app.get("/api/files/browse")
-def api_browse_files(path: Optional[str] = Query(None), preset: Optional[str] = Query(None)):
+def api_browse_files(
+    path: Optional[str] = Query(None),
+    preset: Optional[str] = Query(None),
+    _auth: None = Depends(require_pairing_token),
+):
     """Browses directories and presets on the host PC."""
-    return file_manager.browse_directory(path=path, preset=preset)
+    try:
+        return file_manager.browse_directory(path=path, preset=preset)
+    except (PermissionError, FileNotFoundError, ValueError, NotADirectoryError) as exc:
+        raise_file_http_error(exc)
 
 
 @app.get("/api/files/download")
-def api_download_file(path: str = Query(...)):
+def api_download_file(path: str = Query(...), _auth: None = Depends(require_pairing_token)):
     """Streams a file from the host PC to the phone."""
-    if not os.path.exists(path) or os.path.isdir(path):
-        raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(path=path, filename=os.path.basename(path))
+    try:
+        safe_path = file_manager.require_allowed_existing_path(path)
+        if os.path.isdir(safe_path):
+            raise ValueError("Choose a file, not a folder")
+        return FileResponse(path=safe_path, filename=os.path.basename(safe_path))
+    except (PermissionError, FileNotFoundError, ValueError, NotADirectoryError) as exc:
+        raise_file_http_error(exc)
 
 
 @app.post("/api/files/open")
-def api_open_file(payload: Dict[str, Any] = Body(...)):
+def api_open_file(payload: Dict[str, Any] = Body(...), _auth: None = Depends(require_pairing_token)):
     """Launches a file or folder on the host PC."""
     target_path = payload.get("path", "")
     if not target_path:
         raise HTTPException(status_code=400, detail="Path is required")
-    res = file_manager.open_path_on_pc(target_path)
-    return res
+    try:
+        safe_path = file_manager.require_allowed_existing_path(str(target_path))
+        return file_manager.open_path_on_pc(safe_path)
+    except (PermissionError, FileNotFoundError, ValueError, NotADirectoryError) as exc:
+        raise_file_http_error(exc)
 
 
 CONNECTED_WEBSOCKETS: List[WebSocket] = []
@@ -981,11 +1051,13 @@ async def websocket_jarvis_endpoint(websocket: WebSocket):
     except Exception:
         pass
 
-    token = os.environ.get("JARVIS_API_TOKEN", os.environ.get("JARVICE_API_TOKEN", "jarvis_local_token")).strip()
     auth = websocket.headers.get("authorization", "")
 
-
-    if token and auth != f"Bearer {token}":
+    if not JARVICE_API_TOKEN:
+        logger.error("Rejected WebSocket connection because JARVICE_API_TOKEN is not configured")
+        await websocket.close(code=status.WS_1011_INTERNAL_ERROR, reason="Host pairing is not configured")
+        return
+    if not secrets.compare_digest(auth, f"Bearer {JARVICE_API_TOKEN}"):
         logger.warning("Rejected WebSocket connection with missing or invalid token")
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid pairing token")
         return

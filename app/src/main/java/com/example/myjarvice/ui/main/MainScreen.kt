@@ -879,7 +879,7 @@ internal fun EmptyChatHero(
 
         Text(
             "A little help.\nA clearer day.",
-            color = scheme.onBackground,
+            color = scheme.primary,
             style = MaterialTheme.typography.displaySmall
         )
         Text("Ask, plan, or pick up a thought.", color = scheme.onSurfaceVariant,
@@ -893,25 +893,33 @@ internal fun EmptyChatHero(
                 title = if (pcAvailable) "Plan my day" else "Make a plan",
                 desc = if (pcAvailable) "Your tasks & reminders" else "Break a goal into steps",
                 prompt = if (pcAvailable) "plan my day" else "Help me make a realistic plan for today. Ask what I need to get done first.",
-                icon = { IconSparkles(tint = scheme.primary, size = 18.dp) }
+                containerColor = scheme.primaryContainer,
+                contentColor = scheme.onPrimaryContainer,
+                icon = { IconSparkles(tint = scheme.onPrimaryContainer, size = 18.dp) }
             ),
             PromptCardItem(
                 title = "Explain simply",
                 desc = "Understand something new",
                 prompt = "Explain how a phone runs an AI model, using a simple example.",
-                icon = { IconActivity(tint = scheme.primary, size = 18.dp) }
+                containerColor = scheme.secondaryContainer,
+                contentColor = scheme.onSecondaryContainer,
+                icon = { IconActivity(tint = scheme.onSecondaryContainer, size = 18.dp) }
             ),
             PromptCardItem(
                 title = "Help me write",
                 desc = "Find the right words",
                 prompt = "Help me write a clear, friendly message. Ask who it's for and what I want to say.",
-                icon = { IconDocument(tint = scheme.primary, size = 18.dp) }
+                containerColor = scheme.tertiaryContainer,
+                contentColor = scheme.onTertiaryContainer,
+                icon = { IconDocument(tint = scheme.onTertiaryContainer, size = 18.dp) }
             ),
             PromptCardItem(
                 title = "My memory",
                 desc = "Review saved preferences",
                 prompt = "Show memories",
-                icon = { IconDocument(tint = scheme.primary, size = 18.dp) }
+                containerColor = scheme.surfaceContainerHigh,
+                contentColor = scheme.onSurface,
+                icon = { IconDocument(tint = scheme.onSurface, size = 18.dp) }
             )
         )
 
@@ -943,6 +951,8 @@ private data class PromptCardItem(
     val title: String,
     val desc: String,
     val prompt: String,
+    val containerColor: Color,
+    val contentColor: Color,
     val icon: @Composable () -> Unit
 )
 
@@ -952,13 +962,10 @@ private fun PromptSuggestionCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val scheme = MaterialTheme.colorScheme
-
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(scheme.surfaceContainerLow)
-            .border(1.dp, scheme.outlineVariant, RoundedCornerShape(16.dp))
+            .background(item.containerColor)
             .clickable(onClick = onClick)
             .padding(14.dp)
     ) {
@@ -966,7 +973,7 @@ private fun PromptSuggestionCard(
             modifier = Modifier
                 .size(32.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(scheme.primaryContainer),
+                .background(item.contentColor.copy(alpha = 0.08f)),
             contentAlignment = Alignment.Center
         ) {
             item.icon()
@@ -976,13 +983,13 @@ private fun PromptSuggestionCard(
 
         Text(
             item.title,
-            color = scheme.onSurface,
+            color = item.contentColor,
             style = MaterialTheme.typography.titleMedium
         )
         Spacer(Modifier.height(2.dp))
         Text(
             item.desc,
-            color = scheme.onSurfaceVariant,
+            color = item.contentColor,
             style = MaterialTheme.typography.bodySmall,
             maxLines = 3,
             overflow = TextOverflow.Ellipsis

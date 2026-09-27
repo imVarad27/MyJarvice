@@ -1,398 +1,225 @@
 package com.example.myjarvice.ui.settings
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.myjarvice.data.SettingsStore
-import com.example.myjarvice.data.SpeechManager
-import com.example.myjarvice.theme.ArcGold
-import com.example.myjarvice.theme.JarvisBlue
-import com.example.myjarvice.theme.JarvisCyan
-import com.example.myjarvice.wake.AudioBufferRecorder
-import com.example.myjarvice.wake.WakeEvents
-import com.example.myjarvice.wake.VoiceprintMatcher
-import com.example.myjarvice.wake.WakeEnrollmentValidator
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
+import com.example.myjarvice.ui.JarvisBrandMark
+import com.example.myjarvice.ui.JarvisPageHeader
+import com.example.myjarvice.wake.*
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 
-private val ENROLLMENT_PROMPTS = listOf(
-    "Hey Jarvis",
-    "Hey Jarvis",
-    "Hey Jarvis"
-)
+private const val SAMPLE_COUNT = 3
+private enum class SetupPhase { READY, PREPARING, COUNTDOWN, LISTENING, CHECKING, COMPLETE }
 
 @Composable
-fun VoiceMatchEnrollmentScreen(
-    onFinished: () -> Unit,
-    onBack: () -> Unit
-) {
+fun VoiceMatchEnrollmentScreen(onFinished: () -> Unit, onBack: () -> Unit) {
     val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     val scope = rememberCoroutineScope()
-    val settingsStore = remember { SettingsStore(context) }
-    val speechManager = remember { SpeechManager(context) }
-    val audioRecorder = remember { AudioBufferRecorder(sampleRate = 16000) }
+    val settings = remember { SettingsStore(context) }
+    val recorder = remember { AudioBufferRecorder() }
+    val samples = remember { mutableStateListOf<ShortArray>() }
+    var job by remember { mutableStateOf<Job?>(null) }
+    var attempted by remember { mutableStateOf(false) }
+    var phase by remember { mutableStateOf(SetupPhase.READY) }
+    var countdown by remember { mutableIntStateOf(2) }
+    var level by remember { mutableFloatStateOf(0f) }
+    var status by remember { mutableStateOf("Tap Start. Say ‘Hey Jarvis’ each time Speak now appears.") }
+    val busy = phase !in listOf(SetupPhase.READY, SetupPhase.COMPLETE)
+    val colors = MaterialTheme.colorScheme
 
-    var currentStep by remember { mutableIntStateOf(0) } // 0, 1, 2, or 3 (completed)
-    var isRecording by remember { mutableStateOf(false) }
-    var recordingProgress by remember { mutableFloatStateOf(0f) }
-    var micRmsLevel by remember { mutableFloatStateOf(0f) }
-    var statusMessage by remember { mutableStateOf("Find a quiet place, then tap the microphone.") }
+    fun pause() {
+        job?.cancel()
+        recorder.stop()
+        if (phase != SetupPhase.COMPLETE) {
+            phase = SetupPhase.READY
+            status = "Paused. Your completed samples are kept while this screen stays open."
+        }
+    }
 
-    val recordedSamples = remember { mutableStateListOf<ShortArray>() }
-
-    DisposableEffect(Unit) {
+    DisposableEffect(lifecycle) {
         WakeEvents.setMicrophoneBusy("enrollment", true)
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) pause()
+        }
+        lifecycle.addObserver(observer)
         onDispose {
-            audioRecorder.stop()
-            speechManager.shutdown()
+            job?.cancel()
+            recorder.stop()
+            lifecycle.removeObserver(observer)
             WakeEvents.setMicrophoneBusy("enrollment", false)
         }
     }
 
-    val scheme = MaterialTheme.colorScheme
-
-    // Pulsing animations
-    val infiniteTransition = rememberInfiniteTransition(label = "VoiceMatchPulse")
-    val idlePulse by infiniteTransition.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "idlePulse"
-    )
-
-    val reactorScale = if (isRecording) {
-        1.0f + (micRmsLevel / 100f).coerceIn(0f, 0.45f)
-    } else {
-        idlePulse
-    }
-
-    val glowColor by animateColorAsState(
-        targetValue = scheme.primary,
-        label = "glowColor"
-    )
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(scheme.background)
-            .safeDrawingPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        com.example.myjarvice.ui.JarvisPageHeader("Set up your voice", "Three samples, saved on this phone", onBack)
-
-        Spacer(Modifier.height(20.dp))
-
-        // Step Progress Bar
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            for (i in 0 until 3) {
-                val stepColor = when {
-                    i < currentStep -> scheme.primary
-                    i == currentStep -> scheme.tertiary
-                    else -> scheme.outline.copy(alpha = 0.3f)
+    fun start() {
+        if (job != null) return
+        attempted = true
+        phase = SetupPhase.PREPARING
+        status = if (WakeModelStore.ready(context)) "Getting voice setup ready…"
+            else "Preparing offline recognition. The first setup downloads about 40 MB."
+        job = scope.launch {
+            val validator = WakeEnrollmentValidator()
+            try {
+                validator.prepare(context)
+                if (withTimeoutOrNull(3500) { WakeEvents.captureReleased.first { it } } != true) {
+                    status = "The microphone is busy. Close any voice call or recording, then tap Try again."
+                    return@launch
                 }
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(stepColor)
-                )
+                while (samples.size < SAMPLE_COUNT) {
+                    phase = SetupPhase.COUNTDOWN
+                    status = if (samples.isEmpty()) "Use your normal voice. Wait for Speak now."
+                        else "Got it. Get ready to say it once more."
+                    level = 0f
+                    for (second in 2 downTo 1) { countdown = second; delay(1000) }
+                    val audio = recorder.recordSample(durationMs = 6000, stopAfterSpeech = true,
+                        onReady = {
+                            phase = SetupPhase.LISTENING
+                            status = "Say ‘Hey Jarvis’ once, then pause. No need to speak loudly."
+                        },
+                        onProgress = { _, rms -> level = ((rms - 35f) / 40f).coerceIn(0f, 1f) })
+                    phase = SetupPhase.CHECKING
+                    status = "Checking this sample…"
+                    val issue = withContext(Dispatchers.Default) { EnrollmentAudio.issue(audio) }
+                    if (issue != null) {
+                        status = when (issue) {
+                            EnrollmentAudio.Issue.TOO_QUIET -> "The microphone picked up very little sound. Hold the phone closer and check that the mic is uncovered."
+                            EnrollmentAudio.Issue.TOO_SHORT -> "That was a little short. Say both words—‘Hey Jarvis’—after Speak now appears."
+                            EnrollmentAudio.Issue.CLIPPED -> "That was too loud for the microphone. Speak normally or move the phone a little farther away."
+                        }
+                        break
+                    }
+                    val result = validator.check(audio)
+                    if (!result.accepted) {
+                        status = if (result.heard.isBlank() || result.heard.contains("[unk]"))
+                            "I heard sound but couldn't make out the phrase. Say ‘Hey Jarvis’ once, with a short pause afterward."
+                        else "I couldn't confirm both words clearly. Try ‘Hey Jarvis’ in your normal voice."
+                        break
+                    }
+                    val cleanAudio = withContext(Dispatchers.Default) { VoiceprintMatcher.trimSilence(audio) }
+                    val candidate = samples.toList() + listOf(cleanAudio)
+                    val profile = withContext(Dispatchers.Default) { VoiceprintMatcher.enrollMasterProfile(candidate) }
+                    val consistent = withContext(Dispatchers.Default) {
+                        candidate.all { VoiceprintMatcher.verify(profile, it, settings.voiceMatchThreshold).first }
+                    }
+                    if (!consistent) {
+                        status = "This sample sounded different. Keep the same distance and use your normal voice. Earlier samples are kept."
+                        break
+                    }
+                    if (candidate.size == SAMPLE_COUNT && !settings.saveVoiceProfile(profile)) {
+                        status = "Couldn't save this sample. Please try it again; your earlier samples are kept."
+                        break
+                    }
+                    samples.add(cleanAudio)
+                }
+                if (samples.size == SAMPLE_COUNT) {
+                    phase = SetupPhase.COMPLETE
+                    status = "Your voice profile is ready."
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                status = when (phase) {
+                    SetupPhase.PREPARING -> "Couldn't prepare voice setup. Check your connection and tap Try again. Your existing profile is unchanged."
+                    SetupPhase.CHECKING -> "Couldn't check this sample. Tap Try again; your earlier samples are kept."
+                    else -> "Couldn't record this sample. Check microphone access and close other recording apps, then try again."
+                }
+            } finally {
+                withContext(NonCancellable + Dispatchers.IO) { validator.close() }
+                level = 0f
+                if (phase != SetupPhase.COMPLETE) phase = SetupPhase.READY
+                job = null
             }
         }
+    }
 
-        Spacer(Modifier.height(30.dp))
-
-        if (currentStep < 3) {
-            Text(
-                "Sample ${currentStep + 1} of 3",
-                color = scheme.primary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.2.sp
-            )
-
-            Spacer(Modifier.height(8.dp))
-
-            Text(
-                "Say this naturally in your normal voice:",
-                color = scheme.onSurfaceVariant,
-                fontSize = 14.sp,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(Modifier.height(16.dp))
-
-            // Phrase Box
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(scheme.surface)
-                    .border(1.dp, scheme.outline.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
-                    .padding(20.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    "“${ENROLLMENT_PROMPTS[currentStep]}”",
-                    color = scheme.onSurface,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center
-                )
-            }
-
-            Spacer(Modifier.weight(1f))
-
-            // Central Glowing Reactor / Mic Button
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(190.dp)
-                    .scale(reactorScale)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                glowColor.copy(alpha = 0.35f),
-                                glowColor.copy(alpha = 0.08f),
-                                Color.Transparent
-                            )
-                        )
-                    )
-                    .clickable(enabled = !isRecording) {
-                        isRecording = true
-                        statusMessage = "Listening… speak now."
-                        scope.launch {
-                            if (withTimeoutOrNull(2500) { WakeEvents.captureReleased.first { it } } != true) {
-                                isRecording = false
-                                statusMessage = "The wake microphone is still busy. Please retry."
-                                return@launch
-                            }
-                            val audioSample = audioRecorder.recordSample(durationMs = 2600) { progress, rms ->
-                                recordingProgress = progress
-                                micRmsLevel = rms
-                            }
-
-                            statusMessage = "Checking the wake phrase… first setup may download the 40 MB recognition model."
-                            val phraseChecked = try { WakeEnrollmentValidator.check(context, audioSample) }
-                            catch (error: CancellationException) { throw error }
-                            catch (error: Exception) {
-                                isRecording = false
-                                statusMessage = "Voice setup failed: ${error.message ?: "check your internet connection and retry"}"
-                                return@launch
-                            }
-                            if (VoiceprintMatcher.isUsableVoiceSample(audioSample) && phraseChecked) {
-                                recordedSamples.add(audioSample)
-                                speechManager.playActivationTone()
-                                recordingProgress = 0f
-                                micRmsLevel = 0f
-
-                                if (recordedSamples.size < 3) {
-                                    currentStep++
-                                    isRecording = false
-                                    statusMessage = "Sample captured. Ready for sample ${currentStep + 1}."
-                                } else {
-                                    val samples = recordedSamples.toList()
-                                    val masterProfile = withContext(Dispatchers.Default) { VoiceprintMatcher.enrollMasterProfile(samples) }
-                                    val consistent = withContext(Dispatchers.Default) {
-                                        samples.all { VoiceprintMatcher.verify(masterProfile, it, settingsStore.voiceMatchThreshold).first }
-                                    }
-                                    if (consistent && settingsStore.saveVoiceProfile(masterProfile)) {
-                                        currentStep = 3
-                                        statusMessage = "Your voice profile is ready."
-                                    } else {
-                                        currentStep = 0
-                                        recordedSamples.clear()
-                                        statusMessage = "Those voice samples differed too much. Try again in a quiet place using your normal voice."
-                                    }
-                                    isRecording = false
-                                }
-                            } else {
-                                isRecording = false
-                                recordingProgress = 0f
-                                micRmsLevel = 0f
-                                statusMessage = "I didn’t clearly hear only ‘Hey Jarvis’. Say those two words naturally and retry."
-                            }
-                        }
-                    }
-            ) {
-                // Circular outer ring & progress
-                if (isRecording) {
-                    CircularProgressIndicator(
-                        progress = { recordingProgress },
-                        modifier = Modifier.size(150.dp),
-                        color = scheme.primary,
-                        strokeWidth = 5.dp
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .size(120.dp)
-                        .clip(CircleShape)
-                        .background(scheme.surface)
-                        .border(2.dp, glowColor, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            if (isRecording) "Listening" else "Tap to\nrecord",
-                            color = glowColor,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
-                        )
-                    }
+    Column(Modifier.fillMaxSize().background(colors.background).safeDrawingPadding()
+        .verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        JarvisPageHeader("Set up your voice", "One start · three short recordings", onBack)
+        Spacer(Modifier.height(16.dp))
+        JarvisBrandMark()
+        Spacer(Modifier.height(24.dp))
+        Text(if (phase == SetupPhase.COMPLETE) "You're all set" else "Let Jarvis learn your voice",
+            style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+        Text("Hold the phone comfortably in front of you and speak normally. Setup audio stays on this phone.",
+            color = colors.onSurfaceVariant, textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 10.dp, bottom = 24.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            repeat(SAMPLE_COUNT) { index ->
+                val done = index < samples.size
+                Surface(Modifier.weight(1f), shape = RoundedCornerShape(14.dp),
+                    color = if (done) colors.primaryContainer else colors.surfaceContainerHigh) {
+                    Text(if (done) "✓ Saved" else "${index + 1}", textAlign = TextAlign.Center,
+                        color = if (done) colors.onPrimaryContainer else colors.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 12.dp))
                 }
             }
-
-            Spacer(Modifier.weight(1f))
-
-            Text(
-                statusMessage,
-                color = if (isRecording) scheme.primary else scheme.onSurfaceVariant,
-                fontSize = 13.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-
-            Spacer(Modifier.height(24.dp))
+        }
+        Spacer(Modifier.height(24.dp))
+        Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), color = colors.surfaceContainerLow) {
+            Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(when (phase) {
+                    SetupPhase.COUNTDOWN -> "Ready in $countdown"
+                    SetupPhase.LISTENING -> "Speak now"
+                    SetupPhase.PREPARING -> "Getting ready"
+                    SetupPhase.CHECKING -> "Checking"
+                    SetupPhase.COMPLETE -> "Voice profile ready"
+                    SetupPhase.READY -> if (samples.isEmpty()) "Say it three times" else "Let's finish your setup"
+                }, style = MaterialTheme.typography.titleMedium, color = colors.primary,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                if (phase != SetupPhase.COMPLETE) {
+                    Text("Hey Jarvis", style = MaterialTheme.typography.headlineLarge,
+                        modifier = Modifier.padding(vertical = 20.dp))
+                }
+                when (phase) {
+                    SetupPhase.LISTENING -> {
+                        LinearProgressIndicator(progress = { level }, modifier = Modifier.fillMaxWidth()
+                            .semantics { contentDescription = "Microphone level" })
+                        Text("Take your time · up to 6 seconds", style = MaterialTheme.typography.bodySmall,
+                            color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp))
+                    }
+                    SetupPhase.PREPARING, SetupPhase.CHECKING -> CircularProgressIndicator(Modifier.size(28.dp))
+                    else -> Unit
+                }
+                Text(status, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center,
+                    color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 16.dp)
+                        .semantics { liveRegion = LiveRegionMode.Polite })
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+        if (phase == SetupPhase.COMPLETE) {
+            Text("Jarvis will check for ‘Hey Jarvis’ and compare it with your voice profile. Voice matching is a convenience feature, not a secure identity check.",
+                style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant,
+                textAlign = TextAlign.Center)
+            Button(onClick = onFinished, modifier = Modifier.fillMaxWidth().padding(top = 16.dp).heightIn(min = 52.dp)) { Text("Done") }
+        } else if (busy) {
+            OutlinedButton(onClick = { pause() }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text("Pause setup") }
         } else {
-            // Enrollment Complete Screen
-            Spacer(Modifier.weight(0.5f))
-
-            AnimatedVisibility(
-                visible = true,
-                enter = fadeIn() + slideInVertically()
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(scheme.surface)
-                        .border(1.5.dp, scheme.primary.copy(alpha = 0.8f), RoundedCornerShape(24.dp))
-                        .padding(28.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(70.dp)
-                            .clip(CircleShape)
-                            .background(scheme.primary.copy(alpha = 0.15f))
-                            .border(2.dp, scheme.primary, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("✓", fontSize = 32.sp, color = scheme.primary, fontWeight = FontWeight.Bold)
-                    }
-
-                    Spacer(Modifier.height(18.dp))
-
-                    Text(
-                        "Voice profile ready",
-                        color = scheme.onSurface,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-
-                    Text(
-                        "Jarvis will compare future wake phrases with these samples on this phone. Sensitive spoken actions are blocked when the voice is not verified.",
-                        color = scheme.onSurfaceVariant,
-                        fontSize = 14.sp,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 20.sp
-                    )
-
-                    Spacer(Modifier.height(24.dp))
-
-                    Button(
-                        onClick = onFinished,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 50.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = scheme.primary,
-                            contentColor = scheme.onPrimary
-                        ),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Text("Done", fontWeight = FontWeight.Bold)
-                    }
-                }
+            if (samples.isNotEmpty()) Text("${samples.size} of $SAMPLE_COUNT saved · continue with the next recording",
+                style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 12.dp))
+            Button(onClick = { start() }, enabled = job == null, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
+                Text(if (samples.isNotEmpty()) "Continue setup" else if (attempted) "Try again" else "Start")
             }
-
-            Spacer(Modifier.weight(1f))
+            TextButton(onClick = onBack, modifier = Modifier.padding(top = 4.dp)) { Text("Set up later") }
         }
     }
 }

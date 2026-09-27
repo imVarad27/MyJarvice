@@ -14,85 +14,80 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
-// --- Obsidian Dark (Google Gemini / ChatGPT standard) ---
+// Jarvis uses the same blue, violet and teal roles across every screen.
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFF8DCBC3),
-    onPrimary = Color(0xFF082F29),
-    primaryContainer = Color(0xFF203E37),
-    onPrimaryContainer = Color(0xFFC2F0DE),
-    secondaryContainer = Color(0xFF263746),
-    onSecondaryContainer = Color(0xFFDBEAFE),
-    surfaceContainerLowest = Color(0xFF101112),
-    surfaceContainerLow = Color(0xFF191B1E),
-    surfaceContainer = Color(0xFF1E1F20),
-    surfaceContainerHigh = Color(0xFF25282C),
-    surfaceContainerHighest = Color(0xFF2D3136),
-    secondary = JarvisBlue,
-    onSecondary = Color(0xFF172554),
-    tertiary = ArcGold,
-    onTertiary = Color(0xFF451A03),
-    background = Color(0xFF131314),
-    onBackground = Color(0xFFE3E3E3),
-    surface = Color(0xFF1E1F20),
-    onSurface = Color(0xFFE3E3E3),
-    surfaceVariant = Color(0xFF282A2C),
-    onSurfaceVariant = Color(0xFFADB3BC),
-    outline = Color(0xFF626975),
-    outlineVariant = Color(0xFF363C46)
+    primary = Color(0xFFABC7FF),
+    onPrimary = Color(0xFF092C65),
+    primaryContainer = Color(0xFF25447F),
+    onPrimaryContainer = Color(0xFFDFE9FF),
+    secondary = Color(0xFFD0BFFF),
+    onSecondary = Color(0xFF35205C),
+    secondaryContainer = Color(0xFF403266),
+    onSecondaryContainer = Color(0xFFEBDDFF),
+    tertiary = Color(0xFF72DBCD),
+    onTertiary = Color(0xFF003831),
+    tertiaryContainer = Color(0xFF004F48),
+    onTertiaryContainer = Color(0xFFA0F2E6),
+    surfaceContainerLowest = Color(0xFF080F1C),
+    surfaceContainerLow = Color(0xFF141E30),
+    surfaceContainer = Color(0xFF19253A),
+    surfaceContainerHigh = Color(0xFF233047),
+    surfaceContainerHighest = Color(0xFF2D3B53),
+    background = Color(0xFF0C1424),
+    onBackground = Color(0xFFEDF2FF),
+    surface = Color(0xFF0C1424),
+    onSurface = Color(0xFFEDF2FF),
+    surfaceVariant = Color(0xFF28364D),
+    onSurfaceVariant = Color(0xFFBBC7DD),
+    outline = Color(0xFF8794AC),
+    outlineVariant = Color(0xFF3B4A63),
+    surfaceTint = Color(0xFFABC7FF),
+    inverseSurface = Color(0xFFE5ECFA),
+    inverseOnSurface = Color(0xFF18243B),
+    inversePrimary = Color(0xFF315EDA)
 )
 
-// --- True Black (AMOLED) ---
-private val AmoledColors = darkColorScheme(
-    primary = Color(0xFF8DCBC3),
-    primaryContainer = Color(0xFF203E37),
-    onPrimaryContainer = Color(0xFFC2F0DE),
-    secondaryContainer = Color(0xFF202C38),
-    onSecondaryContainer = Color(0xFFDBEAFE),
+// Keep true black while retaining the same readable accents and containers.
+private val AmoledColors = DarkColors.copy(
+    background = Color.Black,
+    surface = Color.Black,
     surfaceContainerLowest = Color.Black,
-    surfaceContainerLow = Color(0xFF08090A),
-    surfaceContainer = Color(0xFF101012),
-    surfaceContainerHigh = Color(0xFF181A1E),
-    surfaceContainerHighest = Color(0xFF22252A),
-    onPrimary = Color(0xFF082F29),
-    secondary = JarvisBlue,
-    onSecondary = Color(0xFF172554),
-    tertiary = ArcGold,
-    onTertiary = Color(0xFF451A03),
-    background = Color(0xFF000000),
-    onBackground = Color(0xFFF4F4F5),
-    surface = Color(0xFF101012),
-    onSurface = Color(0xFFF4F4F5),
-    surfaceVariant = Color(0xFF1A1A1E),
-    onSurfaceVariant = Color(0xFFA1A1AA),
-    outline = Color(0xFF626975),
-    outlineVariant = Color(0xFF30343B)
+    surfaceContainerLow = Color(0xFF0C1320),
+    surfaceContainer = Color(0xFF111B2C),
+    surfaceContainerHigh = Color(0xFF1B283D),
+    surfaceContainerHighest = Color(0xFF26344B)
 )
 
-// --- Refined Light (Gemini Light) ---
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF27645F),
-    primaryContainer = Color(0xFFDCEEE5),
-    onPrimaryContainer = Color(0xFF183E33),
-    secondaryContainer = Color(0xFFE3EBF4),
-    onSecondaryContainer = Color(0xFF20364C),
-    surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFF3F4EF),
-    surfaceContainer = Color(0xFFEDEFE9),
-    surfaceContainerHigh = Color(0xFFE7EAE3),
-    surfaceContainerHighest = Color(0xFFE1E5DC),
+    primary = Color(0xFF315EDA),
     onPrimary = Color.White,
-    secondary = Color(0xFF2563EB),
+    primaryContainer = Color(0xFFE0E9FF),
+    onPrimaryContainer = Color(0xFF17366F),
+    secondary = Color(0xFF6950BC),
     onSecondary = Color.White,
-    tertiary = Color(0xFFD97706),
+    secondaryContainer = Color(0xFFEDE4FF),
+    onSecondaryContainer = Color(0xFF432978),
+    tertiary = Color(0xFF006B64),
     onTertiary = Color.White,
-    background = Color(0xFFFAFAF7),
-    onBackground = Color(0xFF1F1F1F),
-    surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF1F1F1F),
-    surfaceVariant = Color(0xFFE8ECE5),
-    onSurfaceVariant = Color(0xFF5E6266),
-    outline = Color(0xFF747C88),
-    outlineVariant = Color(0xFFD8DED5)
+    tertiaryContainer = Color(0xFFC7F3EB),
+    onTertiaryContainer = Color(0xFF005048),
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = Color(0xFFF0F4FF),
+    surfaceContainer = Color(0xFFEAF0FC),
+    surfaceContainerHigh = Color(0xFFE3EAF8),
+    surfaceContainerHighest = Color(0xFFDCE4F3),
+    background = Color(0xFFF8FAFF),
+    onBackground = Color(0xFF18243B),
+    surface = Color(0xFFF8FAFF),
+    onSurface = Color(0xFF18243B),
+    surfaceVariant = Color(0xFFE3EAF8),
+    onSurfaceVariant = Color(0xFF526079),
+    outline = Color(0xFF75839B),
+    outlineVariant = Color(0xFFCCD7EB),
+    surfaceTint = Color(0xFF315EDA),
+    inverseSurface = Color(0xFF26344B),
+    inverseOnSurface = Color(0xFFEDF2FF),
+    inversePrimary = Color(0xFFABC7FF)
 )
 
 /**
@@ -127,7 +122,12 @@ fun MyJarvisTheme(
         onPrimary = if (dark) Color(0xFF003640) else Color.White,
         primaryContainer = if (dark) Color(0xFF074652) else Color(0xFFC2F0FA),
         onPrimaryContainer = if (dark) Color(0xFFC2F0FA) else Color(0xFF003640),
-        tertiary = if (dark) ArcGold else Color(0xFF855400)
+        surfaceTint = if (dark) Color(0xFF6CD9EE) else Color(0xFF00677B),
+        inversePrimary = if (dark) Color(0xFF00677B) else Color(0xFF6CD9EE),
+        tertiary = if (dark) Color(0xFFFFCE80) else Color(0xFF855400),
+        onTertiary = if (dark) Color(0xFF462A00) else Color.White,
+        tertiaryContainer = if (dark) Color(0xFF634000) else Color(0xFFFFE7BE),
+        onTertiaryContainer = if (dark) Color(0xFFFFE7BE) else Color(0xFF573600)
     ) else baseColors
 
     MaterialTheme(

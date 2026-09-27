@@ -96,7 +96,7 @@ private fun UserMessageBubble(msg: JarvisMessage) {
             modifier = Modifier
                 .widthIn(max = 290.dp)
                 .clip(RoundedCornerShape(18.dp))
-                .background(scheme.surfaceVariant)
+                .background(scheme.primaryContainer)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             val bitmap = remember(msg.image) {
@@ -118,7 +118,7 @@ private fun UserMessageBubble(msg: JarvisMessage) {
             }
             Text(
                 msg.text,
-                color = scheme.onSurface,
+                color = scheme.onPrimaryContainer,
                 style = MaterialTheme.typography.bodyLarge
             )
         }

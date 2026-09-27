@@ -44,3 +44,19 @@ Run APK assembly, existing JVM tests, Android lint and compile-only instrumentat
 No Android device was attached during the initial check. Live layout, keyboard, TalkBack, launcher masks, and gesture-navigation checks remain pending a device or emulator. On the personal phone use only an in-place update; never run instrumentation that uninstalls the app or clears its data.
 
 Final automated verification: debug APK assembly, all 51 JVM tests, compile-only Android UI tests, and Android lint completed successfully. The APK is at `app/build/outputs/apk/debug/app-debug.apk`. No device installation or screenshot capture was performed.
+
+## September 26 color refresh and device installation
+
+Refreshed the shared palette with blue emphasis, violet and teal containers, cool light surfaces, and navy dark surfaces. AMOLED retains its black background. Jarvis style retains cyan and amber with matching readable container colors. The home suggestions use distinct theme colors, user messages use the primary container, and the brand mark and launcher use a blue/violet gradient.
+
+Debug APK assembly and Android lint passed for this refresh. Checked primary text, container text, secondary text and the colored heading in both static light and dark palettes; every sampled pair exceeded 4.5:1 contrast. Installed the APK as an in-place update on the connected realme RMX2061. Existing imported models and the selected AMOLED/Pixel appearance remain intact.
+
+Restored the PC server using the project virtual environment and added its missing Pillow, Edge TTS and multipart dependencies to `server/requirements.txt`. The server runs on localhost port 8000 through ADB USB forwarding; the phone reported “Auto · PC connected”. Gemma 4 E4B ran entirely in GPU memory on the RTX 4060. A short question through the authenticated streaming endpoint produced its first text in 4.33 seconds and completed in 5.40 seconds; this is one warm run, not a general performance benchmark.
+
+## Voice setup follow-up
+
+Replaced the three separate recording buttons with one guided start, a countdown before each recording, a live microphone level and automatic progress. Offline recognition prepares before asking the user to speak. “Speak now” appears only after the microphone starts; each recording allows up to six seconds and finishes after speech and a pause. Audio quality checks distinguish silence, short clips and clipping, and assess spoken audio without penalizing the initial wait.
+
+Supervised enrollment uses a phrase-specific recognizer with an unknown-word alternative and retains all recognition segments. Live wake recognition, the exact phrase confidence requirement, and owner-match thresholds are unchanged. Retries and pauses retain completed samples while this screen remains open; only a complete, consistent set replaces the existing profile. Leaving or backgrounding the screen cancels recording.
+
+Debug APK assembly, all 56 JVM tests (including five new enrollment-audio regressions) and Android lint passed. Human confirmation of enrollment with the user's actual voice is still needed; automated audio tests do not establish recognition or speaker-verification accuracy.
