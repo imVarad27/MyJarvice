@@ -31,6 +31,12 @@ class WakeWordService : Service() {
         fun start(context: Context) {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
             val settings = SettingsStore(context)
+            if (settings.assistantPaused) {
+                requested = false
+                WakeEvents.status.value = "Jarvis is paused"
+                if (WakeEvents.running.value) context.stopService(Intent(context, WakeWordService::class.java))
+                return
+            }
             if (!settings.isVoiceProfileEnrolled || !settings.voiceMatchEnabled) {
                 requested = false
                 WakeEvents.status.value = "Set up and enable your personal voice profile first"
@@ -113,6 +119,11 @@ class WakeWordService : Service() {
     }
     private fun resumeCapture() {
         if (!requested || WakeEvents.microphoneBusy.value || capturing || matchInProgress || SystemClock.elapsedRealtime() < cooldownUntil) return
+        if (SettingsStore(this).assistantPaused) {
+            updateStatus("Jarvis is paused")
+            stopSelf()
+            return
+        }
         if (recorder?.isReleased() == false) {
             scope.launch { delay(200); resumeCapture() }
             return

@@ -38,7 +38,7 @@ object FileTransferManager {
 
     private fun getBaseUrl(serverIp: String): String {
         val clean = serverIp.trim().removePrefix("http://").removePrefix("https://").removePrefix("ws://").removePrefix("wss://")
-        return "http://$clean"
+        return "http://${clean.substringBefore('/')}"
     }
 
     /**

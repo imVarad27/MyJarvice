@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import com.example.myjarvice.wake.WakeEvents
+import com.example.myjarvice.wake.WakeWordService
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -141,6 +142,7 @@ fun SettingsScreen(
     var voiceMatchEnabled by remember { mutableStateOf(settingsStore.voiceMatchEnabled) }
     var voiceMatchThreshold by remember { mutableFloatStateOf(settingsStore.voiceMatchThreshold) }
     var isEnrolled by remember { mutableStateOf(settingsStore.isVoiceProfileEnrolled) }
+    var assistantPaused by remember { mutableStateOf(settingsStore.assistantPaused) }
     val lastVoiceMatchScore by WakeEvents.lastVoiceMatchScore.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -150,6 +152,7 @@ fun SettingsScreen(
                 onDeviceModelPath = settingsStore.onDeviceModelPath
                 isEnrolled = settingsStore.isVoiceProfileEnrolled
                 voiceMatchEnabled = settingsStore.voiceMatchEnabled && isEnrolled
+                assistantPaused = settingsStore.assistantPaused
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -210,6 +213,49 @@ fun SettingsScreen(
         // 1. APPEARANCE & THEME
         // ==========================================
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            SettingsCard {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            if (assistantPaused) "Jarvis is paused" else "Jarvis is active",
+                            color = scheme.onSurface,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            if (assistantPaused)
+                                "Wake listening and new requests are blocked on this phone."
+                            else
+                                "Pause instantly to stop listening and block new requests.",
+                            color = scheme.onSurfaceVariant,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            assistantPaused = !assistantPaused
+                            settingsStore.assistantPaused = assistantPaused
+                            if (assistantPaused) {
+                                WakeWordService.stop(context)
+                                WakeEvents.status.value = "Jarvis is paused"
+                                Toast.makeText(context, "Jarvis paused on this phone", Toast.LENGTH_SHORT).show()
+                            } else {
+                                if (wakeEnabled) WakeWordService.start(context)
+                                Toast.makeText(context, "Jarvis resumed", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (assistantPaused) scheme.primary else scheme.error,
+                            contentColor = if (assistantPaused) scheme.onPrimary else scheme.onError
+                        )
+                    ) { Text(if (assistantPaused) "Resume" else "Pause") }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
             if (settingsDescriptions.keys.none { matchesSettingsSearch(it, sectionQuery) }) {
                 Text("No settings found", style = MaterialTheme.typography.titleMedium)
                 Text("Try voice, model, appearance, or PC.", style = MaterialTheme.typography.bodyMedium,
@@ -426,10 +472,19 @@ fun SettingsScreen(
                     ) {
                         Column(Modifier.weight(1f).padding(end = 12.dp)) {
                             Text("Listen for Hey Jarvis", color = scheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            Text(if (wakeEnabled) wakeStatus else "Off • enable to set up", color = scheme.onSurfaceVariant, fontSize = 12.sp)
+                            Text(
+                                when {
+                                    assistantPaused -> "Paused • resume Jarvis to listen"
+                                    wakeEnabled -> wakeStatus
+                                    else -> "Off • enable to set up"
+                                },
+                                color = scheme.onSurfaceVariant,
+                                fontSize = 12.sp
+                            )
                         }
                         Switch(
                             checked = wakeEnabled,
+                            enabled = !assistantPaused,
                             onCheckedChange = onWakeEnabled,
                             colors = SwitchDefaults.colors(checkedThumbColor = scheme.onPrimary, checkedTrackColor = scheme.primary)
                         )
@@ -475,7 +530,7 @@ fun SettingsScreen(
                         }
                         Switch(
                             checked = voiceMatchEnabled,
-                            enabled = isEnrolled,
+                            enabled = isEnrolled && !assistantPaused,
                             onCheckedChange = {
                                 voiceMatchEnabled = it
                                 settingsStore.voiceMatchEnabled = it

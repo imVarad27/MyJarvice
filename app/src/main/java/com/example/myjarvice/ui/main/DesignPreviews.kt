@@ -27,7 +27,7 @@ private fun BlankChatPreview(theme: ThemeMode) {
             Column(Modifier.fillMaxSize()) {
                 ChatTopBar(ConnectionStatus.DISCONNECTED, {}, {}, {}, {})
                 Box(Modifier.weight(1f)) { EmptyChatHero(onPromptSelected = {}) }
-                ChatComposer("", {}, false, false, false, false, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})
+                ChatComposer("", {}, false, false, false, false, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})
             }
         }
     }

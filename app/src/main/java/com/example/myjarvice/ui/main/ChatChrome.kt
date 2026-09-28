@@ -70,6 +70,7 @@ internal fun ChatComposer(
     onChoosePhoto: () -> Unit,
     onSendFileToPc: () -> Unit,
     onOpenPcExplorer: () -> Unit,
+    onOpenActionHistory: () -> Unit,
     onSend: () -> Unit,
     onQuickVoice: () -> Unit,
     onVoiceMode: () -> Unit,
@@ -133,6 +134,7 @@ internal fun ChatComposer(
                 ToolRow("Saved memories", "Review facts stored on this phone", { onToolSelected("show memories") })
                 HorizontalDivider(Modifier.padding(vertical = 12.dp))
                 Text(if (pcConnected) "Connected PC" else "PC tools · connect your PC to use", style = MaterialTheme.typography.titleSmall)
+                ToolRow("Activity", "Review recent PC actions", onOpenActionHistory, pcConnected)
                 ToolRow("Send a file to PC", "Transfer to your configured host", onSendFileToPc, pcConnected)
                 ToolRow("Browse PC files", "Find a file on your connected computer", onOpenPcExplorer, pcConnected)
                 var moreTools by remember { mutableStateOf(false) }

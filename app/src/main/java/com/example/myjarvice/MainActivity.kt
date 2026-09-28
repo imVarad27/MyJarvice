@@ -145,7 +145,9 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         WakeEvents.appVisible.value = true
-        if (SettingsStore(this).wakeWordEnabled) WakeWordService.start(this)
+        SettingsStore(this).also { settings ->
+            if (settings.wakeWordEnabled && !settings.assistantPaused) WakeWordService.start(this)
+        }
     }
 
     override fun onPause() {

@@ -99,6 +99,8 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.example.myjarvice.data.ChatSession
 import com.example.myjarvice.data.ConnectionStatus
+import com.example.myjarvice.data.ActionAuditEvent
+import com.example.myjarvice.data.ActionAuditManager
 import com.example.myjarvice.data.FileTransferManager
 import com.example.myjarvice.data.ImageUnderstanding
 import com.example.myjarvice.data.PhotoAttachment
@@ -201,11 +203,25 @@ fun MainScreen(
     var showVoicePicker by remember { mutableStateOf(false) }
     var showToolsMenu by remember { mutableStateOf(false) }
     var showPcExplorer by remember { mutableStateOf(false) }
+    var showActionHistory by remember { mutableStateOf(false) }
+    var actionHistory by remember { mutableStateOf<List<ActionAuditEvent>>(emptyList()) }
+    var actionHistoryLoading by remember { mutableStateOf(false) }
+    var actionHistoryError by remember { mutableStateOf<String?>(null) }
     var showRememberInbox by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(inboxRequest) { if (inboxRequest > 0) showRememberInbox = true }
     val rememberInbox = remember { RememberInboxStore(context.applicationContext) }
     var pendingChatDeletion by remember { mutableStateOf<String?>(null) }
     var pendingVoiceMode by remember { mutableStateOf(false) }
+    fun refreshActionHistory() {
+        actionHistoryLoading = true
+        actionHistoryError = null
+        coroutineScope.launch {
+            ActionAuditManager.recent(serverIp, serverToken)
+                .onSuccess { actionHistory = it }
+                .onFailure { actionHistoryError = "Could not load activity: ${it.message ?: "check your PC connection"}" }
+            actionHistoryLoading = false
+        }
+    }
     val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed ->
         if (allowed) {
             if (pendingVoiceMode) viewModel.enterVoiceMode() else viewModel.toggleVoiceInput()
@@ -409,6 +425,16 @@ fun MainScreen(
             messageCount = chatHistory.size,
             voiceLabel = voices.firstOrNull { it.id == selectedVoiceId }?.label ?: "Engine default",
             onDismiss = { showVoiceInfo = false }
+        )
+    }
+
+    if (showActionHistory) {
+        ActionHistoryDialog(
+            events = actionHistory,
+            loading = actionHistoryLoading,
+            error = actionHistoryError,
+            onDismiss = { showActionHistory = false },
+            onRefresh = ::refreshActionHistory
         )
     }
 
@@ -627,6 +653,11 @@ fun MainScreen(
                                 onOpenPcExplorer = {
                                     showToolsMenu = false
                                     showPcExplorer = true
+                                },
+                                onOpenActionHistory = {
+                                    showToolsMenu = false
+                                    showActionHistory = true
+                                    refreshActionHistory()
                                 },
                                 onSend = {
 

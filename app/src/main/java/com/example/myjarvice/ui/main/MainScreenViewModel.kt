@@ -251,6 +251,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     /** Single entry point for listening, so every path re-arms the same way. */
     private fun beginListening() {
+        if (settings.assistantPaused) return
         if (listeningJob?.isActive == true || isListening.value) return
         preparingMic.value = true
         WakeEvents.setMicrophoneBusy(microphoneOwner, true)
@@ -276,6 +277,10 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun enterVoiceMode(verifiedByWake: Boolean = false, matchedOwner: Boolean = WakeEvents.ownerVerified.value) {
+        if (settings.assistantPaused) {
+            _responseRoute.value = "Jarvis is paused · resume it in Settings"
+            return
+        }
         _voiceOwnerVerified.value = verifiedByWake && matchedOwner
         _voiceModeActive.value = true
         _micMuted.value = false
@@ -320,12 +325,32 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     fun selectVoice(voiceId: String) = speechManager.applyVoice(voiceId)
 
     /** Nothing leaves the host server until this is called with approved = true. */
-    fun resolvePendingEmail(id: String, approved: Boolean) =
+    fun resolvePendingEmail(id: String, approved: Boolean) {
+        if (settings.assistantPaused && approved) {
+            wsClient.resolvePendingEmail(id, false)
+            wsClient.addLocalMessage(JarvisMessage(
+                sender = "JARVIS (Safety)",
+                text = "Jarvis is paused, so I discarded that email approval. Resume Jarvis before drafting or approving another action.",
+                type = "ERROR",
+                timestamp = timestampNow()
+            ))
+            return
+        }
         wsClient.resolvePendingEmail(id, approved)
+    }
 
     fun resolvePendingAction(approved: Boolean) {
         val action = _pendingAction.value ?: return
         _pendingAction.value = null
+        if (settings.assistantPaused && approved) {
+            wsClient.addLocalMessage(JarvisMessage(
+                sender = "JARVIS (Safety)",
+                text = "Jarvis is paused, so I did not run that phone action.",
+                type = "ERROR",
+                timestamp = timestampNow()
+            ))
+            return
+        }
         if (approved) {
             if (action.id.startsWith("local:")) {
                 if (action.type == "CALL" || action.type == "WHATSAPP") {
@@ -373,6 +398,16 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     fun sendQuery(text: String, photo: PhotoAttachment? = null, fromVoice: Boolean = false) {
         if (text.isBlank() || localRequestActive || _isThinking.value) return
+        if (settings.assistantPaused) {
+            _responseRoute.value = "Jarvis is paused · resume it in Settings"
+            wsClient.addLocalMessage(JarvisMessage(
+                sender = "JARVIS (Safety)",
+                text = "Jarvis is paused. Resume it in Settings before starting a new request.",
+                type = "ERROR",
+                timestamp = timestampNow()
+            ))
+            return
+        }
         if (com.example.myjarvice.data.LocalBenchmarkRuntime.active.value) {
             _responseRoute.value = "Local model comparison running · stop it before chatting"
             return

@@ -41,6 +41,16 @@ class SettingsStore(context: Context) {
             prefs.edit().putBoolean(KEY_WAKE, value).apply()
         }
 
+    /**
+     * Emergency local pause. It preserves the user's wake preference but prevents
+     * new requests, dictation, and background wake listening until they resume.
+     */
+    var assistantPaused: Boolean
+        get() = prefs.getBoolean(KEY_ASSISTANT_PAUSED, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_ASSISTANT_PAUSED, value).apply()
+        }
+
     /** Host PC address for the websocket link, so the app reconnects without retyping it. */
     var serverIp: String
         get() = prefs.getString(KEY_SERVER_IP, DEFAULT_SERVER_IP) ?: DEFAULT_SERVER_IP
@@ -191,6 +201,7 @@ class SettingsStore(context: Context) {
 
         private const val KEY_DYNAMIC = "dynamic_color"
         private const val KEY_WAKE = "wake_word_enabled"
+        private const val KEY_ASSISTANT_PAUSED = "assistant_paused"
         private const val KEY_TTS_VOICE = "tts_voice"
         private const val KEY_TTS_SPEECH_RATE = "tts_speech_rate"
         private const val KEY_TTS_PITCH = "tts_pitch"

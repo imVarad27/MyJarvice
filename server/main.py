@@ -25,6 +25,7 @@ import file_manager
 import neural_voice
 import assistant_runtime
 from action_ledger import EmailApprovalLedger
+from action_audit import ActionAuditLog
 
 
 
@@ -90,6 +91,15 @@ EMAIL_APPROVAL_TTL_SECONDS = positive_int_from_env("JARVIS_EMAIL_APPROVAL_TTL_SE
 # Drafts and approval state must survive a server restart.  The ledger also makes
 # each approval one-use, preventing replay of an old APPROVE_EMAIL message.
 email_ledger = EmailApprovalLedger(DB_PATH, EMAIL_APPROVAL_TTL_SECONDS)
+action_audit = ActionAuditLog(DB_PATH)
+
+
+def record_audit(action_type: str, outcome: str, summary: str, details: Optional[Dict[str, Any]] = None) -> None:
+    """Auditing must never make a completed user action fail."""
+    try:
+        action_audit.record(action_type, outcome, summary, details)
+    except Exception as exc:
+        logger.warning("Unable to record audit event %s: %s", action_type, exc)
 
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 
@@ -599,6 +609,12 @@ def build_email_draft(user_text: str, address: str) -> tuple:
 
     draft = draft_email_content(user_text, address)
     stored_draft = email_ledger.create(recipient, draft["subject"], draft["body"])
+    record_audit(
+        "email.draft",
+        "awaiting_approval",
+        "Email draft created; waiting for your approval.",
+        {"draft_id": stored_draft.id, "recipient": recipient, "subject": draft["subject"]},
+    )
     pending = {
         "id": stored_draft.id,
         "to": stored_draft.to,
@@ -909,6 +925,7 @@ def handle_email_verdict(verdict: Dict[str, Any]) -> str:
     if not approved:
         state = email_ledger.discard(draft_id)
         if state == "discarded":
+            record_audit("email.draft", "discarded", "Email draft discarded before sending.", {"draft_id": draft_id})
             logger.info("Email draft %s discarded by user.", draft_id)
             return "Discarded, Sir. Nothing was sent."
         if state == "expired":
@@ -917,6 +934,7 @@ def handle_email_verdict(verdict: Dict[str, Any]) -> str:
 
     state, pending = email_ledger.claim_for_send(draft_id)
     if state != "executing" or pending is None:
+        record_audit("email.approval", "rejected", "Email approval was not usable.", {"draft_id": draft_id, "state": state})
         if state == "expired":
             return "That email approval expired. Please request a new draft."
         if state == "missing":
@@ -927,13 +945,16 @@ def handle_email_verdict(verdict: Dict[str, Any]) -> str:
         send_email_smtp(pending.to, pending.subject, pending.body)
     except Exception as exc:
         email_ledger.mark_failed(draft_id, str(exc))
+        record_audit("email.send", "failed", "Email send failed; it will not be retried automatically.", {"draft_id": draft_id})
         logger.error("Failed to send email draft %s: %s", draft_id, exc)
         return "I couldn't send it, Sir. Nothing will be retried automatically; please create a new draft if you want to try again."
 
     if not email_ledger.mark_sent(draft_id):
+        record_audit("email.send", "outcome_unknown", "Email was submitted, but final status could not be recorded.", {"draft_id": draft_id})
         logger.critical("Email %s was submitted to SMTP but could not be recorded as sent", draft_id)
         return f"The message was submitted to {pending.to}, but I could not confirm its final status. I will not resend it automatically."
     logger.info("Email sent to %s", pending.to)
+    record_audit("email.send", "sent", "Email sent after explicit approval.", {"draft_id": draft_id, "recipient": pending.to})
     return f"Sent to {pending.to}, Sir."
 
 
@@ -990,6 +1011,7 @@ async def api_upload_file(
         if len(content) > MAX_UPLOAD_BYTES:
             raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File is larger than the 200 MB safety limit")
         res = file_manager.save_uploaded_file(content, file.filename or "drop_file.bin")
+        record_audit("file.upload", "completed", "File received from the paired phone.", {"name": file.filename, "size_bytes": len(content)})
         return JSONResponse(content=res)
     except HTTPException:
         raise
@@ -1008,7 +1030,9 @@ def api_browse_files(
 ):
     """Browses directories and presets on the host PC."""
     try:
-        return file_manager.browse_directory(path=path, preset=preset)
+        result = file_manager.browse_directory(path=path, preset=preset)
+        record_audit("file.browse", "completed", "Browsed an approved PC folder.", {"path": result["current_path"], "preset": preset})
+        return result
     except (PermissionError, FileNotFoundError, ValueError, NotADirectoryError) as exc:
         raise_file_http_error(exc)
 
@@ -1020,6 +1044,7 @@ def api_download_file(path: str = Query(...), _auth: None = Depends(require_pair
         safe_path = file_manager.require_allowed_existing_path(path)
         if os.path.isdir(safe_path):
             raise ValueError("Choose a file, not a folder")
+        record_audit("file.download", "started", "File transfer to the paired phone started.", {"path": safe_path})
         return FileResponse(path=safe_path, filename=os.path.basename(safe_path))
     except (PermissionError, FileNotFoundError, ValueError, NotADirectoryError) as exc:
         raise_file_http_error(exc)
@@ -1033,9 +1058,22 @@ def api_open_file(payload: Dict[str, Any] = Body(...), _auth: None = Depends(req
         raise HTTPException(status_code=400, detail="Path is required")
     try:
         safe_path = file_manager.require_allowed_existing_path(str(target_path))
-        return file_manager.open_path_on_pc(safe_path)
+        result = file_manager.open_path_on_pc(safe_path)
+        record_audit(
+            "file.open",
+            "completed" if result.get("status") == "success" else "failed",
+            "Opened an approved PC file or folder." if result.get("status") == "success" else "Could not open an approved PC file or folder.",
+            {"path": safe_path},
+        )
+        return result
     except (PermissionError, FileNotFoundError, ValueError, NotADirectoryError) as exc:
         raise_file_http_error(exc)
+
+
+@app.get("/api/audit/recent")
+def api_recent_audit(limit: int = Query(50, ge=1, le=100), _auth: None = Depends(require_pairing_token)):
+    """Return privacy-minimised action history for a future Android activity view."""
+    return {"events": action_audit.recent(limit)}
 
 
 CONNECTED_WEBSOCKETS: List[WebSocket] = []
