@@ -196,6 +196,7 @@ class WakeWordService : Service() {
     }
 
     private fun activateWake(ownerVerified: Boolean) {
+        if (!requested || SettingsStore(this).assistantPaused) return
         cooldownUntil = SystemClock.elapsedRealtime() + 4000
         WakeEvents.ownerVerified.value = ownerVerified
         Log.i("WakeWordService", "Wake phrase accepted; ownerVerified=$ownerVerified")

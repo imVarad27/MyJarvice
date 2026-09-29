@@ -47,7 +47,8 @@ import java.util.Date
 /** Library and detail views share a responsive surface instead of stacking small dialogs. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RememberInboxScreen(store: RememberInboxStore, onDismiss: () -> Unit, onAskJarvis: (RememberItem) -> Unit) {
+fun RememberInboxScreen(store: RememberInboxStore, onDismiss: () -> Unit, onAskJarvis: (RememberItem) -> Unit,
+    initialItemId: String? = null) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var entries by remember { mutableStateOf<List<RememberItem>>(emptyList()) }
@@ -56,7 +57,7 @@ fun RememberInboxScreen(store: RememberInboxStore, onDismiss: () -> Unit, onAskJ
     var revision by remember { mutableIntStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
     var kind by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedId by rememberSaveable { mutableStateOf(initialItemId) }
     var deleteItem by remember { mutableStateOf<RememberItem?>(null) }
     var reminderItem by remember { mutableStateOf<RememberItem?>(null) }
     var pendingReminder by remember { mutableStateOf<Pair<String, Long>?>(null) }

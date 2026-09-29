@@ -76,7 +76,8 @@ internal fun ChatComposer(
     onVoiceMode: () -> Unit,
     pcConnected: Boolean = true,
     mode: SmartMode = SmartMode.AUTO,
-    onChooseModel: () -> Unit = {}
+    onChooseModel: () -> Unit = {},
+    assistantPaused: Boolean = false
 ) {
     val colors = MaterialTheme.colorScheme
     Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -95,16 +96,16 @@ internal fun ChatComposer(
             Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 ChatIconButton("Add attachment or tool", onToggleToolsMenu, !isThinking) { IconPlus(tint = colors.onSurfaceVariant) }
                 ComposerModelSelector(mode, onChooseModel, enabled = !isThinking, modifier = Modifier.weight(1f))
-                ChatIconButton(if (isListening) "Stop dictation" else "Dictate message", onQuickVoice, !isThinking) {
+                ChatIconButton(if (isListening) "Stop dictation" else "Dictate message", onQuickVoice, !isThinking && !assistantPaused) {
                     IconMicrophone(tint = if (isListening) colors.primary else colors.onSurfaceVariant)
                 }
                 if (textInput.isNotBlank() || canSendAttachment) {
-                    FilledIconButton(onClick = onSend, enabled = !isThinking,
+                    FilledIconButton(onClick = onSend, enabled = !isThinking && !assistantPaused,
                         modifier = Modifier.size(48.dp).semantics { contentDescription = "Send message" }) {
                         IconSend(tint = if (isThinking) colors.onSurfaceVariant else colors.onPrimary)
                     }
                 } else {
-                    FilledIconButton(onClick = onVoiceMode, enabled = !isThinking,
+                    FilledIconButton(onClick = onVoiceMode, enabled = !isThinking && !assistantPaused,
                         modifier = Modifier.size(48.dp).semantics { contentDescription = "Start voice conversation" }) {
                         IconVoiceWaveform(tint = colors.onPrimary, size = 22.dp)
                     }
@@ -115,41 +116,65 @@ internal fun ChatComposer(
     if (showToolsMenu) {
         ModalBottomSheet(onDismissRequest = onToggleToolsMenu,
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
-                Text("Add to your conversation", style = MaterialTheme.typography.titleLarge)
-                Text("Choose something to share with Jarvis.", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 16.dp))
-                ToolRow("Take a photo", "Capture a receipt, label, or page", onTakePhoto)
-                ToolRow("Choose a photo", "Attach an image from your phone", onChoosePhoto)
-                ToolRow("Attach text document", "Text or Markdown, up to 8,000 characters", onAttachFile)
-                HorizontalDivider(Modifier.padding(vertical = 12.dp))
-                Text("Phone actions", style = MaterialTheme.typography.titleSmall)
-                ToolRow("Phone status", "Battery, charging and connection", { onToolSelected("phone status") })
-                ToolRow("Turn flashlight on", "Safe immediate action", { onToolSelected("turn the flashlight on") })
-                ToolRow("Set a timer", "Android asks you to confirm the duration", { onToolSelected("start a timer for 10 minutes") })
-                HorizontalDivider(Modifier.padding(vertical = 12.dp))
-                Text("Personal assistant", style = MaterialTheme.typography.titleSmall)
-                ToolRow("Plan my day", "Open tasks and reminders · PC required", { onToolSelected("plan my day") }, pcConnected)
-                ToolRow("My tasks", "Review saved tasks · PC required", { onToolSelected("show my tasks") }, pcConnected)
-                ToolRow("Saved memories", "Review facts stored on this phone", { onToolSelected("show memories") })
-                HorizontalDivider(Modifier.padding(vertical = 12.dp))
-                Text(if (pcConnected) "Connected PC" else "PC tools · connect your PC to use", style = MaterialTheme.typography.titleSmall)
-                ToolRow("Activity", "Review recent PC actions", onOpenActionHistory, pcConnected)
-                ToolRow("Send a file to PC", "Transfer to your configured host", onSendFileToPc, pcConnected)
-                ToolRow("Browse PC files", "Find a file on your connected computer", onOpenPcExplorer, pcConnected)
-                var moreTools by remember { mutableStateOf(false) }
-                TextButton(onClick = { moreTools = !moreTools }, enabled = pcConnected) { Text(if (moreTools) "Fewer tools" else "More PC tools") }
-                if (moreTools) {
-                    listOf(
-                        "Daily briefing" to "Give me my executive morning briefing.",
-                        "Active reminders" to "What are my active reminders?",
-                        "Web search" to "Search the web for the latest artificial intelligence news.",
-                        "Weather" to "What is the live weather forecast for Pune today?",
-                        "PC screenshot" to "Capture host PC screenshot.",
-                        "PC hardware status" to "What are my PC hardware stats?",
-                        "Lock PC" to "Lock my host PC workstation.",
-                        "Search PC documents" to "Search indexed files on my PC drives."
-                    ).forEach { (label, prompt) -> TextButton(onClick = { onToolSelected(prompt) }) { Text(label) } }
+            val shortcuts = listOf(
+                Shortcut("Take a photo", "Capture a receipt, label, or page", "Attachments", onTakePhoto),
+                Shortcut("Choose a photo", "Attach an image from your phone", "Attachments", onChoosePhoto),
+                Shortcut("Attach text document", "Text or Markdown, up to 8,000 characters", "Attachments", onAttachFile),
+                Shortcut("Phone status", "Battery, charging and connection", "On your phone", { onToolSelected("phone status") }),
+                Shortcut("Flashlight", "Prepare a flashlight command", "On your phone", { onToolSelected("turn the flashlight on") }),
+                Shortcut("Set a timer", "Choose a duration before you send", "On your phone", { onToolSelected("start a timer for 10 minutes") }),
+                Shortcut("Saved memories", "Facts stored on this phone", "On your phone", { onToolSelected("show memories") }),
+                Shortcut("Plan my day", "Review your PC tasks and reminders", "PC assistant", { onToolSelected("plan my day") }, true),
+                Shortcut("My tasks", "Review saved PC tasks", "PC assistant", { onToolSelected("show my tasks") }, true),
+                Shortcut("Daily briefing", "Prepare a briefing request", "PC assistant", { onToolSelected("Give me my executive morning briefing.") }, true),
+                Shortcut("Active reminders", "Review PC reminders", "PC assistant", { onToolSelected("What are my active reminders?") }, true),
+                Shortcut("Web search", "Add a topic before sending", "PC assistant", { onToolSelected("Search the web with sources about: ") }, true),
+                Shortcut("Weather", "Add a city before sending", "PC assistant", { onToolSelected("What is the live weather forecast for ") }, true),
+                Shortcut("Activity", "Review recent PC actions", "PC tools", onOpenActionHistory, true),
+                Shortcut("Send a file to PC", "Choose a file to transfer", "PC tools", onSendFileToPc, true),
+                Shortcut("Browse PC files", "Find a file on your computer", "PC tools", onOpenPcExplorer, true),
+                Shortcut("PC screenshot", "Prepare a screen capture request", "PC tools", { onToolSelected("Capture host PC screenshot.") }, true),
+                Shortcut("PC hardware status", "Check your computer's resources", "PC tools", { onToolSelected("What are my PC hardware stats?") }, true),
+                Shortcut("Lock PC", "Prepare a workstation lock request", "PC tools", { onToolSelected("Lock my host PC workstation.") }, true),
+                Shortcut("Search PC documents", "Search indexed files", "PC tools", { onToolSelected("Search indexed files on my PC drives.") }, true)
+            )
+            ShortcutBrowser(shortcuts, pcConnected, assistantPaused)
+        }
+    }
+}
+
+private data class Shortcut(val title: String, val subtitle: String, val group: String,
+    val run: () -> Unit, val needsPc: Boolean = false)
+
+@Composable
+private fun ShortcutBrowser(shortcuts: List<Shortcut>, pcConnected: Boolean, paused: Boolean) {
+    var query by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var phoneOnly by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    val needle = query.trim()
+    val matches = shortcuts.filter {
+        (!phoneOnly || !it.needsPc) && "${it.title} ${it.subtitle} ${it.group}".contains(needle, ignoreCase = true)
+    }
+    Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 24.dp).padding(bottom = 16.dp)) {
+        Text("Your shortcuts", style = MaterialTheme.typography.headlineSmall)
+        Text(if (paused) "Jarvis is paused. Resume in Settings to use tools." else "Commands open in chat for you to review.",
+            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
+        OutlinedTextField(query, { query = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+            label = { Text("Find a shortcut") }, shape = RoundedCornerShape(20.dp),
+            trailingIcon = { if (query.isNotEmpty()) TextButton(onClick = { query = "" }) { Text("Clear") } })
+        FilterChip(selected = phoneOnly, onClick = { phoneOnly = !phoneOnly }, label = { Text("Works without PC") })
+        androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f, fill = false)) {
+            if (matches.isEmpty()) item {
+                Text("No shortcuts found. Try camera, timer, or memory.", modifier = Modifier.padding(vertical = 24.dp))
+            }
+            matches.groupBy { it.group }.forEach { (group, entries) ->
+                item(key = group) { Text(group, style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)) }
+                entries.forEach { shortcut ->
+                    item(key = shortcut.title) {
+                        ToolRow(shortcut.title, shortcut.subtitle + if (shortcut.needsPc && !pcConnected) " · PC unavailable" else "",
+                            shortcut.run, enabled = !paused && (!shortcut.needsPc || pcConnected))
+                    }
                 }
             }
         }

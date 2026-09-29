@@ -72,6 +72,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
 
     private val settings = SettingsStore(application.applicationContext)
+    private val _assistantPaused = MutableStateFlow(settings.assistantPaused)
+    val assistantPaused = _assistantPaused.asStateFlow()
     private val _smartMode = MutableStateFlow(settings.smartMode)
     val smartMode = _smartMode.asStateFlow()
     fun selectSmartMode(mode: SmartMode) {
@@ -127,6 +129,18 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     init {
         viewModelScope.launch {
+            settings.observeAssistantPaused().collect { paused ->
+                _assistantPaused.value = paused
+                if (paused) {
+                    val requestInProgress = _isThinking.value
+                    exitVoiceMode()
+                    _isThinking.value = requestInProgress
+                    _pendingAction.value = null
+                    _responseRoute.value = "Jarvis is paused · resume it in Settings"
+                } else refreshPreferences()
+            }
+        }
+        viewModelScope.launch {
             combine(isSpeaking, isListening, _voiceModeActive, _isThinking, preparingMic) { speaking, listening, voice, thinking, preparing ->
                 speaking || listening || voice || thinking || preparing
             }.collect { WakeEvents.setMicrophoneBusy(microphoneOwner, it) }
@@ -164,7 +178,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             wsClient.latestResponse.collect { msg ->
                 msg?.let {
                     if (it.sender != "USER" && !localRequestActive) _isThinking.value = false
-                    if (it.sender.startsWith("JARVIS", ignoreCase = true) &&
+                    if (!settings.assistantPaused && it.sender.startsWith("JARVIS", ignoreCase = true) &&
                         (!WakeEvents.popupVisible.value || popupSession) &&
                         (settings.autoSpeakReplies || _voiceModeActive.value)) {
                         if (!it.audioB64.isNullOrBlank()) {
@@ -182,6 +196,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         // Execute phone actions (call / open app) the server directs.
         viewModelScope.launch {
             wsClient.latestAction.collect { action ->
+                if (settings.assistantPaused) return@collect
                 action?.let {
                     if (it.type.equals("CALL", ignoreCase = true) || it.type.equals("WHATSAPP", ignoreCase = true)) {
                         _pendingAction.value = it
@@ -258,6 +273,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         listeningJob = viewModelScope.launch {
             try {
                 if (withTimeoutOrNull(1500) { WakeEvents.captureReleased.first { it } } != true) return@launch
+                if (settings.assistantPaused) return@launch
                 speechManager.startListening(
                     onReady = { viewModelScope.launch { JarvisSoundFx.playWakeChime() } },
                     onResult = { voiceText -> sendQuery(voiceText, fromVoice = true) },
@@ -389,7 +405,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 _serverToken.value = settings.serverToken
             }
         }
-        if (!_isThinking.value) _responseRoute.value = when (settings.smartMode) {
+        if (settings.assistantPaused) _responseRoute.value = "Jarvis is paused · resume it in Settings"
+        else if (!_isThinking.value) _responseRoute.value = when (settings.smartMode) {
             SmartMode.FAST_ON_DEVICE -> "Fast · Replies stay on this phone"
             SmartMode.STRONG_HOST -> "Strong · Uses your configured PC"
             SmartMode.AUTO -> "Auto · PC when connected, phone when offline"
@@ -586,6 +603,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun speak(text: String) {
+        if (settings.assistantPaused) return
         speechManager.speak(text)
     }
 

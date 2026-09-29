@@ -26,7 +26,12 @@ private fun BlankChatPreview(theme: ThemeMode) {
         Surface {
             Column(Modifier.fillMaxSize()) {
                 ChatTopBar(ConnectionStatus.DISCONNECTED, {}, {}, {}, {})
-                Box(Modifier.weight(1f)) { EmptyChatHero(onPromptSelected = {}) }
+                Box(Modifier.weight(1f)) {
+                    TodayHomeContent(
+                        brief = com.example.myjarvice.data.TodayBrief.from(emptyList(), System.currentTimeMillis()),
+                        now = System.currentTimeMillis()
+                    )
+                }
                 ChatComposer("", {}, false, false, false, false, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})
             }
         }

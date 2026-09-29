@@ -4,8 +4,6 @@ import android.app.Application
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.example.myjarvice.ui.inbox.RememberInboxScreen
@@ -80,12 +78,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -105,24 +101,19 @@ import com.example.myjarvice.data.FileTransferManager
 import com.example.myjarvice.data.ImageUnderstanding
 import com.example.myjarvice.data.PhotoAttachment
 import com.example.myjarvice.data.RememberInboxStore
-import com.example.myjarvice.theme.ArcGold
-import com.example.myjarvice.ui.JarvisArcReactor
 import com.example.myjarvice.ui.files.PcExplorerDialog
 
-import com.example.myjarvice.ui.icons.IconActivity
 import com.example.myjarvice.ui.icons.IconDocument
 import com.example.myjarvice.ui.icons.IconMessage
 import com.example.myjarvice.ui.icons.IconPlus
 import com.example.myjarvice.ui.icons.IconSettings
 import com.example.myjarvice.wake.WakeEvents
-import com.example.myjarvice.ui.icons.IconSparkles
 import com.example.myjarvice.ui.icons.IconTrash
 import com.example.myjarvice.ui.voice.VoiceInfoDialog
 import com.example.myjarvice.ui.voice.VoiceModeScreen
 import com.example.myjarvice.ui.voice.VoicePickerDialog
 import kotlinx.coroutines.launch
 import java.io.File
-import java.util.Calendar
 import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -159,6 +150,7 @@ fun MainScreen(
     val pendingEmail by viewModel.pendingEmail.collectAsStateWithLifecycle()
     val isThinking by viewModel.isThinking.collectAsStateWithLifecycle()
     val responseRoute by viewModel.responseRoute.collectAsStateWithLifecycle()
+    val assistantPaused by viewModel.assistantPaused.collectAsStateWithLifecycle()
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
@@ -208,6 +200,8 @@ fun MainScreen(
     var actionHistoryLoading by remember { mutableStateOf(false) }
     var actionHistoryError by remember { mutableStateOf<String?>(null) }
     var showRememberInbox by rememberSaveable { mutableStateOf(false) }
+    var selectedInboxId by rememberSaveable { mutableStateOf<String?>(null) }
+    var showDraftComposer by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(inboxRequest) { if (inboxRequest > 0) showRememberInbox = true }
     val rememberInbox = remember { RememberInboxStore(context.applicationContext) }
     var pendingChatDeletion by remember { mutableStateOf<String?>(null) }
@@ -363,7 +357,8 @@ fun MainScreen(
     if (showRememberInbox) {
         RememberInboxScreen(
             store = rememberInbox,
-            onDismiss = { showRememberInbox = false },
+            initialItemId = selectedInboxId,
+            onDismiss = { showRememberInbox = false; selectedInboxId = null },
             onAskJarvis = { item ->
                 if (isThinking) Toast.makeText(context, "Wait for the current reply before starting another request.", Toast.LENGTH_SHORT).show()
                 else {
@@ -372,6 +367,13 @@ fun MainScreen(
                 }
             }
         )
+    }
+
+    if (showDraftComposer) {
+        DraftComposerSheet(onDismiss = { showDraftComposer = false }, onPrepare = { prompt ->
+            textInput = prompt
+            showDraftComposer = false
+        })
     }
 
     if (showIpDialog) {
@@ -498,7 +500,7 @@ fun MainScreen(
                             if (!isThinking) { viewModel.startNewChat(); textInput = ""; attachedPhoto = null; attachedFileName = null; attachedFileContent = null }
                             else Toast.makeText(context, "Wait for this reply before starting a new conversation.", Toast.LENGTH_SHORT).show()
                         },
-                        onOpenInbox = { showRememberInbox = true }
+                        onOpenInbox = { selectedInboxId = null; showRememberInbox = true }
                     )
                 }
             ) { innerPadding ->
@@ -508,6 +510,15 @@ fun MainScreen(
                         .padding(innerPadding)
                         .imePadding()
                 ) {
+                    if (assistantPaused) {
+                        androidx.compose.material3.Surface(color = scheme.secondaryContainer) {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Text("Jarvis is paused", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                                TextButton(onClick = onOpenSettings) { Text("Open settings") }
+                            }
+                        }
+                    }
                     // Content Area: Empty Hero OR Active Chat Feed
                     Box(
                         modifier = Modifier
@@ -516,11 +527,12 @@ fun MainScreen(
                         contentAlignment = Alignment.TopCenter
                     ) {
                         if (chatHistory.isEmpty()) {
-                            EmptyChatHero(
-                                pcAvailable = connectionStatus == ConnectionStatus.CONNECTED && smartMode != com.example.myjarvice.data.SmartMode.FAST_ON_DEVICE,
-                                onPromptSelected = { prompt ->
-                                    textInput = prompt
-                                }
+                            AssistantHome(
+                                store = rememberInbox, sessions = savedSessions, refreshKey = showRememberInbox,
+                                onOpenSaved = { id -> selectedInboxId = id; showRememberInbox = true },
+                                onOpenSession = { session -> if (!isThinking) viewModel.loadSession(session) },
+                                onOpenTools = { showToolsMenu = true },
+                                onDraft = { showDraftComposer = true }
                             )
                         } else {
                             ChatFeed(
@@ -619,11 +631,12 @@ fun MainScreen(
                                 canSendAttachment = attachedFileContent != null || attachedPhoto != null,
                                 isListening = isListening,
                                 isThinking = isThinking || attachmentBusy,
+                                assistantPaused = assistantPaused,
                                 showToolsMenu = showToolsMenu,
                                 onToggleToolsMenu = { showToolsMenu = !showToolsMenu },
                                 onToolSelected = { toolPrompt ->
                                     showToolsMenu = false
-                                    viewModel.sendQuery(toolPrompt)
+                                    textInput = toolPrompt
                                 },
                                 onAttachFile = {
                                     showToolsMenu = false
@@ -871,170 +884,6 @@ private fun HistoryDrawerContent(
     }
 }
 
-/**
- * Empty Chat State Hero (JARVIS 1.0 with PC Automation & Web Search Shortcuts)
- */
-@Composable
-internal fun EmptyChatHero(
-    onPromptSelected: (String) -> Unit,
-    pcAvailable: Boolean = false
-) {
-    val scheme = MaterialTheme.colorScheme
-    val greeting = remember {
-        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        when {
-            hour < 12 -> "Good morning"
-            hour < 18 -> "Good afternoon"
-            else -> "Good evening"
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .widthIn(max = 640.dp)
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 16.dp),
-        horizontalAlignment = Alignment.Start,
-        verticalArrangement = Arrangement.Center
-    ) {
-        com.example.myjarvice.ui.JarvisBrandMark(Modifier.size(64.dp))
-        Spacer(Modifier.height(24.dp))
-        Text(
-            greeting,
-            color = scheme.onSurfaceVariant,
-            style = MaterialTheme.typography.titleMedium
-        )
-
-        Spacer(Modifier.height(6.dp))
-
-        Text(
-            "A little help.\nA clearer day.",
-            color = scheme.primary,
-            style = MaterialTheme.typography.displaySmall
-        )
-        Text("Ask, plan, or pick up a thought.", color = scheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp))
-
-        Spacer(Modifier.height(28.dp))
-
-        // Professional 2x2 Suggestion Cards
-        val promptCards = listOf(
-            PromptCardItem(
-                title = if (pcAvailable) "Plan my day" else "Make a plan",
-                desc = if (pcAvailable) "Your tasks & reminders" else "Break a goal into steps",
-                prompt = if (pcAvailable) "plan my day" else "Help me make a realistic plan for today. Ask what I need to get done first.",
-                containerColor = scheme.primaryContainer,
-                contentColor = scheme.onPrimaryContainer,
-                icon = { IconSparkles(tint = scheme.onPrimaryContainer, size = 18.dp) }
-            ),
-            PromptCardItem(
-                title = "Explain simply",
-                desc = "Understand something new",
-                prompt = "Explain how a phone runs an AI model, using a simple example.",
-                containerColor = scheme.secondaryContainer,
-                contentColor = scheme.onSecondaryContainer,
-                icon = { IconActivity(tint = scheme.onSecondaryContainer, size = 18.dp) }
-            ),
-            PromptCardItem(
-                title = "Help me write",
-                desc = "Find the right words",
-                prompt = "Help me write a clear, friendly message. Ask who it's for and what I want to say.",
-                containerColor = scheme.tertiaryContainer,
-                contentColor = scheme.onTertiaryContainer,
-                icon = { IconDocument(tint = scheme.onTertiaryContainer, size = 18.dp) }
-            ),
-            PromptCardItem(
-                title = "My memory",
-                desc = "Review saved preferences",
-                prompt = "Show memories",
-                containerColor = scheme.surfaceContainerHigh,
-                contentColor = scheme.onSurface,
-                icon = { IconDocument(tint = scheme.onSurface, size = 18.dp) }
-            )
-        )
-
-
-        Column(
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            val columns = if (androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.2f) 1 else 2
-            promptCards.chunked(columns).forEach { rowItems ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    rowItems.forEach { item ->
-                        PromptSuggestionCard(
-                            item = item,
-                            onClick = { onPromptSelected(item.prompt) },
-                            modifier = Modifier.weight(1f).fillMaxHeight()
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-private data class PromptCardItem(
-    val title: String,
-    val desc: String,
-    val prompt: String,
-    val containerColor: Color,
-    val contentColor: Color,
-    val icon: @Composable () -> Unit
-)
-
-@Composable
-private fun PromptSuggestionCard(
-    item: PromptCardItem,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(item.containerColor)
-            .clickable(onClick = onClick)
-            .padding(14.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(item.contentColor.copy(alpha = 0.08f)),
-            contentAlignment = Alignment.Center
-        ) {
-            item.icon()
-        }
-
-        Spacer(Modifier.height(10.dp))
-
-        Text(
-            item.title,
-            color = item.contentColor,
-            style = MaterialTheme.typography.titleMedium
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            item.desc,
-            color = item.contentColor,
-            style = MaterialTheme.typography.bodySmall,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-/**
- * Message Feed (Adaptive Theme with Live Web Sources & Screenshot Cards)
- */
-
-/**
- * Floating Bottom Input Bar (with Host PC & Web Search Tools)
- */
 
 /**
  * Server Configuration Dialog

@@ -1,6 +1,10 @@
 package com.example.myjarvice.data
 
 import android.content.Context
+import android.content.SharedPreferences
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import com.example.myjarvice.theme.ThemeMode
 import com.example.myjarvice.theme.AssistantStyle
 
@@ -50,6 +54,15 @@ class SettingsStore(context: Context) {
         set(value) {
             prefs.edit().putBoolean(KEY_ASSISTANT_PAUSED, value).apply()
         }
+
+    fun observeAssistantPaused() = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_ASSISTANT_PAUSED) trySend(assistantPaused)
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(assistantPaused)
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
 
     /** Host PC address for the websocket link, so the app reconnects without retyping it. */
     var serverIp: String

@@ -63,6 +63,7 @@ class ChatChromeTest {
         ChatComposer(textInput = "", onTextChange = {}, canSendAttachment = attachment,
             isListening = false, isThinking = busy, showToolsMenu = menu, onToggleToolsMenu = {},
             onToolSelected = {}, onAttachFile = {}, onTakePhoto = {}, onChoosePhoto = {},
-            onSendFileToPc = {}, onOpenPcExplorer = {}, onSend = onSend, onQuickVoice = {}, onVoiceMode = {})
+            onSendFileToPc = {}, onOpenPcExplorer = {}, onOpenActionHistory = {},
+            onSend = onSend, onQuickVoice = {}, onVoiceMode = {})
     }
 }
