@@ -606,7 +606,7 @@ fun MainScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text("Photo ready", color = scheme.onSurface, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                                 Text(
-                                    if (photo.hasReadableText) "Text read on this phone" else "Use Strong mode for full visual analysis",
+                                    if (photo.hasReadableText) "Text read on this phone" else "Choose Connected PC for full visual analysis",
                                     color = scheme.onSurfaceVariant,
                                     fontSize = 11.sp,
                                     maxLines = 1,

@@ -110,6 +110,33 @@ class RememberInboxStore(private val context: Context) {
         } }
     }
 
+    /** Merge a backup. Media paths from the archive are ignored and regenerated in app-private storage. */
+    fun mergeItems(incoming: List<RememberItem>, media: Map<String, Pair<String, ByteArray>>): Int {
+        val current = load().toMutableList()
+        val existing = current.mapTo(mutableSetOf()) { it.id }
+        var added = 0
+        incoming.take(1_000).forEach { item ->
+            if (item.id.isBlank() || item.id.length > 160 || item.id in existing || item.title.length > 240 ||
+                item.summary.length > 2_000 || item.searchableText.length > 100_000
+            ) return@forEach
+            val restoredPath = media[item.id]?.let { (extension, bytes) ->
+                val safeExtension = extension.lowercase().filter { it.isLetterOrDigit() }.take(8).ifBlank { "bin" }
+                if (bytes.size > 12 * 1024 * 1024) null else File(inboxDir(), "${item.id}.$safeExtension")
+                    .also { it.writeBytes(bytes) }.absolutePath
+            }
+            if ((item.kind == RememberKind.PHOTO || item.kind == RememberKind.VOICE) && restoredPath == null) return@forEach
+            val restored = item.copy(mediaPath = restoredPath)
+            current += restored
+            existing += restored.id
+            if (restored.reminderAt != null && restored.reminderAt > System.currentTimeMillis()) {
+                scheduleReminder(restored, restored.reminderAt)
+            }
+            added++
+        }
+        save(current)
+        return added
+    }
+
     private fun inboxDir(): File = File(context.filesDir, "remember-inbox").apply { mkdirs() }
 
     private fun load(): List<RememberItem> = runCatching {

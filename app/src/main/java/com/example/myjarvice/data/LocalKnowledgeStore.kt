@@ -50,6 +50,25 @@ class LocalKnowledgeStore(private val context: Context) {
 
     fun delete(id: String) = synchronized(lock) { save(entries().filterNot { it.id == id }) }
 
+    /** Merge explicit memories/documents from a backup while preserving current entries and limits. */
+    fun mergeEntries(incoming: List<KnowledgeEntry>): Int = synchronized(lock) {
+        val current = entries().toMutableList()
+        val existing = current.mapTo(mutableSetOf()) { it.id }
+        var added = 0
+        incoming.forEach { entry ->
+            if (entry.id.isBlank() || entry.id.length > 160 || entry.name.length > 160 ||
+                entry.text.isBlank() || entry.text.length > (if (entry.memory) 300 else 100_000) ||
+                entry.id in existing || (entry.memory && current.count { it.memory } >= 50) ||
+                (!entry.memory && current.count { !it.memory } >= 20)
+            ) return@forEach
+            current += entry
+            existing += entry.id
+            added++
+        }
+        save(current)
+        added
+    }
+
     fun importDocument(uri: Uri): KnowledgeEntry {
         val resolver = context.contentResolver
         val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {

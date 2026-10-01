@@ -55,7 +55,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -74,6 +76,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.myjarvice.data.SettingsStore
 import com.example.myjarvice.data.SmartMode
 import com.example.myjarvice.data.SpeechManager
+import com.example.myjarvice.data.BackupPreview
+import com.example.myjarvice.data.JarvisBackupManager
 import com.example.myjarvice.theme.ThemeMode
 import com.example.myjarvice.theme.AssistantStyle
 import com.example.myjarvice.ui.icons.IconDocument
@@ -81,6 +85,7 @@ import com.example.myjarvice.ui.icons.IconMicrophone
 import com.example.myjarvice.ui.icons.IconSparkles
 import com.example.myjarvice.ui.icons.IconSpeaker
 import com.example.myjarvice.ui.icons.IconVoiceWaveform
+import com.example.myjarvice.ui.main.responseModeTitle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -90,9 +95,10 @@ private val settingsDescriptions = mapOf(
     "Appearance" to "Light, dark, AMOLED and wallpaper colors",
     "Voice & speech" to "Voice, pace and spoken replies",
     "Hands-free voice" to "Hey Jarvis, voice match and microphone",
+    "Writing style" to "Personal drafts, tone, length, emoji and sign-off",
     "AI & personal knowledge" to "Phone model, memory and documents",
     "PC connection" to "Pair your computer · Wi-Fi and host address",
-    "Data & storage" to "Saved items and conversation history",
+    "Data & storage" to "Backup, saved items and conversation history",
     "About Jarvis" to "App information"
 )
 
@@ -120,6 +126,9 @@ fun SettingsScreen(
     val availableVoices by speechManager.voices.collectAsState()
     DisposableEffect(speechManager) { onDispose { speechManager.shutdown() } }
     var importingModel by remember { mutableStateOf(false) }
+    var backupBusy by remember { mutableStateOf(false) }
+    var pendingRestore by remember { mutableStateOf<Pair<Uri, BackupPreview>?>(null) }
+    var backupRevision by remember { mutableIntStateOf(0) }
 
     var selectedVoiceId by remember { mutableStateOf(settingsStore.ttsVoice) }
     var speechRate by remember { mutableFloatStateOf(settingsStore.ttsSpeechRate) }
@@ -163,6 +172,34 @@ fun SettingsScreen(
     var showPersonalityDropdown by remember { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
+    val backupManager = remember { JarvisBackupManager(context) }
+    val backupExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        coroutineScope.launch {
+            backupBusy = true
+            val result = withContext(Dispatchers.IO) { runCatching { backupManager.exportTo(uri) } }
+            result.onSuccess { preview ->
+                Toast.makeText(context, "Backup created · ${preview.totalItems} items", Toast.LENGTH_LONG).show()
+            }.onFailure { error ->
+                Toast.makeText(context, "Backup failed: ${error.message}", Toast.LENGTH_LONG).show()
+            }
+            backupBusy = false
+        }
+    }
+    val backupImportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        coroutineScope.launch {
+            backupBusy = true
+            val result = withContext(Dispatchers.IO) { runCatching { backupManager.inspect(uri) } }
+            result.onSuccess { pendingRestore = uri to it }
+                .onFailure { error -> Toast.makeText(context, "Cannot open backup: ${error.message}", Toast.LENGTH_LONG).show() }
+            backupBusy = false
+        }
+    }
     val modelImportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -615,6 +652,9 @@ fun SettingsScreen(
 
 
             }
+            SettingsSection("Writing style", initiallyExpanded = false, query = sectionQuery) {
+                key(backupRevision) { WritingProfilePanel() }
+            }
             SettingsSection("AI & personal knowledge", initiallyExpanded = false, query = sectionQuery) {
 
 
@@ -716,13 +756,13 @@ fun SettingsScreen(
                     HorizontalDivider(color = scheme.outline.copy(alpha = 0.2f))
                     Spacer(Modifier.height(12.dp))
 
-                    Text("Smart Mode", color = scheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text("Response model", color = scheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.height(4.dp))
                     Text(
                         when (smartMode) {
-                            SmartMode.FAST_ON_DEVICE -> "Fast & private: uses the model stored on this phone"
-                            SmartMode.STRONG_HOST -> "Strong: always uses your connected PC/server model"
-                            SmartMode.AUTO -> "Automatic: uses PC when connected, otherwise your phone model"
+                            SmartMode.FAST_ON_DEVICE -> "Private text replies from the model stored on this phone."
+                            SmartMode.STRONG_HOST -> "Use the model, web search, and tools on your paired computer."
+                            SmartMode.AUTO -> "Use your PC when available, with the phone model as a private fallback."
                         },
                         color = scheme.onSurfaceVariant,
                         fontSize = 12.sp
@@ -730,10 +770,10 @@ fun SettingsScreen(
                     Spacer(Modifier.height(8.dp))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         listOf(
-                            SmartMode.FAST_ON_DEVICE to "Fast",
-                            SmartMode.STRONG_HOST to "Strong",
-                            SmartMode.AUTO to "Auto"
-                        ).forEach { (mode, label) ->
+                            SmartMode.AUTO,
+                            SmartMode.FAST_ON_DEVICE,
+                            SmartMode.STRONG_HOST
+                        ).forEach { mode ->
                             Button(
                                 onClick = {
                                     smartMode = mode
@@ -745,7 +785,7 @@ fun SettingsScreen(
                                 ),
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier
-                            ) { Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+                            ) { Text(responseModeTitle(mode), fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
                         }
                     }
 
@@ -840,10 +880,46 @@ fun SettingsScreen(
             SettingsSection("Data & storage", initiallyExpanded = false, query = sectionQuery) {
 
                     SettingsCard {
-                        Text("Conversation history", style = MaterialTheme.typography.titleSmall)
-                        Spacer(Modifier.height(8.dp))
-                        Text("Open the conversation sidebar to review or delete your chats. Saved inbox items have their own delete controls.",
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconDocument(tint = scheme.primary, size = 20.dp)
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text("Backup & restore", style = MaterialTheme.typography.titleSmall)
+                                Text("Keep your personal Jarvis data under your control",
+                                    style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Text("Back up conversations, memories, imported text, saved items and preferences to a file you choose.",
                             style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                        Spacer(Modifier.height(8.dp))
+                        Text("Never included: PC address or token, voice profile, wake state, and AI model files.",
+                            style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                        Text("Backup files are not encrypted. Keep them somewhere private.",
+                            style = MaterialTheme.typography.bodySmall, color = scheme.error,
+                            modifier = Modifier.padding(top = 6.dp))
+                        if (backupBusy) {
+                            Spacer(Modifier.height(14.dp))
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            Text("Preparing your data…", style = MaterialTheme.typography.labelMedium,
+                                color = scheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+                        }
+                        Spacer(Modifier.height(14.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Button(
+                                onClick = {
+                                    val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+                                    backupExportLauncher.launch("jarvis-backup-$date.jarvisbackup")
+                                },
+                                enabled = !backupBusy,
+                                modifier = Modifier.weight(1f).heightIn(min = 48.dp)
+                            ) { Text("Create backup") }
+                            androidx.compose.material3.OutlinedButton(
+                                onClick = { backupImportLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) },
+                                enabled = !backupBusy,
+                                modifier = Modifier.weight(1f).heightIn(min = 48.dp)
+                            ) { Text("Restore") }
+                        }
                     }
                     Spacer(Modifier.height(16.dp))
 
@@ -873,6 +949,56 @@ fun SettingsScreen(
             }
         }
         Spacer(Modifier.height(8.dp))
+    }
+
+    pendingRestore?.let { (uri, preview) ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { if (!backupBusy) pendingRestore = null },
+            title = { Text("Merge this backup?") },
+            text = {
+                Column {
+                    Text("Created ${java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(java.util.Date(preview.createdAt))}",
+                        style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+                    Spacer(Modifier.height(8.dp))
+                    Text("Jarvis found ${preview.totalItems} items:")
+                    Text("${preview.conversations} conversations · ${preview.memories} memories · ${preview.documents} documents")
+                    Text("${preview.savedItems} saved items · ${preview.mediaFiles} media files")
+                    Spacer(Modifier.height(12.dp))
+                    Text("Restore adds missing items and updates older matching conversations. It does not delete newer data.",
+                        color = scheme.onSurfaceVariant)
+                    Text("Connection credentials, voiceprints and model files are never restored.",
+                        color = scheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    coroutineScope.launch {
+                        backupBusy = true
+                        val result = withContext(Dispatchers.IO) { runCatching { backupManager.restoreFrom(uri) } }
+                        result.onSuccess {
+                            selectedVoiceId = settingsStore.ttsVoice
+                            speechRate = settingsStore.ttsSpeechRate
+                            pitch = settingsStore.ttsPitch
+                            autoSpeak = settingsStore.autoSpeakReplies
+                            userName = settingsStore.userName
+                            aiPersonality = settingsStore.aiPersonality
+                            temperature = settingsStore.temperature
+                            smartMode = settingsStore.smartMode
+                            onThemeMode(settingsStore.themeMode)
+                            onDynamicColor(settingsStore.dynamicColor)
+                            onAssistantStyle(settingsStore.assistantStyle)
+                            backupRevision++
+                            Toast.makeText(context, "Backup merged successfully", Toast.LENGTH_LONG).show()
+                        }.onFailure { error ->
+                            Toast.makeText(context, "Restore failed: ${error.message}", Toast.LENGTH_LONG).show()
+                        }
+                        backupBusy = false
+                        pendingRestore = null
+                    }
+                }, enabled = !backupBusy) { Text("Merge backup") }
+            },
+            dismissButton = { TextButton(onClick = { pendingRestore = null }, enabled = !backupBusy) { Text("Cancel") } }
+        )
     }
 }
 

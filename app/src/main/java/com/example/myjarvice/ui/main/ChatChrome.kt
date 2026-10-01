@@ -38,12 +38,7 @@ internal fun ChatTopBar(
         TextButton(onClick = onStatusClick, modifier = Modifier.weight(1f).semantics { contentDescription = "Choose response mode and connection" }) {
             Column(Modifier.fillMaxWidth()) {
                 Text("Jarvis", style = MaterialTheme.typography.titleLarge, color = colors.onSurface)
-                Text(when {
-                    mode == SmartMode.FAST_ON_DEVICE -> "On this phone"
-                    connectionStatus == ConnectionStatus.CONNECTED -> "${if (mode == SmartMode.AUTO) "Auto · " else ""}PC connected"
-                    connectionStatus == ConnectionStatus.CONNECTING -> "Connecting…"
-                    else -> "${if (mode == SmartMode.AUTO) "Auto" else "PC"} · PC offline"
-                }, style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant,
+                Text(responseModeTopStatus(mode, connectionStatus), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
@@ -80,12 +75,12 @@ internal fun ChatComposer(
     assistantPaused: Boolean = false
 ) {
     val colors = MaterialTheme.colorScheme
-    Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(28.dp), color = colors.surfaceContainerLow,
-        border = androidx.compose.foundation.BorderStroke(1.dp, colors.primary.copy(alpha = 0.3f))) {
+    Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(28.dp), color = colors.surfaceContainer,
+        border = androidx.compose.foundation.BorderStroke(1.dp, colors.outlineVariant), shadowElevation = 4.dp) {
         Column(Modifier.padding(8.dp)) {
             OutlinedTextField(value = textInput, onValueChange = onTextChange,
-                placeholder = { Text(if (canSendAttachment) "Ask about your attachment…" else "Ask Jarvis…") },
+                placeholder = { Text(if (canSendAttachment) "Ask about this attachment" else "Message Jarvis") },
                 modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Message input" },
                 maxLines = 4,
                 textStyle = MaterialTheme.typography.bodyLarge,
@@ -184,18 +179,26 @@ private fun ShortcutBrowser(shortcuts: List<Shortcut>, pcConnected: Boolean, pau
 @Composable
 internal fun ComposerModelSelector(mode: SmartMode, onClick: () -> Unit, enabled: Boolean = true,
     modifier: Modifier = Modifier) {
-    TextButton(onClick = onClick, enabled = enabled,
-        modifier = modifier.heightIn(min = 48.dp).semantics { contentDescription = "Choose AI model: ${modeLabel(mode)}" },
-        contentPadding = PaddingValues(horizontal = 10.dp)) {
-        Text("${modeLabel(mode)} ⌄", style = MaterialTheme.typography.labelLarge,
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
+    val colors = MaterialTheme.colorScheme
+    Surface(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(50),
+        color = colors.surfaceContainerHighest,
+        border = androidx.compose.foundation.BorderStroke(1.dp, colors.outlineVariant),
+        modifier = modifier.padding(horizontal = 4.dp, vertical = 5.dp).heightIn(min = 40.dp)
+            .semantics { contentDescription = "Choose response mode. Current: ${responseModeTitle(mode)}" }) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Surface(shape = RoundedCornerShape(50), color = when (mode) {
+                SmartMode.AUTO -> colors.primary
+                SmartMode.FAST_ON_DEVICE -> colors.tertiary
+                SmartMode.STRONG_HOST -> colors.secondary
+            }, modifier = Modifier.size(8.dp)) {}
+            Text(responseModeCompactLabel(mode), style = MaterialTheme.typography.labelLarge,
+                color = colors.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 8.dp))
+            Text("⌄", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant,
+                modifier = Modifier.padding(start = 6.dp))
+        }
     }
-}
-
-internal fun modeLabel(mode: SmartMode) = when (mode) {
-    SmartMode.AUTO -> "Auto"
-    SmartMode.FAST_ON_DEVICE -> "Phone"
-    SmartMode.STRONG_HOST -> "PC"
 }
 
 @Composable

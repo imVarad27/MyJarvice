@@ -21,10 +21,11 @@ Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer co
 - Replies have a wider reading column, selectable basic bold/code/headings/bullets, and no animated avatar. Streaming hides premature action buttons and redundant thinking indicators.
 - Settings start as compact categories with explanatory subtitles. Voice respects the app theme and uses readable status and transcription text.
 - Appearance offers Pixel-inspired or original Jarvis accents. Verified “Hey Jarvis” opens a compact assistant popup on an unlocked phone, with typing, voice, route selection, dismiss and expand controls. Preview is explicitly manual and unverified; it does not bypass voice protection.
+- Data & storage can create and merge a local backup of conversations, explicit memories/documents, saved inbox media, and safe preferences. Credentials, voiceprints, wake state, and model files are excluded; restore is reviewed and non-destructive.
 
 ## What a personal assistant needs next
 
-1. **Data safety:** explicit export/import and verified backups for conversations, memories, saved items and settings. This is more important than cosmetic features. Never run uninstalling instrumentation on a personal phone.
+1. **Data safety follow-through:** run a real create/restore drill on an unlocked test device, then consider optional passphrase encryption and backup reminders. Never run uninstalling instrumentation on a personal phone.
 2. **A real Today page:** editable tasks, reminder status and due dates, with a clear distinction between phone and PC storage. Do not synthesize a fake calendar or agenda.
 3. **Dependable voice:** end-to-end acoustic tests, interruption handling, clear errors, and transparent Android background/lock-screen limits. UI tests alone do not establish recognition accuracy.
 4. **Permissioned integrations:** calendar and contacts, followed by messaging/email where useful. Show a preview and require confirmation for consequential actions. Do not claim integrations until connected and tested.

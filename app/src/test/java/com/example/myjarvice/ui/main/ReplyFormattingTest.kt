@@ -11,6 +11,9 @@ class ReplyFormattingTest {
         assertTrue(result.spanStyles.isNotEmpty())
     }
     @Test fun headingsAndBulletsAreReadable() { assertEquals("Plan\n• First step", formatReplyText("## Plan\n- First step").text) }
+    @Test fun commonMarkdownDoesNotLeakIntoTheAnswer() {
+        assertEquals("• First\n• Second\n│ Note\nquietly", formatReplyText("* First\n+ Second\n> Note\n_quietly_").text)
+    }
     @Test fun fencedCodePreservesLiteralMarkup() {
         assertEquals("\n  **literal**\n", formatReplyText("```text\n  **literal**\n```").text)
     }

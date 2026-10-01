@@ -124,6 +124,21 @@ class ChatHistoryStore(context: Context) {
         }
     }
 
+    /** Merge a validated backup without deleting conversations created after that backup. */
+    fun mergeSessions(incoming: List<ChatSession>): Int = synchronized(storageLock) {
+        val accepted = incoming.take(500).filter { session ->
+            session.id.isNotBlank() && session.id.length <= 160 && session.title.length <= 240 &&
+                session.messages.size <= 2_000 && session.messages.all { it.text.length <= 100_000 }
+        }
+        val current = loadAllSessions()
+        val merged = (current + accepted).groupBy { it.id }.values
+            .mapNotNull { versions -> versions.maxByOrNull { it.updatedAt } }
+            .sortedByDescending { it.updatedAt }
+            .take(500)
+        persistSessions(merged)
+        merged.count { result -> current.none { it.id == result.id } }
+    }
+
     private fun persistSessions(sessions: List<ChatSession>) {
         val jsonArray = JSONArray()
         for (session in sessions) {

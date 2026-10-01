@@ -6,7 +6,6 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Base64
 import android.widget.Toast
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -153,17 +152,23 @@ private fun JarvisMessageBubble(
                     color = scheme.onSurface,
                     style = MaterialTheme.typography.titleMedium
                 )
-                Text(
-                    when {
+                Surface(shape = RoundedCornerShape(50), color = scheme.surfaceContainerHighest) {
+                    Text(
+                        when {
                         msg.type == "ERROR" -> "Couldn't finish"
                         msg.type == "PARTIAL" -> "Writing…"
-                        msg.sender.contains("On-device", true) -> "On your phone"
-                        msg.sender.contains("Local tool", true) -> "Local tool"
-                        else -> "PC"
-                    },
-                    color = scheme.onSurfaceVariant,
-                    fontSize = 11.sp
-                )
+                        msg.sender.contains("On-device", true) -> "On this phone"
+                        msg.sender.contains("Local tool", true) -> "On this phone"
+                        msg.sender.contains("Phone", true) -> "Phone action"
+                        msg.sender.contains("Safety", true) -> "Safety"
+                        msg.sender.contains("Voice protection", true) -> "Voice protection"
+                            else -> "Connected PC"
+                        },
+                        color = scheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
             }
 
             Spacer(Modifier.height(4.dp))
@@ -428,14 +433,6 @@ private fun ThinkingIndicator(processingLabel: String = "") {
 
         Spacer(Modifier.width(12.dp))
 
-        val transition = rememberInfiniteTransition(label = "thinking")
-        val alpha by transition.animateFloat(
-            initialValue = 0.3f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(600, easing = LinearEasing), RepeatMode.Reverse),
-            label = "thinkingAlpha"
-        )
-
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(12.dp))
@@ -450,7 +447,7 @@ private fun ThinkingIndicator(processingLabel: String = "") {
                     elapsedSeconds >= 8 -> "Still working on it… ${elapsedSeconds}s"
                     else -> "Thinking it through…"
                 },
-                color = scheme.primary.copy(alpha = alpha),
+                color = scheme.onSurfaceVariant,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium
             )

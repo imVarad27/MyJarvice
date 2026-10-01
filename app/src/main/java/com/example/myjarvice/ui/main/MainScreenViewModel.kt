@@ -407,9 +407,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         }
         if (settings.assistantPaused) _responseRoute.value = "Jarvis is paused · resume it in Settings"
         else if (!_isThinking.value) _responseRoute.value = when (settings.smartMode) {
-            SmartMode.FAST_ON_DEVICE -> "Fast · Replies stay on this phone"
-            SmartMode.STRONG_HOST -> "Strong · Uses your configured PC"
-            SmartMode.AUTO -> "Auto · PC when connected, phone when offline"
+            SmartMode.FAST_ON_DEVICE -> "On this phone · private"
+            SmartMode.STRONG_HOST -> "Connected PC"
+            SmartMode.AUTO -> "Automatic · chooses an available model"
         }
     }
 
@@ -426,7 +426,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             return
         }
         if (com.example.myjarvice.data.LocalBenchmarkRuntime.active.value) {
-            _responseRoute.value = "Local model comparison running · stop it before chatting"
+            _responseRoute.value = "Phone model test is running"
             return
         }
 
@@ -453,7 +453,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         if (photo == null) {
             SafePhoneActionParser.parse(command)?.let { phoneAction ->
                 wsClient.addLocalMessage(JarvisMessage(sender = "USER", text = text, type = "QUERY", timestamp = timestampNow()))
-                _responseRoute.value = "Phone action · stays on this device"
+                _responseRoute.value = "Preparing a phone action"
                 if (phoneAction.requiresConfirmation) {
                     _pendingAction.value = JarvisAction("local:${UUID.randomUUID()}", phoneAction.type, phoneAction.query)
                     wsClient.addLocalMessage(JarvisMessage(sender = "JARVIS (Phone)", text = "I can do that, but I need your confirmation first.", timestamp = timestampNow()))
@@ -470,7 +470,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         if (photo == null && (command.startsWith("calculate ", true) || command.startsWith("remember: ", true) ||
             command.equals("show memories", true) || command.startsWith("search documents:", true))) {
             localRequestActive = true
-            _responseRoute.value = "Local tool · stays on this phone"
+            _responseRoute.value = "Working on this phone"
             _isThinking.value = true
             wsClient.addLocalMessage(JarvisMessage(sender = "USER", text = text, type = "QUERY", timestamp = timestampNow()))
             viewModelScope.launch {
@@ -509,9 +509,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         }
         if (!useOnDevice) {
             _responseRoute.value = if (photo == null) {
-                "PC/server · sending this request to your configured host"
+                "Using your connected PC"
             } else {
-                "PC/server · analysing your photo on the configured host"
+                "Reading the photo with your connected PC"
             }
             val ctx = deviceContext.getDeviceContext()
             wsClient.sendMessage(
@@ -543,16 +543,16 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         )
         localRequestActive = true
         _responseRoute.value = if (photo == null) {
-            "On-device · loading / generating locally"
+            "Starting the phone model"
         } else if (photo.hasReadableText) {
-            "On-device · reading the photo text privately"
+            "Reading the photo on this phone"
         } else {
-            "On-device · photo has no readable text; Strong mode can analyse the full image"
+            "No readable text found in the photo"
         }
         wsClient.addLocalMessage(userMessage)
         if (photo != null && !photo.hasReadableText) {
             wsClient.addLocalMessage(JarvisMessage(sender = "JARVIS (On-device)",
-                text = "I couldn't read text in this photo. Try a clearer picture of the page, or use Strong mode with a vision-capable PC model to ask about the image.",
+                text = "I couldn't find readable text in this photo. Try a clearer picture of the page, or choose Connected PC if your PC model supports images.",
                 type = "ERROR", timestamp = timestampNow()))
             localRequestActive = false
             _isThinking.value = false
@@ -573,7 +573,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             _isThinking.value = false
             result.fold(
                 onSuccess = { reply ->
-                    _responseRoute.value = "On-device · response completed locally"
+                    _responseRoute.value = "Answered on this phone"
                     wsClient.addLocalMessage(
                         JarvisMessage(
                             sender = "JARVIS (On-device)",
@@ -583,7 +583,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                     )
                 },
                 onFailure = { error ->
-                    _responseRoute.value = "On-device · failed; nothing forwarded to the server"
+                    _responseRoute.value = "Phone model couldn't finish · nothing was shared"
                     wsClient.addLocalMessage(
                         JarvisMessage(
                             sender = "JARVIS (On-device)",

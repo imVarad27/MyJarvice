@@ -11,6 +11,8 @@ import com.example.myjarvice.data.RememberItem
 import com.example.myjarvice.data.RememberKind
 import com.example.myjarvice.data.TodayBrief
 import com.example.myjarvice.data.CalendarAgendaItem
+import com.example.myjarvice.data.WritingProfile
+import com.example.myjarvice.data.DraftTone
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -34,15 +36,44 @@ class MainScreenTest {
 
     @Test fun draftHelperPreparesTextOnlyAfterTheUserProvidesAnIntent() {
         var prepared: String? = null
-        compose.setContent { MaterialTheme { DraftComposerSheet({}, { prepared = it }) } }
+        compose.setContent { MaterialTheme { WritingDraftSheetContent(WritingProfile(), {}, {}, { prepared = it }) } }
         compose.onNodeWithText("Prepare in chat").assertIsNotEnabled()
         compose.onNodeWithText("What do you want to say?").performTextInput("Ask to reschedule our meeting")
-        compose.onNodeWithText("Professional").performClick()
+        compose.onNodeWithText("Professional").performScrollTo().performClick()
         compose.onNodeWithText("Prepare in chat").performScrollTo().performClick()
         compose.runOnIdle {
             assertTrue(prepared.orEmpty().contains("Professional"))
             assertTrue(prepared.orEmpty().contains("Ask to reschedule our meeting"))
             assertTrue(prepared.orEmpty().contains("do not send"))
+        }
+    }
+
+    @Test fun writingProfileCanBeOmittedFromOneDraft() {
+        var prepared: String? = null
+        compose.setContent { MaterialTheme {
+            WritingDraftSheetContent(WritingProfile(enabled = true, signOff = "Synthetic signature"), {}, {}, { prepared = it })
+        } }
+        compose.onNodeWithText("What do you want to say?").performTextInput("Say hello")
+        compose.onNodeWithContentDescription("Use my writing profile").performScrollTo().performClick()
+        compose.onNodeWithText("Prepare in chat").performScrollTo().performClick()
+        compose.runOnIdle {
+            assertNotNull(prepared)
+            assertFalse(prepared.orEmpty().contains("Synthetic signature"))
+            assertFalse(prepared.orEmpty().contains("My writing preferences"))
+        }
+    }
+
+    @Test fun toneFeedbackRequiresExplicitRememberTap() {
+        var remembered: WritingProfile? = null
+        compose.setContent { MaterialTheme {
+            WritingDraftSheetContent(WritingProfile(), { remembered = it }, {}, {})
+        } }
+        compose.onNodeWithText("Warm").performScrollTo().performClick()
+        compose.runOnIdle { assertNull(remembered) }
+        compose.onNodeWithText("Remember this tone for future drafts").performScrollTo().performClick()
+        compose.runOnIdle {
+            assertEquals(DraftTone.WARM, remembered?.tone)
+            assertEquals(true, remembered?.enabled)
         }
     }
 

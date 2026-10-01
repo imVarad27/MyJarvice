@@ -25,7 +25,7 @@ class LocalAgentHarness(
         val initial = preflight(query)
         if (initial != null) {
             currentCoroutineContext().ensureActive()
-            onStage("On-device · ${label(initial.name)}")
+            onStage("On this phone · ${label(initial.name)}")
             val result = try { execute(initial) }
             catch (error: CancellationException) { throw error }
             catch (error: IllegalArgumentException) {
@@ -43,7 +43,7 @@ class LocalAgentHarness(
         repeat(3) { pass ->
             currentCoroutineContext().ensureActive()
             val allowTools = pass < 2 && seen.size < 2
-            onStage(if (observations.isEmpty()) "On-device · thinking locally" else "On-device · answering with local tools")
+            onStage(if (observations.isEmpty()) "Thinking on this phone" else "Using a private phone tool")
             val prompt = buildString {
                 append("User request:\n").append(query)
                 if (observations.isNotEmpty()) {
@@ -63,7 +63,7 @@ class LocalAgentHarness(
             }
             if (!allowTools) return failure("The phone model reached its local tool limit. Try a more specific question.", used, sources)
             if (!seen.add(call)) return failure("The phone model repeated the same tool request. Try a more specific question.", used, sources)
-            onStage("On-device · ${label(call.name)}")
+            onStage("On this phone · ${label(call.name)}")
             val result = try { execute(call) }
             catch (error: CancellationException) { throw error }
             catch (_: Exception) { LocalToolResult("The local tool couldn't complete this request. Try a more specific search or an explicit Calculate / Search documents command.", hasData = false) }

@@ -37,7 +37,7 @@ import com.example.myjarvice.ui.main.EmailApprovalDialog
 import com.example.myjarvice.ui.main.MainScreenViewModel
 import com.example.myjarvice.ui.main.ResponseModeSheet
 import com.example.myjarvice.ui.main.ServerConfigDialog
-import com.example.myjarvice.data.ConnectionStatus
+import com.example.myjarvice.ui.main.responseModeUi
 
 /** A compact, original Jarvis card inspired by Material/Pixel assistant surfaces. */
 @Composable
@@ -64,6 +64,7 @@ fun AssistantPopupScreen(model: MainScreenViewModel, verifiedWake: Boolean,
     var text by rememberSaveable { mutableStateOf("") }
     var chooseModel by remember { mutableStateOf(false) }
     var chooseConnection by remember { mutableStateOf(false) }
+    val modePresentation = responseModeUi(mode, connection, model.hasOnDeviceModel())
 
     val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) model.enterVoiceMode()
@@ -116,7 +117,7 @@ fun AssistantPopupScreen(model: MainScreenViewModel, verifiedWake: Boolean,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp))
                 }
                 OutlinedTextField(value = text, onValueChange = { text = it.take(4000) },
-                    placeholder = { Text("Ask Jarvis…") }, maxLines = 4,
+                    placeholder = { Text("Message Jarvis") }, maxLines = 4,
                     modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) model.pauseVoiceForTyping() }
                         .semantics { contentDescription = "Popup message input" },
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Color.Transparent, unfocusedBorderColor = Color.Transparent))
@@ -143,11 +144,8 @@ fun AssistantPopupScreen(model: MainScreenViewModel, verifiedWake: Boolean,
                         else IconMicrophone(tint = colors.onPrimary)
                     }
                 }
-                Text(when (mode) {
-                    com.example.myjarvice.data.SmartMode.FAST_ON_DEVICE -> "Text generation stays on your phone"
-                    com.example.myjarvice.data.SmartMode.STRONG_HOST -> if (connection == ConnectionStatus.CONNECTED) "Uses your paired PC model" else "PC offline · connect through the model menu"
-                    else -> "PC when connected · phone fallback when available"
-                }, style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant,
+                Text("${modePresentation.title} · ${modePresentation.status}",
+                    style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant,
                     modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
             }
         }

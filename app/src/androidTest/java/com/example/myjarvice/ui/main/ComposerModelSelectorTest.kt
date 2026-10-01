@@ -19,7 +19,7 @@ class ComposerModelSelectorTest {
                 ComposerModelSelector(mode.value, { mode.value = SmartMode.FAST_ON_DEVICE })
             }
         }
-        rule.onNodeWithContentDescription("Choose AI model: PC").performClick()
-        rule.onNodeWithContentDescription("Choose AI model: Phone").assertExists()
+        rule.onNodeWithContentDescription("Choose response mode. Current: Connected PC").performClick()
+        rule.onNodeWithContentDescription("Choose response mode. Current: On this phone").assertExists()
     }
 }
