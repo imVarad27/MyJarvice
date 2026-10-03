@@ -19,9 +19,10 @@ data class BackupPreview(
     val memories: Int,
     val documents: Int,
     val savedItems: Int,
-    val mediaFiles: Int
+    val mediaFiles: Int,
+    val tasks: Int = 0
 ) {
-    val totalItems: Int get() = conversations + memories + documents + savedItems
+    val totalItems: Int get() = conversations + memories + documents + savedItems + tasks
 }
 
 internal object JarvisBackupPolicy {
@@ -37,6 +38,7 @@ class JarvisBackupManager(private val context: Context) {
     private val chats = ChatHistoryStore(context)
     private val knowledge = LocalKnowledgeStore(context)
     private val inbox = RememberInboxStore(context)
+    private val tasks = LocalTaskStore(context)
     private val settings = SettingsStore(context)
     private val writing = WritingProfileStore(context)
 
@@ -64,6 +66,7 @@ class JarvisBackupManager(private val context: Context) {
             .put("conversations", encodeSessions(sessions))
             .put("knowledge", encodeKnowledge(entries))
             .put("savedItems", encodeSavedItems(saved, mediaEntries.mapValues { it.value.first }))
+            .put("tasks", encodeTasks(tasks.tasks()))
             .put("settings", encodeSettings())
             .put("writingProfile", encodeWritingProfile(writing.load()))
         val manifestBytes = manifest.toString().toByteArray(Charsets.UTF_8)
@@ -89,6 +92,7 @@ class JarvisBackupManager(private val context: Context) {
         decodeSessions(archive.manifest.getJSONArray("conversations"))
         decodeKnowledge(archive.manifest.getJSONArray("knowledge"))
         decodeSavedItems(archive.manifest.getJSONArray("savedItems"), archive.media)
+        decodeTasks(archive.manifest.optJSONArray("tasks") ?: JSONArray())
         preview(archive.manifest, archive.media.size)
     }
 
@@ -98,10 +102,12 @@ class JarvisBackupManager(private val context: Context) {
         val restoredChats = decodeSessions(root.getJSONArray("conversations"))
         val restoredKnowledge = decodeKnowledge(root.getJSONArray("knowledge"))
         val restoredSaved = decodeSavedItems(root.getJSONArray("savedItems"), archive.media)
+        val restoredTasks = decodeTasks(root.optJSONArray("tasks") ?: JSONArray())
 
         chats.mergeSessions(restoredChats)
         knowledge.mergeEntries(restoredKnowledge)
         inbox.mergeItems(restoredSaved.first, restoredSaved.second)
+        tasks.mergeTasks(restoredTasks)
         applySettings(root.optJSONObject("settings"))
         root.optJSONObject("writingProfile")?.let { writing.save(decodeWritingProfile(it)) }
         return preview(root, archive.media.size)
@@ -243,6 +249,27 @@ class JarvisBackupManager(private val context: Context) {
         .put("personality", settings.aiPersonality).put("temperature", settings.temperature)
         .put("smartMode", settings.smartMode.name)
 
+    private fun encodeTasks(items: List<LocalTask>) = JSONArray().also { array ->
+        items.take(1_000).forEach { task -> array.put(JSONObject().put("id", task.id).put("title", task.title)
+            .put("notes", task.notes).put("createdAt", task.createdAt)
+            .put("dueAt", task.dueAt ?: -1).put("completedAt", task.completedAt ?: -1)) }
+    }
+
+    private fun decodeTasks(array: JSONArray): List<LocalTask> {
+        require(array.length() <= 1_000) { "Backup contains too many tasks." }
+        return List(array.length()) { index -> array.getJSONObject(index).let { obj ->
+            val title = obj.getString("title")
+            val notes = obj.optString("notes")
+            require(title.isNotBlank() && title.length <= 180 && notes.length <= 2_000) { "A task in this backup is invalid." }
+            LocalTask(
+                id = obj.getString("id").take(160), title = title, notes = notes,
+                createdAt = obj.optLong("createdAt"),
+                dueAt = obj.optLong("dueAt", -1).takeIf { it > 0 },
+                completedAt = obj.optLong("completedAt", -1).takeIf { it > 0 }
+            )
+        } }
+    }
+
     private fun applySettings(value: JSONObject?) {
         if (value == null) return
         runCatching { settings.themeMode = ThemeMode.valueOf(value.optString("theme")) }
@@ -283,7 +310,8 @@ class JarvisBackupManager(private val context: Context) {
             memories = memories,
             documents = knowledge.length() - memories,
             savedItems = root.getJSONArray("savedItems").length(),
-            mediaFiles = mediaCount
+            mediaFiles = mediaCount,
+            tasks = root.optJSONArray("tasks")?.length() ?: 0
         )
     }
 

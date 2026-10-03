@@ -962,7 +962,7 @@ fun SettingsScreen(
                     Spacer(Modifier.height(8.dp))
                     Text("Jarvis found ${preview.totalItems} items:")
                     Text("${preview.conversations} conversations · ${preview.memories} memories · ${preview.documents} documents")
-                    Text("${preview.savedItems} saved items · ${preview.mediaFiles} media files")
+                    Text("${preview.tasks} tasks · ${preview.savedItems} saved items · ${preview.mediaFiles} media files")
                     Spacer(Modifier.height(12.dp))
                     Text("Restore adds missing items and updates older matching conversations. It does not delete newer data.",
                         color = scheme.onSurfaceVariant)

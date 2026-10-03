@@ -35,9 +35,22 @@ class DeviceActionExecutor(private val context: Context) {
             "NAVIGATE" -> { navigateTo(action.query); "Opening directions to ${action.query}." }
             "SET_ALARM" -> { setAlarm(action.query); "Opening the alarm confirmation for ${action.query}." }
             "SET_TIMER" -> { setTimer(action.query); "Opening the timer confirmation for ${action.query}." }
+            "ADD_LOCAL_TASK" -> {
+                LocalTaskStore(context).saveTask(title = action.query)
+                "Added “${action.query}” to Your tasks on this phone."
+            }
+            "SHOW_LOCAL_TASKS" -> {
+                val open = TaskAgenda.from(LocalTaskStore(context).tasks(), System.currentTimeMillis()).open
+                if (open.isEmpty()) "Your phone task list is clear."
+                else open.take(10).joinToString("\n") { "• ${it.title}${taskDueSuffix(it.dueAt)}" }
+            }
             else -> error("This phone action is not allowlisted.")
         }
     }
+
+    private fun taskDueSuffix(dueAt: Long?): String = dueAt?.let {
+        " · due ${java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(it))}"
+    }.orEmpty()
 
     /** Common voice-name → package aliases for reliability. */
     private val appAliases = mapOf(

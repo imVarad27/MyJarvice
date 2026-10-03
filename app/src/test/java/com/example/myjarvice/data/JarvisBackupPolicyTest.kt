@@ -7,8 +7,16 @@ import org.junit.Test
 
 class JarvisBackupPolicyTest {
     @Test fun previewCountsOnlyRestorableItems() {
-        val preview = BackupPreview(1L, conversations = 3, memories = 2, documents = 1, savedItems = 4, mediaFiles = 2)
-        assertEquals(10, preview.totalItems)
+        val preview = BackupPreview(
+            createdAt = 1L,
+            conversations = 3,
+            memories = 2,
+            documents = 1,
+            savedItems = 4,
+            tasks = 5,
+            mediaFiles = 2
+        )
+        assertEquals(15, preview.totalItems)
     }
 
     @Test fun mediaEntryMustStayInsideTheArchiveMediaFolder() {

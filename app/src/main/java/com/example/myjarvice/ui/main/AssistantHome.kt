@@ -9,6 +9,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,6 +23,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.Lifecycle
@@ -33,10 +36,15 @@ import com.example.myjarvice.data.CalendarAgendaRepository
 import com.example.myjarvice.data.ChatSession
 import com.example.myjarvice.data.RememberInboxStore
 import com.example.myjarvice.data.RememberItem
+import com.example.myjarvice.data.LocalTask
+import com.example.myjarvice.data.LocalTaskStore
+import com.example.myjarvice.data.LocalDayWindow
+import com.example.myjarvice.data.TaskAgenda
 import com.example.myjarvice.data.TodayBrief
 import com.example.myjarvice.ui.JarvisBrandMark
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.DateFormat
 import java.util.Calendar
@@ -55,7 +63,10 @@ internal fun AssistantHome(
 ) {
     val context = LocalContext.current
     val calendarRepository = remember { CalendarAgendaRepository(context.applicationContext) }
+    val taskStore = remember { LocalTaskStore(context.applicationContext) }
+    val scope = rememberCoroutineScope()
     var entries by remember { mutableStateOf<List<RememberItem>>(emptyList()) }
+    var tasks by remember { mutableStateOf<List<LocalTask>>(emptyList()) }
     var calendarEvents by remember { mutableStateOf<List<CalendarAgendaItem>>(emptyList()) }
     var calendarGranted by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED)
@@ -66,6 +77,9 @@ internal fun AssistantHome(
     var revision by remember { mutableIntStateOf(0) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var showCapture by rememberSaveable { mutableStateOf(false) }
+    var showTasks by rememberSaveable { mutableStateOf(false) }
+    var showTaskEditor by rememberSaveable { mutableStateOf(false) }
+    var editingTask by remember { mutableStateOf<LocalTask?>(null) }
     val calendarPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         calendarGranted = granted
         calendarError = if (granted) null else "Calendar access wasn't granted. Today still works with saved reminders."
@@ -81,6 +95,7 @@ internal fun AssistantHome(
     }
     LaunchedEffect(revision, refreshKey) {
         entries = withContext(Dispatchers.IO) { store.items() }
+        tasks = withContext(Dispatchers.IO) { taskStore.tasks() }
         now = System.currentTimeMillis()
         loaded = true
         calendarGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
@@ -110,8 +125,44 @@ internal fun AssistantHome(
         showCapture = false
         revision++
     })
+    if (showTasks) TaskListSheet(
+        agenda = TaskAgenda.from(tasks, now),
+        now = now,
+        onAdd = { editingTask = null; showTaskEditor = true },
+        onEdit = { editingTask = it; showTaskEditor = true },
+        onToggle = { task, complete -> scope.launch {
+            try {
+                withContext(Dispatchers.IO) { taskStore.setCompleted(task.id, complete) }
+                revision++
+            } catch (error: kotlinx.coroutines.CancellationException) { throw error
+            } catch (_: Exception) { Toast.makeText(context, "Couldn't update this task.", Toast.LENGTH_LONG).show() }
+        } },
+        onDismiss = { showTasks = false }
+    )
+    if (showTaskEditor) TaskEditorDialog(
+        task = editingTask,
+        now = now,
+        onDismiss = { showTaskEditor = false },
+        onSave = { title, notes, dueAt -> scope.launch {
+            try {
+                withContext(Dispatchers.IO) { taskStore.saveTask(editingTask?.id, title, notes, dueAt) }
+                showTaskEditor = false
+                revision++
+            } catch (error: kotlinx.coroutines.CancellationException) { throw error
+            } catch (error: Exception) { Toast.makeText(context, error.message ?: "Couldn't save this task.", Toast.LENGTH_LONG).show() }
+        } },
+        onDelete = editingTask?.let { task -> { scope.launch {
+            try {
+                withContext(Dispatchers.IO) { taskStore.delete(task.id) }
+                showTaskEditor = false
+                revision++
+            } catch (error: kotlinx.coroutines.CancellationException) { throw error
+            } catch (_: Exception) { Toast.makeText(context, "Couldn't delete this task.", Toast.LENGTH_LONG).show() }
+        } } }
+    )
     TodayHomeContent(
         brief = TodayBrief.from(entries, now), now = now, loaded = loaded,
+        taskAgenda = TaskAgenda.from(tasks, now),
         calendarGranted = calendarGranted, calendarEvents = calendarEvents,
         calendarLoading = calendarLoading, calendarError = calendarError,
         onRequestCalendar = { calendarPermission.launch(Manifest.permission.READ_CALENDAR) },
@@ -123,7 +174,17 @@ internal fun AssistantHome(
             }) }.onFailure { Toast.makeText(context, "No calendar app could open this event.", Toast.LENGTH_LONG).show() }
         },
         sessions = sessions.take(2), onOpenSaved = onOpenSaved, onOpenSession = onOpenSession,
-        onCapture = { showCapture = true }, onOpenTools = onOpenTools, onDraft = onDraft
+        onCapture = { showCapture = true }, onOpenTools = onOpenTools, onDraft = onDraft,
+        onOpenTasks = { showTasks = true },
+        onAddTask = { editingTask = null; showTaskEditor = true },
+        onEditTask = { editingTask = it; showTaskEditor = true },
+        onToggleTask = { task, complete -> scope.launch {
+            try {
+                withContext(Dispatchers.IO) { taskStore.setCompleted(task.id, complete) }
+                revision++
+            } catch (error: kotlinx.coroutines.CancellationException) { throw error
+            } catch (_: Exception) { Toast.makeText(context, "Couldn't update this task.", Toast.LENGTH_LONG).show() }
+        } }
     )
 }
 
@@ -131,6 +192,7 @@ internal fun AssistantHome(
 internal fun TodayHomeContent(
     brief: TodayBrief,
     now: Long,
+    taskAgenda: TaskAgenda = TaskAgenda.from(emptyList(), now),
     loaded: Boolean = true,
     calendarGranted: Boolean = false,
     calendarEvents: List<CalendarAgendaItem> = emptyList(),
@@ -143,7 +205,11 @@ internal fun TodayHomeContent(
     onOpenSession: (ChatSession) -> Unit = {},
     onCapture: () -> Unit = {},
     onOpenTools: () -> Unit = {},
-    onDraft: () -> Unit = {}
+    onDraft: () -> Unit = {},
+    onOpenTasks: () -> Unit = {},
+    onAddTask: () -> Unit = {},
+    onEditTask: (LocalTask) -> Unit = {},
+    onToggleTask: (LocalTask, Boolean) -> Unit = { _, _ -> }
 ) {
     val colors = MaterialTheme.colorScheme
     val greeting = when (Calendar.getInstance().apply { timeInMillis = now }.get(Calendar.HOUR_OF_DAY)) {
@@ -178,7 +244,31 @@ internal fun TodayHomeContent(
             }
         }
         item {
-            HomeSectionTitle("Today", "Saved on your phone")
+            HomeSectionTitle("Your tasks", "Private · saved on this phone")
+            Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainerLow) {
+                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(when {
+                        taskAgenda.overdue.isNotEmpty() -> "${taskAgenda.overdue.size} overdue · ${taskAgenda.open.size} open"
+                        taskAgenda.dueToday.isNotEmpty() -> "${taskAgenda.dueToday.size} due today · ${taskAgenda.open.size} open"
+                        taskAgenda.open.isNotEmpty() -> "${taskAgenda.open.size} open ${if (taskAgenda.open.size == 1) "task" else "tasks"}"
+                        else -> "Your list is clear"
+                    }, style = MaterialTheme.typography.titleMedium)
+                    if (taskAgenda.open.isEmpty()) Text("Add one concrete next step. It stays available offline.",
+                        style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+                    taskAgenda.open.take(4).forEach { task ->
+                        HomeTaskRow(task, now, onToggle = { onToggleTask(task, it) }, onEdit = { onEditTask(task) })
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = onAddTask) { Text("Add task") }
+                        if (taskAgenda.open.isNotEmpty() || taskAgenda.completed.isNotEmpty()) {
+                            TextButton(onClick = onOpenTasks) { Text("View all") }
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            HomeSectionTitle("Saved reminders", "Notes and links with a time")
             Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainerLow) {
                 Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(if (!loaded) "Opening your brief…" else when {
@@ -262,7 +352,7 @@ internal fun TodayHomeContent(
             }
         }
         item {
-            Text("Today uses local saved items${if (calendarGranted) " and read-only calendar events" else ""}. PC tasks aren't included.",
+            Text("Today uses phone tasks, local saved items${if (calendarGranted) " and read-only calendar events" else ""}. PC tasks stay separate.",
                 color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(vertical = 8.dp))
         }
@@ -291,6 +381,150 @@ private fun HomeLink(title: String, subtitle: String, onClick: () -> Unit) {
                 modifier = Modifier.padding(start = 12.dp))
         }
     }
+}
+
+@Composable
+private fun HomeTaskRow(task: LocalTask, now: Long, onToggle: (Boolean) -> Unit, onEdit: () -> Unit) {
+    Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 62.dp).padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = task.completed, onCheckedChange = onToggle,
+                modifier = Modifier.semantics { contentDescription = if (task.completed) "Reopen task: ${task.title}" else "Complete task: ${task.title}" })
+            Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
+                Text(task.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                taskDueLabel(task, now)?.let { label ->
+                    Text(label, style = MaterialTheme.typography.bodySmall,
+                        color = if (label.startsWith("Overdue")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            TextButton(onClick = onEdit) { Text("Edit") }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TaskListSheet(
+    agenda: TaskAgenda,
+    now: Long,
+    onAdd: () -> Unit,
+    onEdit: (LocalTask) -> Unit,
+    onToggle: (LocalTask, Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.fillMaxWidth().heightIn(max = 650.dp).verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp).padding(bottom = 28.dp)) {
+            Text("Your tasks", style = MaterialTheme.typography.headlineSmall)
+            Text("Stored privately on this phone. PC tasks remain separate.", style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
+            Button(onClick = onAdd, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Add a task") }
+            if (agenda.open.isEmpty()) {
+                Text("Nothing open right now.", style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 24.dp))
+            } else {
+                Text("Open · ${agenda.open.size}", style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
+                agenda.open.forEach { task ->
+                    HomeTaskRow(task, now, onToggle = { onToggle(task, it) }, onEdit = { onEdit(task) })
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+            if (agenda.completed.isNotEmpty()) {
+                HorizontalDivider(Modifier.padding(vertical = 14.dp))
+                Text("Recently completed", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(bottom = 8.dp))
+                agenda.completed.forEach { task ->
+                    HomeTaskRow(task, now, onToggle = { onToggle(task, it) }, onEdit = { onEdit(task) })
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TaskEditorDialog(
+    task: LocalTask?,
+    now: Long,
+    onDismiss: () -> Unit,
+    onSave: (String, String, Long?) -> Unit,
+    onDelete: (() -> Unit)?
+) {
+    var title by rememberSaveable(task?.id) { mutableStateOf(task?.title.orEmpty()) }
+    var notes by rememberSaveable(task?.id) { mutableStateOf(task?.notes.orEmpty()) }
+    var dueAt by rememberSaveable(task?.id) { mutableStateOf(task?.dueAt) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    val today = LocalDayWindow.containing(now)
+    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = dueAt)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (task == null) "Add a task" else "Edit task") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text("This task stays on your phone and works offline.", style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedTextField(title, { title = it.take(180) }, label = { Text("Task") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = 14.dp), supportingText = { Text("${title.length}/180") })
+                OutlinedTextField(notes, { notes = it.take(2000) }, label = { Text("Notes (optional)") },
+                    minLines = 2, maxLines = 4, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                Text("Due date", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = dueAt == null, onClick = { dueAt = null }, label = { Text("No date") })
+                    FilterChip(selected = dueAt == today.startsAt, onClick = { dueAt = today.startsAt }, label = { Text("Today") })
+                    FilterChip(selected = dueAt == today.endsAtExclusive, onClick = { dueAt = today.endsAtExclusive }, label = { Text("Tomorrow") })
+                    FilterChip(selected = dueAt != null && dueAt != today.startsAt && dueAt != today.endsAtExclusive,
+                        onClick = { showDatePicker = true }, label = { Text(dueAt?.let(::formatTaskDate) ?: "Pick date") })
+                }
+                if (onDelete != null) {
+                    TextButton(onClick = { confirmDelete = true }, modifier = Modifier.padding(top = 12.dp)) {
+                        Text("Delete task", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(title, notes, dueAt) }, enabled = title.isNotBlank()) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+    if (showDatePicker) DatePickerDialog(
+        onDismissRequest = { showDatePicker = false },
+        confirmButton = { TextButton(onClick = {
+            datePickerState.selectedDateMillis?.let { dueAt = pickerDateToLocalStart(it) }
+            showDatePicker = false
+        }) { Text("Use date") } },
+        dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } }
+    ) { DatePicker(state = datePickerState) }
+    if (confirmDelete && onDelete != null) AlertDialog(
+        onDismissRequest = { confirmDelete = false },
+        title = { Text("Delete this task?") },
+        text = { Text("This removes the task from this phone. This can't be undone from the task list.") },
+        confirmButton = { TextButton(onClick = onDelete) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Keep task") } }
+    )
+}
+
+private fun taskDueLabel(task: LocalTask, now: Long): String? {
+    if (task.completed) return "Completed"
+    val due = task.dueAt ?: return null
+    val today = LocalDayWindow.containing(now)
+    return when {
+        due < today.startsAt -> "Overdue · ${formatTaskDate(due)}"
+        due < today.endsAtExclusive -> "Due today"
+        due < LocalDayWindow.containing(today.endsAtExclusive).endsAtExclusive -> "Due tomorrow"
+        else -> "Due ${formatTaskDate(due)}"
+    }
+}
+
+private fun formatTaskDate(time: Long): String = DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(time))
+
+private fun pickerDateToLocalStart(utcDate: Long): Long {
+    val utc = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply { timeInMillis = utcDate }
+    return Calendar.getInstance().apply {
+        clear()
+        set(utc.get(Calendar.YEAR), utc.get(Calendar.MONTH), utc.get(Calendar.DAY_OF_MONTH))
+    }.timeInMillis
 }
 
 @Composable

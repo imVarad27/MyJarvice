@@ -7,6 +7,9 @@ screen should open without waiting for a model or a connected PC.
 
 - New conversations open Today: local saved reminders, the next scheduled item,
   two recent conversations, and three recently saved items.
+- Today includes phone-native tasks with optional due dates, overdue/today
+  grouping, direct completion, editing, deletion, and a completed-items view.
+  Tasks are local and work without a model or PC connection.
 - Tap a reminder or saved card to open that specific inbox item. The existing
   inbox provides reminder scheduling, rescheduling and deletion.
 - Capture a note or link from Today. Saving is local and does not invoke a model.
@@ -26,6 +29,8 @@ screen should open without waiting for a model or a connected PC.
 
 Today reflects the phone's saved inbox and, after explicit permission, today's
 read-only calendar events. It does not claim access to notifications or PC task data.
+Phone tasks are stored separately from the PC task database. A task due date is an
+organizing date, not an alarm or notification.
 Calendar text is not added to model prompts. Delivered reminders are cleared by the existing
 reminder receiver and therefore are not a completed-task history. The brief
 refreshes on foreground entry, on closing the inbox, after capture, and each minute

@@ -38,6 +38,15 @@ object SafePhoneActionParser {
             return SafePhoneAction("SET_TIMER", match.groupValues[3].trim(), false)
         }
 
+        Regex("^(add|create) (a )?(phone |local )?task( to)? (.+)$", RegexOption.IGNORE_CASE).matchEntire(text)?.let { match ->
+            val title = match.groupValues[5].trim().trimEnd('.')
+            if (title.isNotBlank() && title.length <= 180) return SafePhoneAction("ADD_LOCAL_TASK", title, false)
+        }
+
+        if (lower.matches(Regex("^(show|list|what are) (my )?(phone |local )?tasks\\??$"))) {
+            return SafePhoneAction("SHOW_LOCAL_TASKS", "", false)
+        }
+
         Regex("^(open|launch|start) (.+)$", RegexOption.IGNORE_CASE).matchEntire(text)?.let { match ->
             val app = match.groupValues[2].trim().trimEnd('.', '?')
             if (app.isNotBlank() && app.length <= 80) return SafePhoneAction("OPEN_APP", app, false)

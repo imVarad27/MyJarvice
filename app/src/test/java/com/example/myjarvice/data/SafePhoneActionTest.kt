@@ -11,6 +11,8 @@ class SafePhoneActionTest {
         assertEquals(SafePhoneAction("NAVIGATE", "Central Park", false), SafePhoneActionParser.parse("directions to Central Park"))
         assertEquals(SafePhoneAction("SET_ALARM", "7 PM", false), SafePhoneActionParser.parse("set an alarm for 7 PM"))
         assertEquals(SafePhoneAction("SET_TIMER", "10 minutes", false), SafePhoneActionParser.parse("start a timer for 10 minutes"))
+        assertEquals(SafePhoneAction("ADD_LOCAL_TASK", "buy milk", false), SafePhoneActionParser.parse("add a phone task to buy milk"))
+        assertEquals(SafePhoneAction("SHOW_LOCAL_TASKS", "", false), SafePhoneActionParser.parse("show my phone tasks"))
     }
 
     @Test fun riskyActionsRequireConfirmation() {

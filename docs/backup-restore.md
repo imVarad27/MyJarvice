@@ -10,6 +10,7 @@ Included:
 - conversation history and cited-source metadata;
 - explicit memories and imported document text;
 - saved inbox notes, links, photos, voice notes and future reminder times;
+- phone-native tasks, due dates and completion state;
 - appearance, speech, assistant personality and response-mode preferences;
 - the explicit personal writing profile.
 

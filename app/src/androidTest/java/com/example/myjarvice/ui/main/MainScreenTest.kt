@@ -13,6 +13,8 @@ import com.example.myjarvice.data.TodayBrief
 import com.example.myjarvice.data.CalendarAgendaItem
 import com.example.myjarvice.data.WritingProfile
 import com.example.myjarvice.data.DraftTone
+import com.example.myjarvice.data.LocalTask
+import com.example.myjarvice.data.TaskAgenda
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -92,6 +94,23 @@ class MainScreenTest {
         }
         compose.onNodeWithText("Synthetic planning session").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(42L, opened) }
+    }
+
+    @Test fun todayTaskCanBeCompletedWithoutOpeningChat() {
+        val now = System.currentTimeMillis()
+        val task = LocalTask("synthetic-task", "Prepare demo notes", createdAt = now, dueAt = now)
+        var completed: Boolean? = null
+        compose.setContent {
+            MaterialTheme {
+                TodayHomeContent(
+                    brief = TodayBrief.from(emptyList(), now), now = now,
+                    taskAgenda = TaskAgenda.from(listOf(task), now),
+                    onToggleTask = { selected, value -> if (selected.id == task.id) completed = value }
+                )
+            }
+        }
+        compose.onNodeWithContentDescription("Complete task: Prepare demo notes").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(true, completed) }
     }
 
     @Test fun pausedComposerKeepsTheDraftButDisablesSendAndDictation() {

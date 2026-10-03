@@ -22,11 +22,12 @@ Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer co
 - Settings start as compact categories with explanatory subtitles. Voice respects the app theme and uses readable status and transcription text.
 - Appearance offers Pixel-inspired or original Jarvis accents. Verified “Hey Jarvis” opens a compact assistant popup on an unlocked phone, with typing, voice, route selection, dismiss and expand controls. Preview is explicitly manual and unverified; it does not bypass voice protection.
 - Data & storage can create and merge a local backup of conversations, explicit memories/documents, saved inbox media, and safe preferences. Credentials, voiceprints, wake state, and model files are excluded; restore is reviewed and non-destructive.
+- Today includes editable phone-native tasks with due dates, overdue state, direct completion and offline storage. Phone and PC tasks are labeled separately, and phone tasks are included in local backups.
 
 ## What a personal assistant needs next
 
 1. **Data safety follow-through:** run a real create/restore drill on an unlocked test device, then consider optional passphrase encryption and backup reminders. Never run uninstalling instrumentation on a personal phone.
-2. **A real Today page:** editable tasks, reminder status and due dates, with a clear distinction between phone and PC storage. Do not synthesize a fake calendar or agenda.
+2. **Today follow-through:** add optional task notifications and recurring tasks only after the basic local workflow is tested on-device. Keep phone and PC storage visibly distinct.
 3. **Dependable voice:** end-to-end acoustic tests, interruption handling, clear errors, and transparent Android background/lock-screen limits. UI tests alone do not establish recognition accuracy.
 4. **Permissioned integrations:** calendar and contacts, followed by messaging/email where useful. Show a preview and require confirmation for consequential actions. Do not claim integrations until connected and tested.
 5. **Personal memory controls:** inspect, edit, forget, and choose what can be shared with the PC. Avoid inferred sensitive memories and hidden personalization.
