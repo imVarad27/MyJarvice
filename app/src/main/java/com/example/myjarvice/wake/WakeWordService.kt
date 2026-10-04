@@ -27,6 +27,8 @@ class WakeWordService : Service() {
         const val ACTION_STOP = "ACTION_STOP_WAKE_WORD"
         const val CHANNEL_ID = "JarvisWakeChannel"
         const val NOTIFICATION_ID = 1001
+        private const val WAKE_GRAMMAR = "[\"hey jarvis\", \"[unk]\"]"
+        private const val STABLE_PARTIAL_FRAMES = 2
         @Volatile private var requested = false
         fun start(context: Context) {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
@@ -66,6 +68,7 @@ class WakeWordService : Service() {
     @Volatile private var matchInProgress = false
     private var promoted = false
     private var cooldownUntil = 0L
+    private var partialWakeHits = 0
     override fun onCreate() {
         super.onCreate()
         if (Build.VERSION.SDK_INT >= 26) getSystemService(NotificationManager::class.java).createNotificationChannel(
@@ -86,27 +89,37 @@ class WakeWordService : Service() {
             requested = false
         }
         if (!requested || !promoted) { stopSelf(); return START_NOT_STICKY }
-        if (initialization == null) initialization = scope.launch {
-            try {
-                updateStatus(if (WakeModelStore.ready(this@WakeWordService)) "Loading wake listener" else "Downloading wake model (40 MB)…")
-                val path = withContext(Dispatchers.IO) { WakeModelStore.prepare(this@WakeWordService).absolutePath }
-                ensureActive()
-                var loaded: Model? = null
+        if (initialization == null) {
+            initialization = scope.launch {
                 try {
-                    withContext(Dispatchers.IO) { loaded = Model(path) }
-                    model = loaded
-                    loaded = null
-                } finally { loaded?.close() }
-                // Free transcription avoids a tiny grammar forcing unrelated sounds
-                // into the only known wake phrase. Only completed results can wake.
-                recognizer = Recognizer(model, 16000f).apply { setWords(true) }
-                recorder = AudioBufferRecorder(sampleRate = 16000, bufferSeconds = 3.0f)
-                WakeEvents.microphoneBusy.collect { busy -> if (busy) pauseCapture() else resumeCapture() }
-            } catch (e: CancellationException) { throw e
-            } catch (e: Exception) {
-                updateStatus("Wake setup failed. Check internet, then toggle off and on.")
-                Log.e("WakeWordService", "Wake setup failed", e)
-                stopSelf()
+                    updateStatus(if (WakeModelStore.ready(this@WakeWordService)) "Loading wake listener" else "Downloading wake model (40 MB)…")
+                    val path = withContext(Dispatchers.IO) { WakeModelStore.prepare(this@WakeWordService).absolutePath }
+                    ensureActive()
+                    var loaded: Model? = null
+                    try {
+                        withContext(Dispatchers.IO) { loaded = Model(path) }
+                        model = loaded
+                        loaded = null
+                    } finally { loaded?.close() }
+                    // A phrase grammar is more reliable than free-form transcription for the
+                    // user's short wake phrase. [unk] remains available so unrelated speech is
+                    // rejected instead of being forced into "hey jarvis".
+                    recognizer = Recognizer(model, 16000f, WAKE_GRAMMAR).apply { setWords(true) }
+                    recorder = AudioBufferRecorder(sampleRate = 16000, bufferSeconds = 3.0f)
+                    WakeEvents.microphoneBusy.collect { busy -> if (busy) pauseCapture() else resumeCapture() }
+                } catch (e: CancellationException) { throw e
+                } catch (e: Exception) {
+                    updateStatus("Wake setup failed. Check internet, then toggle off and on.")
+                    Log.e("WakeWordService", "Wake setup failed", e)
+                    stopSelf()
+                }
+            }
+        } else if (!capturing && !matchInProgress && !WakeEvents.microphoneBusy.value) {
+            // A foreground retry recovers from Android denying microphone access during
+            // an early cold-start service launch; the model stays loaded.
+            scope.launch {
+                delay(250)
+                resumeCapture()
             }
         }
         return START_NOT_STICKY
@@ -130,6 +143,7 @@ class WakeWordService : Service() {
         }
         WakeEvents.captureReleased.value = true
         recognizer?.reset()
+        partialWakeHits = 0
         recorder?.clear()
         if (!SettingsStore(this).voiceMatchEnabled || !SettingsStore(this).isVoiceProfileEnrolled) {
             updateStatus("Voice profile required for hands-free wake")
@@ -145,12 +159,17 @@ class WakeWordService : Service() {
             }
         }) { audio, length, _ ->
             val localRecognizer = recognizer ?: return@start
-            if (localRecognizer.acceptWaveForm(audio, length)) accept(localRecognizer.result)
+            if (localRecognizer.acceptWaveForm(audio, length)) {
+                partialWakeHits = 0
+                acceptFinal(localRecognizer.result)
+            } else {
+                acceptPartial(localRecognizer.partialResult)
+            }
         } == true
         WakeEvents.captureReleased.value = !capturing
         updateStatus(if (capturing) "Listening for Hey Jarvis" else "Microphone unavailable. Toggle off and on to retry.")
     }
-    private fun accept(hypothesis: String?) {
+    private fun acceptFinal(hypothesis: String?) {
         val data = runCatching { JSONObject(hypothesis.orEmpty()) }.getOrNull() ?: return
         val text = data.optString("text")
         val recognizedWords = data.optJSONArray("result") ?: return
@@ -158,10 +177,39 @@ class WakeWordService : Service() {
             val word = recognizedWords.getJSONObject(index)
             word.optString("word") to word.optDouble("conf", 0.0)
         }
-        if (!WakePhrase.confidentWords(words)) return
-        if (!capturing || matchInProgress || WakeEvents.microphoneBusy.value || !WakePhrase.matches(text) || SystemClock.elapsedRealtime() < cooldownUntil) return
+        if (!WakePhrase.matches(text)) return
+        if (!WakePhrase.confidentWakeCandidate(words)) {
+            Log.d("WakeWordService", "Exact wake candidate rejected by phrase confidence gate")
+            return
+        }
+        beginVoiceVerification()
+    }
+
+    /**
+     * Vosk can hold a short phrase as a partial result for several seconds when there is
+     * background noise. Two consecutive exact partials let the private voice check start
+     * promptly without accepting a single unstable recognition frame.
+     */
+    private fun acceptPartial(hypothesis: String?) {
+        if (!capturing || matchInProgress || WakeEvents.microphoneBusy.value ||
+            SystemClock.elapsedRealtime() < cooldownUntil
+        ) return
+        val partial = runCatching {
+            JSONObject(hypothesis.orEmpty()).optString("partial")
+        }.getOrDefault("")
+        partialWakeHits = if (WakePhrase.matches(partial)) partialWakeHits + 1 else 0
+        if (partialWakeHits >= STABLE_PARTIAL_FRAMES) {
+            partialWakeHits = 0
+            beginVoiceVerification()
+        }
+    }
+
+    private fun beginVoiceVerification() {
+        if (!capturing || matchInProgress || WakeEvents.microphoneBusy.value ||
+            SystemClock.elapsedRealtime() < cooldownUntil
+        ) return
         matchInProgress = true
-        val wakeAudio = recorder?.getRecentAudio(2600) ?: ShortArray(0)
+        val wakeAudio = recorder?.getRecentAudio(2200) ?: ShortArray(0)
         scope.launch {
             pauseCapture()
             verifyAndActivate(wakeAudio)

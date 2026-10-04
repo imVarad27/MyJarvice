@@ -22,6 +22,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -99,12 +107,13 @@ fun RememberInboxScreen(store: RememberInboxStore, onDismiss: () -> Unit, onAskJ
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                 Column(Modifier.safeDrawingPadding().imePadding().widthIn(max = 760.dp).fillMaxSize()) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { if (selected != null) selectedId = null else onDismiss() }) {
-                            Text(if (selected != null) "Back" else "Close")
+                    Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { if (selected != null) selectedId = null else onDismiss() }) {
+                            Icon(if (selected != null) Icons.AutoMirrored.Rounded.ArrowBack else Icons.Rounded.Close,
+                                contentDescription = if (selected != null) "Back" else "Close")
                         }
                         Text(if (selected != null) "Saved item" else "Saved", style = MaterialTheme.typography.titleLarge,
-                            modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     error?.let { message ->
                         Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth().padding(16.dp), shape = RoundedCornerShape(12.dp)) {
@@ -122,7 +131,10 @@ fun RememberInboxScreen(store: RememberInboxStore, onDismiss: () -> Unit, onAskJ
                             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
                         OutlinedTextField(query, { query = it }, label = { Text("Search saved items") }, singleLine = true,
-                            trailingIcon = { if (query.isNotEmpty()) TextButton(onClick = { query = "" }) { Text("Clear") } },
+                            leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                            trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) {
+                                Icon(Icons.Rounded.Close, contentDescription = "Clear saved-item search")
+                            } },
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), shape = RoundedCornerShape(16.dp))
                         LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             item { FilterChip(selected = kind == null, onClick = { kind = null }, label = { Text("All") }) }
@@ -145,14 +157,22 @@ fun RememberInboxScreen(store: RememberInboxStore, onDismiss: () -> Unit, onAskJ
                             }
                         } else LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             items(visible, key = { it.id }) { item ->
-                                OutlinedCard(onClick = { selectedId = item.id }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
-                                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text(item.kind.label() + " · " + formatInboxTime(item.createdAt), style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                        Text(item.summary, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                                        item.reminderAt?.let { Text("Reminder · " + formatInboxTime(it), style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.primary) }
+                                ElevatedCard(onClick = { selectedId = item.id }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
+                                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)) {
+                                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
+                                        com.example.myjarvice.ui.JarvisIconBadge(item.kind.icon(), modifier = Modifier.size(40.dp),
+                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                            contentColor = MaterialTheme.colorScheme.primary)
+                                        Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Text(item.kind.label() + " · " + formatInboxTime(item.createdAt), style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                            Text(item.summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 3, overflow = TextOverflow.Ellipsis)
+                                            item.reminderAt?.let { Text("Reminder · " + formatInboxTime(it), style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.primary) }
+                                        }
                                     }
                                 }
                             }
@@ -254,6 +274,12 @@ private fun RememberKind.label() = when (this) {
     RememberKind.LINK -> "Links"
     RememberKind.PHOTO -> "Photos"
     RememberKind.VOICE -> "Voice notes"
+}
+private fun RememberKind.icon() = when (this) {
+    RememberKind.TEXT -> Icons.Rounded.Description
+    RememberKind.LINK -> Icons.Rounded.Link
+    RememberKind.PHOTO -> Icons.Rounded.Image
+    RememberKind.VOICE -> Icons.Rounded.Mic
 }
 private fun formatInboxTime(time: Long) = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(time))
 

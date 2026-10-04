@@ -12,10 +12,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,7 +26,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.MicOff
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -39,20 +45,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
-private val MutedAccent = Color(0xFFFF5A5A)
 
 /**
  * Full-screen hands-free voice mode: a breathing orb with minimal chrome,
@@ -99,11 +96,11 @@ fun VoiceModeScreen(
                     Text("Owner voice recognized", style = MaterialTheme.typography.labelSmall, color = colors.primary)
                 }
             }
-            TopIconButton(onClick = onInfo, contentDescription = "Session info") { drawInfoIcon(it) }
+            TopIconButton(onClick = onInfo, contentDescription = "Session info", icon = Icons.Rounded.Info)
             Spacer(Modifier.width(4.dp))
-            TopIconButton(onClick = onShare, contentDescription = "Share transcript") { drawShareIcon(it) }
+            TopIconButton(onClick = onShare, contentDescription = "Share transcript", icon = Icons.Rounded.Share)
             Spacer(Modifier.width(4.dp))
-            TopIconButton(onClick = onChangeVoice, contentDescription = "Change voice") { drawSlidersIcon(it, colors.background) }
+            TopIconButton(onClick = onChangeVoice, contentDescription = "Change voice", icon = Icons.Rounded.Tune)
         }
 
         // --- ORB ---
@@ -154,14 +151,18 @@ fun VoiceModeScreen(
             CircleControl(
                 onClick = onToggleMute,
                 contentDescription = if (micMuted) "Unmute microphone" else "Mute microphone",
-                background = if (micMuted) colors.errorContainer else colors.surfaceContainerHigh
-            ) { drawMicIcon(it, muted = micMuted) }
+                background = if (micMuted) colors.errorContainer else colors.surfaceContainerHigh,
+                icon = if (micMuted) Icons.Rounded.MicOff else Icons.Rounded.Mic,
+                tint = if (micMuted) colors.error else colors.onSurface
+            )
 
             CircleControl(
                 onClick = onClose,
                 contentDescription = "Close voice mode",
-                background = colors.surfaceContainerHigh
-            ) { drawCloseIcon(it) }
+                background = colors.surfaceContainerHigh,
+                icon = Icons.Rounded.Close,
+                tint = colors.onSurface
+            )
         }
     }
 }
@@ -297,18 +298,11 @@ private fun VoiceOrb(
 private fun TopIconButton(
     onClick: () -> Unit,
     contentDescription: String,
-    draw: DrawScope.(Color) -> Unit
+    icon: androidx.compose.ui.graphics.vector.ImageVector
 ) {
-    Box(
-        modifier = Modifier
-            .size(48.dp)
-            .semantics { this.contentDescription = contentDescription }
-            .clip(CircleShape)
-            .clickable(onClickLabel = contentDescription) { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        val tint = MaterialTheme.colorScheme.onSurface
-        Canvas(modifier = Modifier.size(22.dp)) { draw(tint) }
+    FilledTonalIconButton(onClick = onClick, modifier = Modifier.size(48.dp),
+        colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = Color.Transparent)) {
+        Icon(icon, contentDescription = contentDescription, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -317,159 +311,11 @@ private fun CircleControl(
     onClick: () -> Unit,
     contentDescription: String,
     background: Color,
-    draw: DrawScope.(Color) -> Unit
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tint: Color
 ) {
-    Box(
-        modifier = Modifier
-            .size(64.dp)
-            .semantics { this.contentDescription = contentDescription }
-            .clip(CircleShape)
-            .background(background)
-            .clickable(onClickLabel = contentDescription) { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        val tint = MaterialTheme.colorScheme.onSurface
-        Canvas(modifier = Modifier.size(26.dp)) { draw(tint) }
+    FilledTonalIconButton(onClick = onClick, modifier = Modifier.size(64.dp),
+        colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = background, contentColor = tint)) {
+        Icon(icon, contentDescription = contentDescription, modifier = Modifier.size(28.dp))
     }
-}
-
-// ==========================================================================
-//  Hand-drawn icons (avoids pulling in material-icons-extended)
-// ==========================================================================
-
-private fun DrawScope.drawInfoIcon(tint: Color) {
-    val stroke = size.minDimension * 0.09f
-    val r = size.minDimension / 2f - stroke / 2f
-    val c = Offset(size.width / 2f, size.height / 2f)
-
-    drawCircle(color = tint, radius = r, center = c, style = Stroke(width = stroke))
-    drawCircle(color = tint, radius = stroke * 0.62f, center = Offset(c.x, c.y - r * 0.46f))
-    drawLine(
-        color = tint,
-        start = Offset(c.x, c.y - r * 0.06f),
-        end = Offset(c.x, c.y + r * 0.52f),
-        strokeWidth = stroke,
-        cap = StrokeCap.Round
-    )
-}
-
-private fun DrawScope.drawShareIcon(tint: Color) {
-    val stroke = size.minDimension * 0.09f
-    val w = size.width
-    val h = size.height
-
-    // Arrow rising out of the tray.
-    drawLine(
-        color = tint,
-        start = Offset(w / 2f, h * 0.08f),
-        end = Offset(w / 2f, h * 0.60f),
-        strokeWidth = stroke,
-        cap = StrokeCap.Round
-    )
-    drawLine(
-        color = tint,
-        start = Offset(w * 0.28f, h * 0.30f),
-        end = Offset(w / 2f, h * 0.08f),
-        strokeWidth = stroke,
-        cap = StrokeCap.Round
-    )
-    drawLine(
-        color = tint,
-        start = Offset(w * 0.72f, h * 0.30f),
-        end = Offset(w / 2f, h * 0.08f),
-        strokeWidth = stroke,
-        cap = StrokeCap.Round
-    )
-
-    // Open-topped tray.
-    val trayTop = h * 0.52f
-    drawLine(color = tint, start = Offset(w * 0.14f, trayTop), end = Offset(w * 0.14f, h * 0.92f), strokeWidth = stroke, cap = StrokeCap.Round)
-    drawLine(color = tint, start = Offset(w * 0.86f, trayTop), end = Offset(w * 0.86f, h * 0.92f), strokeWidth = stroke, cap = StrokeCap.Round)
-    drawLine(color = tint, start = Offset(w * 0.14f, h * 0.92f), end = Offset(w * 0.86f, h * 0.92f), strokeWidth = stroke, cap = StrokeCap.Round)
-}
-
-private fun DrawScope.drawSlidersIcon(tint: Color, background: Color) {
-    val stroke = size.minDimension * 0.085f
-    val w = size.width
-    val h = size.height
-    val rows = listOf(h * 0.22f to w * 0.66f, h * 0.5f to w * 0.34f, h * 0.78f to w * 0.58f)
-
-    rows.forEach { (y, knobX) ->
-        drawLine(
-            color = tint,
-            start = Offset(w * 0.06f, y),
-            end = Offset(w * 0.94f, y),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round
-        )
-        drawCircle(color = background, radius = stroke * 1.7f, center = Offset(knobX, y))
-        drawCircle(color = tint, radius = stroke * 1.25f, center = Offset(knobX, y), style = Stroke(width = stroke * 0.85f))
-    }
-}
-
-private fun DrawScope.drawMicIcon(tint: Color, muted: Boolean) {
-    val color = if (muted) MutedAccent else tint
-    val stroke = size.minDimension * 0.09f
-    val w = size.width
-    val h = size.height
-    val capsuleW = w * 0.40f
-    val capsuleH = h * 0.52f
-
-    // Capsule head.
-    drawRoundRect(
-        color = color,
-        topLeft = Offset((w - capsuleW) / 2f, h * 0.06f),
-        size = Size(capsuleW, capsuleH),
-        cornerRadius = CornerRadius(capsuleW / 2f, capsuleW / 2f)
-    )
-
-    // Cradle arc.
-    val arcInset = w * 0.16f
-    drawArc(
-        color = color,
-        startAngle = 0f,
-        sweepAngle = 180f,
-        useCenter = false,
-        topLeft = Offset(arcInset, h * 0.36f),
-        size = Size(w - arcInset * 2f, h * 0.42f),
-        style = Stroke(width = stroke, cap = StrokeCap.Round)
-    )
-
-    // Stem.
-    drawLine(
-        color = color,
-        start = Offset(w / 2f, h * 0.78f),
-        end = Offset(w / 2f, h * 0.94f),
-        strokeWidth = stroke,
-        cap = StrokeCap.Round
-    )
-
-    if (muted) {
-        drawLine(
-            color = color,
-            start = Offset(w * 0.10f, h * 0.06f),
-            end = Offset(w * 0.90f, h * 0.96f),
-            strokeWidth = stroke * 1.15f,
-            cap = StrokeCap.Round
-        )
-    }
-}
-
-private fun DrawScope.drawCloseIcon(tint: Color) {
-    val stroke = size.minDimension * 0.11f
-    val inset = size.minDimension * 0.16f
-    drawLine(
-        color = tint,
-        start = Offset(inset, inset),
-        end = Offset(size.width - inset, size.height - inset),
-        strokeWidth = stroke,
-        cap = StrokeCap.Round
-    )
-    drawLine(
-        color = tint,
-        start = Offset(size.width - inset, inset),
-        end = Offset(inset, size.height - inset),
-        strokeWidth = stroke,
-        cap = StrokeCap.Round
-    )
 }

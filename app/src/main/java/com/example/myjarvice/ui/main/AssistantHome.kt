@@ -16,6 +16,19 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.BookmarkBorder
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.EditNote
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Inbox
+import androidx.compose.material.icons.rounded.Lightbulb
+import androidx.compose.material.icons.rounded.NotificationsNone
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -223,29 +236,45 @@ internal fun TodayHomeContent(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Surface(shape = RoundedCornerShape(28.dp), color = colors.primaryContainer) {
+            Surface(shape = RoundedCornerShape(28.dp), color = colors.primaryContainer, tonalElevation = 2.dp) {
                 Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(
-                    colors.primaryContainer, colors.tertiaryContainer.copy(alpha = 0.65f)
+                    colors.primaryContainer, colors.tertiaryContainer.copy(alpha = 0.5f)
                 ))).padding(22.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        JarvisBrandMark(Modifier.size(40.dp))
+                        JarvisBrandMark(Modifier.size(38.dp))
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text("YOUR SPACE", style = MaterialTheme.typography.labelSmall, color = colors.onPrimaryContainer)
+                            Text("TODAY", style = MaterialTheme.typography.labelSmall, color = colors.onPrimaryContainer)
                             Text(DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(now)),
                                 style = MaterialTheme.typography.labelLarge, color = colors.onPrimaryContainer)
                         }
                     }
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(18.dp))
                     Text(greeting, style = MaterialTheme.typography.headlineMedium, color = colors.onPrimaryContainer)
-                    Text("A clearer day starts here.", style = MaterialTheme.typography.bodyLarge,
+                    Text("Here’s what needs your attention.", style = MaterialTheme.typography.bodyLarge,
                         color = colors.onPrimaryContainer, modifier = Modifier.padding(top = 6.dp))
+                    Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        HomeMetric("Open", taskAgenda.open.size.toString(), Modifier.weight(1f))
+                        HomeMetric("Today", (taskAgenda.dueToday.size + brief.remindersToday.size).toString(), Modifier.weight(1f))
+                        HomeMetric("Saved", brief.savedCount.toString(), Modifier.weight(1f))
+                    }
                 }
             }
         }
         item {
-            HomeSectionTitle("Your tasks", "Private · saved on this phone")
-            Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainerLow) {
+            HomeSectionTitle("Quick actions", "Common things, one tap away", Icons.Rounded.Lightbulb)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HomeQuickAction("Task", Icons.Rounded.Add, onAddTask, Modifier.weight(1f))
+                HomeQuickAction("Capture", Icons.Rounded.Inbox, onCapture, Modifier.weight(1f))
+                HomeQuickAction("Draft", Icons.Rounded.EditNote, onDraft, Modifier.weight(1f))
+                HomeQuickAction("Tools", Icons.Rounded.GridView, onOpenTools, Modifier.weight(1f))
+            }
+        }
+        item {
+            HomeSectionTitle("Your tasks", "Private · saved on this phone", Icons.Rounded.CheckCircle,
+                action = if (taskAgenda.open.isNotEmpty() || taskAgenda.completed.isNotEmpty()) "View all" else null,
+                onAction = onOpenTasks)
+            Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainerLow, tonalElevation = 1.dp) {
                 Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(when {
                         taskAgenda.overdue.isNotEmpty() -> "${taskAgenda.overdue.size} overdue · ${taskAgenda.open.size} open"
@@ -258,18 +287,17 @@ internal fun TodayHomeContent(
                     taskAgenda.open.take(4).forEach { task ->
                         HomeTaskRow(task, now, onToggle = { onToggleTask(task, it) }, onEdit = { onEditTask(task) })
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = onAddTask) { Text("Add task") }
-                        if (taskAgenda.open.isNotEmpty() || taskAgenda.completed.isNotEmpty()) {
-                            TextButton(onClick = onOpenTasks) { Text("View all") }
-                        }
+                    FilledTonalButton(onClick = onAddTask) {
+                        Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Add task")
                     }
                 }
             }
         }
         item {
-            HomeSectionTitle("Saved reminders", "Notes and links with a time")
-            Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainerLow) {
+            HomeSectionTitle("Saved reminders", "Notes and links with a time", Icons.Rounded.NotificationsNone)
+            Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainerLow, tonalElevation = 1.dp) {
                 Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(if (!loaded) "Opening your brief…" else when {
                         brief.overdue.isNotEmpty() -> "${brief.overdue.size} past-due ${if (brief.overdue.size == 1) "reminder" else "reminders"} to review"
@@ -283,18 +311,19 @@ internal fun TodayHomeContent(
                     (brief.overdue + brief.remindersToday).take(3).forEach { item ->
                         HomeLink(item.title, if (item.reminderAt!! < now) "Past due · ${formatReminder(item.reminderAt)}"
                             else "Today · ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(item.reminderAt))}",
-                            onClick = { onOpenSaved(item.id) })
+                            icon = Icons.Rounded.BookmarkBorder, onClick = { onOpenSaved(item.id) })
                     }
                     if (brief.overdue.isEmpty() && brief.remindersToday.isEmpty()) brief.nextReminder?.let { item ->
-                        HomeLink(item.title, "Next · ${formatReminder(item.reminderAt!!)}", onClick = { onOpenSaved(item.id) })
+                        HomeLink(item.title, "Next · ${formatReminder(item.reminderAt!!)}", Icons.Rounded.BookmarkBorder,
+                            onClick = { onOpenSaved(item.id) })
                     }
                     TextButton(onClick = { onOpenSaved(null) }) { Text("Open saved inbox · ${brief.savedCount}") }
                 }
             }
         }
         item {
-            HomeSectionTitle("Your calendar", "Read privately from this phone")
-            Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainerLow) {
+            HomeSectionTitle("Your calendar", "Read privately from this phone", Icons.Rounded.CalendarMonth)
+            Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainerLow, tonalElevation = 1.dp) {
                 Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     when {
                         !calendarGranted -> {
@@ -321,7 +350,8 @@ internal fun TodayHomeContent(
                             Text(if (upcoming.endsAt >= now) "Next on your calendar" else "Today's calendar",
                                 style = MaterialTheme.typography.titleMedium)
                             calendarEvents.take(5).forEach { event ->
-                                HomeLink(event.title, calendarEventSubtitle(event), onClick = { onOpenCalendarEvent(event) })
+                                HomeLink(event.title, calendarEventSubtitle(event), Icons.Rounded.CalendarMonth,
+                                    onClick = { onOpenCalendarEvent(event) })
                             }
                             if (calendarEvents.size > 5) Text("${calendarEvents.size - 5} more events in your calendar",
                                 style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
@@ -331,24 +361,24 @@ internal fun TodayHomeContent(
             }
         }
         item {
-            HomeSectionTitle("Make a little progress", "Start with one thing")
-            HomeLink("Capture a thought", "Save a note or link instantly, even offline", onClick = onCapture)
+            HomeSectionTitle("Make a little progress", "Start with one thing", Icons.Rounded.Lightbulb)
+            HomeLink("Capture a thought", "Save a note or link instantly, even offline", Icons.Rounded.Inbox, onClick = onCapture)
             Spacer(Modifier.height(8.dp))
-            HomeLink("Find the right words", "Prepare a message with your choice of tone", onClick = onDraft)
+            HomeLink("Find the right words", "Prepare a message with your choice of tone", Icons.Rounded.EditNote, onClick = onDraft)
             Spacer(Modifier.height(8.dp))
-            HomeLink("Explore shortcuts", "Search phone tools, memory and PC actions", onClick = onOpenTools)
+            HomeLink("Explore shortcuts", "Search phone tools, memory and PC actions", Icons.Rounded.GridView, onClick = onOpenTools)
         }
         if (sessions.isNotEmpty()) {
-            item { HomeSectionTitle("Pick up where you left off", "Recent conversations") }
+            item { HomeSectionTitle("Pick up where you left off", "Recent conversations", Icons.Rounded.History) }
             items(sessions, key = { "chat:${it.id}" }) { session ->
-                HomeLink(session.title, DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(session.updatedAt)),
+                HomeLink(session.title, DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(session.updatedAt)), Icons.Rounded.History,
                     onClick = { onOpenSession(session) })
             }
         }
         if (brief.recentItems.isNotEmpty()) {
-            item { HomeSectionTitle("Fresh in your inbox", "Notes, links and things to revisit") }
+            item { HomeSectionTitle("Fresh in your inbox", "Notes, links and things to revisit", Icons.Rounded.Inbox) }
             items(brief.recentItems, key = { "saved:${it.id}" }) { item ->
-                HomeLink(item.title, item.summary, onClick = { onOpenSaved(item.id) })
+                HomeLink(item.title, item.summary, Icons.Rounded.BookmarkBorder, onClick = { onOpenSaved(item.id) })
             }
         }
         item {
@@ -360,25 +390,59 @@ internal fun TodayHomeContent(
 }
 
 @Composable
-private fun HomeSectionTitle(title: String, subtitle: String) {
-    Column(Modifier.padding(top = 8.dp, bottom = 10.dp)) {
-        Text(title, style = MaterialTheme.typography.titleMedium)
-        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun HomeSectionTitle(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector,
+    action: String? = null, onAction: () -> Unit = {}) {
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        com.example.myjarvice.ui.JarvisIconBadge(icon, modifier = Modifier.size(36.dp))
+        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (action != null) TextButton(onClick = onAction) { Text(action) }
     }
 }
 
 @Composable
-private fun HomeLink(title: String, subtitle: String, onClick: () -> Unit) {
-    Surface(onClick = onClick, shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+private fun HomeLink(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit) {
+    Surface(onClick = onClick, shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 1.dp) {
         Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
+            com.example.myjarvice.ui.JarvisIconBadge(icon, modifier = Modifier.size(38.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                contentColor = MaterialTheme.colorScheme.primary)
+            Column(Modifier.weight(1f).padding(start = 14.dp)) {
                 Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 4.dp))
             }
-            Text("›", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = 12.dp))
+            Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 12.dp).size(18.dp))
+        }
+    }
+}
+
+@Composable
+private fun HomeMetric(label: String, value: String, modifier: Modifier = Modifier) {
+    Surface(modifier = modifier, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.2f)) {
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 9.dp)) {
+            Text(value, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
+        }
+    }
+}
+
+@Composable
+private fun HomeQuickAction(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(onClick = onClick, modifier = modifier.heightIn(min = 78.dp), shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 1.dp) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+            Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1,
+                modifier = Modifier.padding(top = 7.dp))
         }
     }
 }
@@ -397,7 +461,9 @@ private fun HomeTaskRow(task: LocalTask, now: Long, onToggle: (Boolean) -> Unit,
                         color = if (label.startsWith("Overdue")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            TextButton(onClick = onEdit) { Text("Edit") }
+            IconButton(onClick = onEdit, modifier = Modifier.semantics { contentDescription = "Edit task: ${task.title}" }) {
+                Icon(Icons.Rounded.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }
@@ -418,7 +484,11 @@ private fun TaskListSheet(
             Text("Your tasks", style = MaterialTheme.typography.headlineSmall)
             Text("Stored privately on this phone. PC tasks remain separate.", style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
-            Button(onClick = onAdd, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Add a task") }
+            Button(onClick = onAdd, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Add a task")
+            }
             if (agenda.open.isEmpty()) {
                 Text("Nothing open right now.", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 24.dp))

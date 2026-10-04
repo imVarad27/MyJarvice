@@ -39,12 +39,27 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Computer
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Memory
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
@@ -66,6 +81,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -104,6 +120,17 @@ private val settingsDescriptions = mapOf(
 
 private fun matchesSettingsSearch(title: String, query: String): Boolean =
     query.isBlank() || ("$title ${settingsDescriptions[title].orEmpty()}").contains(query.trim(), ignoreCase = true)
+
+private fun settingsIcon(title: String): ImageVector = when (title) {
+    "Appearance" -> Icons.Rounded.Palette
+    "Voice & speech" -> Icons.AutoMirrored.Rounded.VolumeUp
+    "Hands-free voice" -> Icons.Rounded.Mic
+    "Writing style" -> Icons.Rounded.Edit
+    "AI & personal knowledge" -> Icons.Rounded.Memory
+    "PC connection" -> Icons.Rounded.Computer
+    "Data & storage" -> Icons.Rounded.Storage
+    else -> Icons.Rounded.Info
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -243,7 +270,10 @@ fun SettingsScreen(
         OutlinedTextField(value = sectionQuery, onValueChange = { sectionQuery = it },
             placeholder = { Text("Find a setting") }, singleLine = true,
             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
-            trailingIcon = { if (sectionQuery.isNotEmpty()) TextButton(onClick = { sectionQuery = "" }) { Text("Clear") } })
+            leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+            trailingIcon = { if (sectionQuery.isNotEmpty()) IconButton(onClick = { sectionQuery = "" }) {
+                Icon(Icons.Rounded.Close, contentDescription = "Clear settings search")
+            } })
         Spacer(Modifier.height(16.dp))
 
         // ==========================================
@@ -1011,16 +1041,24 @@ private fun SettingsSection(title: String, initiallyExpanded: Boolean = false, q
         onClick = { expanded = !expanded },
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         shape = RoundedCornerShape(20.dp),
-        color = if (expanded) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow
+        color = if (expanded) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+        tonalElevation = if (expanded) 2.dp else 0.dp
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            com.example.myjarvice.ui.JarvisIconBadge(
+                settingsIcon(title),
+                modifier = Modifier.size(40.dp),
+                containerColor = if (expanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                contentColor = if (expanded) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
+            )
             Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 14.dp))
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 14.dp, top = 4.dp))
             }
-            Text(if (expanded) "−" else "+", style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.semantics { contentDescription = if (expanded) "Collapse $title" else "Expand $title" })
+            Icon(if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                contentDescription = if (expanded) "Collapse $title" else "Expand $title",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
     if (expanded) content()
@@ -1029,15 +1067,15 @@ private fun SettingsSection(title: String, initiallyExpanded: Boolean = false, q
 @Composable
 private fun SettingsCard(content: @Composable () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    Column(
+    androidx.compose.material3.Surface(
         modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(scheme.surface)
-            .border(1.dp, scheme.outlineVariant, RoundedCornerShape(16.dp))
-            .padding(16.dp)
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = scheme.surfaceContainerLow,
+        border = androidx.compose.foundation.BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.65f)),
+        tonalElevation = 1.dp
     ) {
-        content()
+        Column(Modifier.padding(18.dp)) { content() }
     }
 }
 

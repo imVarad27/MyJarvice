@@ -50,6 +50,14 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -103,12 +111,7 @@ import com.example.myjarvice.data.PhotoAttachment
 import com.example.myjarvice.data.RememberInboxStore
 import com.example.myjarvice.ui.files.PcExplorerDialog
 
-import com.example.myjarvice.ui.icons.IconDocument
-import com.example.myjarvice.ui.icons.IconMessage
-import com.example.myjarvice.ui.icons.IconPlus
-import com.example.myjarvice.ui.icons.IconSettings
 import com.example.myjarvice.wake.WakeEvents
-import com.example.myjarvice.ui.icons.IconTrash
 import com.example.myjarvice.ui.voice.VoiceInfoDialog
 import com.example.myjarvice.ui.voice.VoiceModeScreen
 import com.example.myjarvice.ui.voice.VoicePickerDialog
@@ -567,7 +570,8 @@ fun MainScreen(
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconDocument(tint = scheme.primary, size = 14.dp)
+                            androidx.compose.material3.Icon(Icons.Rounded.Description, contentDescription = null,
+                                tint = scheme.primary, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 attachedFileName ?: "",
@@ -581,7 +585,7 @@ fun MainScreen(
                             ChatIconButton("Remove document attachment", onClick = {
                                     attachedFileName = null
                                     attachedFileContent = null
-                                }) { Text("×", style = MaterialTheme.typography.titleLarge) }
+                                }) { androidx.compose.material3.Icon(Icons.Rounded.Close, contentDescription = null) }
                         }
                     }
 
@@ -614,7 +618,7 @@ fun MainScreen(
                                 )
                             }
                             ChatIconButton("Remove photo attachment", onClick = { attachedPhoto = null }) {
-                                Text("×", style = MaterialTheme.typography.titleLarge)
+                                androidx.compose.material3.Icon(Icons.Rounded.Close, contentDescription = null)
                             }
                         }
                     }
@@ -765,7 +769,8 @@ private fun HistoryDrawerContent(
                 horizontalArrangement = Arrangement.Start,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                IconPlus(tint = scheme.onSurface, size = 16.dp)
+                androidx.compose.material3.Icon(Icons.Rounded.Add, contentDescription = null,
+                    tint = scheme.onSurface, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(10.dp))
                 Text(
                     "New chat",
@@ -780,8 +785,11 @@ private fun HistoryDrawerContent(
         OutlinedTextField(value = historyQuery, onValueChange = { historyQuery = it },
             placeholder = { Text("Search conversations", style = MaterialTheme.typography.bodyMedium) }, singleLine = true,
             shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth(),
+            leadingIcon = { androidx.compose.material3.Icon(Icons.Rounded.Search, contentDescription = null) },
             trailingIcon = if (historyQuery.isNotEmpty()) ({
-                ChatIconButton("Clear conversation search", { historyQuery = "" }) { Text("×") }
+                ChatIconButton("Clear conversation search", { historyQuery = "" }) {
+                    androidx.compose.material3.Icon(Icons.Rounded.Close, contentDescription = null)
+                }
             }) else null)
 
         Text(
@@ -826,7 +834,8 @@ private fun HistoryDrawerContent(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.weight(1f)
                         ) {
-                            IconMessage(tint = scheme.onSurfaceVariant, size = 16.dp)
+                            androidx.compose.material3.Icon(Icons.Rounded.ChatBubbleOutline, contentDescription = null,
+                                tint = scheme.onSurfaceVariant, modifier = Modifier.size(17.dp))
                             Spacer(Modifier.width(10.dp))
                             Text(
                                 session.title,
@@ -841,7 +850,8 @@ private fun HistoryDrawerContent(
                             onClick = { onDeleteSession(session.id) },
                             modifier = Modifier.size(48.dp).semantics { contentDescription = "Delete conversation ${session.title}" }
                         ) {
-                            IconTrash(tint = scheme.onSurfaceVariant, size = 14.dp)
+                            androidx.compose.material3.Icon(Icons.Rounded.DeleteOutline, contentDescription = null,
+                                tint = scheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                         }
                     }
                 }
@@ -861,7 +871,8 @@ private fun HistoryDrawerContent(
                     .padding(horizontal = 10.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconSettings(tint = scheme.onSurfaceVariant, size = 18.dp)
+            androidx.compose.material3.Icon(Icons.Rounded.Settings, contentDescription = null,
+                tint = scheme.onSurfaceVariant, modifier = Modifier.size(19.dp))
             Spacer(Modifier.width(12.dp))
             Text("Settings", color = scheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         }
@@ -876,7 +887,8 @@ private fun HistoryDrawerContent(
                     .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconTrash(tint = scheme.error, size = 16.dp)
+                androidx.compose.material3.Icon(Icons.Rounded.DeleteOutline, contentDescription = null,
+                    tint = scheme.error, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(12.dp))
                 Text("Clear conversations", color = scheme.error, fontSize = 13.sp)
             }

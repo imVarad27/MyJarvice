@@ -6,7 +6,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-/** No network, writes, file paths, shell, intents, or arbitrary device actions. */
+/** Executes only schema-validated tools from [LocalAgentHarness]. */
 class LocalAgentTools(private val context: Context) {
     fun execute(call: LocalToolCall): LocalToolResult = when (call.name) {
         "calculate" -> LocalToolResult("${call.argument} = ${LocalCalculator.evaluate(call.argument)}")
@@ -23,7 +23,41 @@ class LocalAgentTools(private val context: Context) {
             val date = SimpleDateFormat("EEEE, yyyy-MM-dd HH:mm:ss z", Locale.getDefault()).apply { timeZone = zone }
             LocalToolResult("Phone clock: ${date.format(Date())}. Timezone: ${zone.id}. Depends on the phone's clock setting.")
         }
+        "phone_status" -> {
+            val values = DeviceContextProvider(context).getDeviceContext()
+            LocalToolResult(
+                "Battery: ${values["battery_level"] ?: "unknown"}; " +
+                    "charging: ${values["is_charging"] ?: "unknown"}; " +
+                    "connection: ${values["connection_type"] ?: "unknown"}; " +
+                    "phone time: ${values["time"] ?: "unknown"}."
+            )
+        }
+        "remember" -> {
+            LocalKnowledgeStore(context).remember(call.argument)
+            LocalToolResult("Saved this fact in private local memory: ${call.argument}")
+        }
+        "list_memories" -> {
+            val memories = LocalKnowledgeStore(context).entries().filter { it.memory }
+            LocalToolResult(
+                memories.joinToString("\n") { "• ${it.text}" }.ifBlank { "No facts are saved in local memory." },
+                hasData = memories.isNotEmpty()
+            )
+        }
+        "add_task" -> executePhone("ADD_LOCAL_TASK", call.argument)
+        "list_tasks" -> executePhone("SHOW_LOCAL_TASKS", "")
+        "open_app" -> executePhone("OPEN_APP", call.argument)
+        "navigate" -> executePhone("NAVIGATE", call.argument)
+        "flashlight" -> executePhone("FLASHLIGHT", call.argument)
+        "set_alarm" -> executePhone("SET_ALARM", call.argument)
+        "set_timer" -> executePhone("SET_TIMER", call.argument)
         else -> error("This tool is not available on the phone.")
+    }
+
+    private fun executePhone(type: String, argument: String): LocalToolResult {
+        val action = PhoneActionPolicy.validate(type, argument)
+            ?: error("The model proposed an invalid phone action.")
+        check(!action.requiresConfirmation) { "This action needs confirmation and is unavailable in the local tool loop." }
+        return LocalToolResult(DeviceActionExecutor(context).executeLocalSafe(action).getOrThrow())
     }
 
     private fun excerpts(hits: List<KnowledgeHit>): LocalToolResult = if (hits.isEmpty())

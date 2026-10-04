@@ -76,6 +76,8 @@ class AudioBufferRecorder(
 
             if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
                 Log.e(TAG, "Failed to initialize AudioRecord instance.")
+                runCatching { audioRecord?.release() }
+                audioRecord = null
                 return false
             }
 

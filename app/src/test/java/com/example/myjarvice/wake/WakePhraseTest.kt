@@ -15,4 +15,11 @@ class WakePhraseTest {
         assertFalse(WakePhrase.confidentWords(listOf("hey" to .98, "jarvis" to .60)))
         assertFalse(WakePhrase.confidentWords(emptyList()))
     }
+
+    @Test fun liveCandidateUsesPhraseGrammarConfidenceWithoutWeakeningEnrollment() {
+        assertTrue(WakePhrase.confidentWakeCandidate(listOf("hey" to .61, "jarvis" to .58)))
+        assertFalse(WakePhrase.confidentWakeCandidate(listOf("hey" to .90, "jarvis" to .54)))
+        assertFalse(WakePhrase.confidentWakeCandidate(listOf("jarvis" to .99)))
+        assertFalse(WakePhrase.confidentWakeCandidate(listOf("hey" to Double.NaN, "jarvis" to .99)))
+    }
 }

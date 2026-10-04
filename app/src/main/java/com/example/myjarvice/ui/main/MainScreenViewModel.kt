@@ -18,10 +18,8 @@ import com.example.myjarvice.data.OnDeviceInferenceEngine
 import com.example.myjarvice.data.SettingsStore
 import com.example.myjarvice.data.SpeechManager
 import com.example.myjarvice.data.SmartMode
-import com.example.myjarvice.data.LocalKnowledgeStore
-import com.example.myjarvice.data.LocalCalculator
 import com.example.myjarvice.data.SafePhoneAction
-import com.example.myjarvice.data.SafePhoneActionParser
+import com.example.myjarvice.data.PhoneActionPolicy
 import com.example.myjarvice.data.PhotoAttachment
 import com.example.myjarvice.data.VoiceOption
 import com.example.myjarvice.wake.WakeEvents
@@ -54,7 +52,6 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     private val actionExecutor = DeviceActionExecutor(application.applicationContext)
     private val historyStore = ChatHistoryStore(application.applicationContext)
     private val onDeviceEngine = OnDeviceInferenceEngine(application.applicationContext)
-    private val knowledgeStore = LocalKnowledgeStore(application.applicationContext)
     private var localRequestActive = false
     private var listeningJob: Job? = null
     private val preparingMic = MutableStateFlow(false)
@@ -198,11 +195,16 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             wsClient.latestAction.collect { action ->
                 if (settings.assistantPaused) return@collect
                 action?.let {
-                    if (it.type.equals("CALL", ignoreCase = true) || it.type.equals("WHATSAPP", ignoreCase = true)) {
-                        _pendingAction.value = it
+                    val validated = PhoneActionPolicy.validate(it.type, it.query)
+                    if (validated == null) {
+                        wsClient.addLocalMessage(JarvisMessage(
+                            sender = "JARVIS (Safety)", text = "The proposed phone action was invalid, so nothing ran.",
+                            type = "ERROR", timestamp = timestampNow()
+                        ))
+                    } else if (validated.requiresConfirmation) {
+                        _pendingAction.value = it.copy(type = validated.type, query = validated.query)
                     } else {
-                        // Allowlisted low-risk actions (open app, camera, maps, flashlight, alarms) execute immediately.
-                        actionExecutor.execute(it)
+                        actionExecutor.execute(it.copy(type = validated.type, query = validated.query))
                         viewModelScope.launch { JarvisSoundFx.playSuccessChime() }
                     }
                 }
@@ -445,57 +447,6 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 type = "ERROR",
                 timestamp = timestampNow()
             ))
-            return
-        }
-
-        // Explicit local tools never forward saved facts or document excerpts to a host.
-        val command = text.trim()
-        if (photo == null) {
-            SafePhoneActionParser.parse(command)?.let { phoneAction ->
-                wsClient.addLocalMessage(JarvisMessage(sender = "USER", text = text, type = "QUERY", timestamp = timestampNow()))
-                _responseRoute.value = "Preparing a phone action"
-                if (phoneAction.requiresConfirmation) {
-                    _pendingAction.value = JarvisAction("local:${UUID.randomUUID()}", phoneAction.type, phoneAction.query)
-                    wsClient.addLocalMessage(JarvisMessage(sender = "JARVIS (Phone)", text = "I can do that, but I need your confirmation first.", timestamp = timestampNow()))
-                } else {
-                    val result = actionExecutor.executeLocalSafe(phoneAction)
-                    result.fold(
-                        onSuccess = { reply -> wsClient.addLocalMessage(JarvisMessage(sender = "JARVIS (Phone)", text = reply, timestamp = timestampNow())) },
-                        onFailure = { error -> wsClient.addLocalMessage(JarvisMessage(sender = "JARVIS (Phone)", text = error.message ?: "Phone action failed.", type = "ERROR", timestamp = timestampNow())) }
-                    )
-                }
-                return
-            }
-        }
-        if (photo == null && (command.startsWith("calculate ", true) || command.startsWith("remember: ", true) ||
-            command.equals("show memories", true) || command.startsWith("search documents:", true))) {
-            localRequestActive = true
-            _responseRoute.value = "Working on this phone"
-            _isThinking.value = true
-            wsClient.addLocalMessage(JarvisMessage(sender = "USER", text = text, type = "QUERY", timestamp = timestampNow()))
-            viewModelScope.launch {
-                try {
-                    val reply = withContext(Dispatchers.IO) {
-                        runCatching {
-                            when {
-                                command.startsWith("calculate ", true) -> LocalCalculator.evaluate(command.substringAfter(' '))
-                                command.startsWith("remember: ", true) -> {
-                                    knowledgeStore.remember(command.substringAfter(':'))
-                                    "Saved on this phone. Review or delete it in Settings → Local memory & documents."
-                                }
-                                command.equals("show memories", true) -> knowledgeStore.entries().filter { it.memory }
-                                    .joinToString("\n") { "• ${it.text}" }.ifBlank { "No saved memories yet." }
-                                else -> LocalKnowledgeStore.rank(command.substringAfter(':'), knowledgeStore.entries().filterNot { it.memory })
-                                    .mapIndexed { i, hit -> "[${i + 1}] ${hit.source}\n${hit.text}" }
-                                    .joinToString("\n\n").ifBlank { "No matching passages. Import a document in Settings or try more specific keywords." }
-                            }
-                        }
-                    }
-                    wsClient.addLocalMessage(JarvisMessage(sender = "JARVIS (Local tool)",
-                        text = reply.getOrElse { it.message ?: "Local tool failed." },
-                        type = if (reply.isSuccess) "RESPONSE" else "ERROR", timestamp = timestampNow()))
-                } finally { localRequestActive = false; _isThinking.value = false }
-            }
             return
         }
 

@@ -25,6 +25,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.core.view.WindowCompat
 import com.example.myjarvice.theme.ThemeMode
@@ -34,9 +35,13 @@ import com.example.myjarvice.data.SettingsStore
 import com.example.myjarvice.theme.MyJarviceTheme
 import com.example.myjarvice.wake.WakeEvents
 import com.example.myjarvice.wake.WakeWordService
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private var inboxRequest by mutableStateOf(0L)
+    private var wakeStartJob: Job? = null
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
@@ -145,12 +150,25 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         WakeEvents.appVisible.value = true
-        SettingsStore(this).also { settings ->
-            if (settings.wakeWordEnabled && !settings.assistantPaused) WakeWordService.start(this)
+        // Some Android/ColorOS builds have not promoted the process to TOP yet while
+        // onResume is executing. Starting a microphone FGS in that small window leaves
+        // the service alive but permanently denies AudioRecord. Retry after the resumed
+        // activity has had a chance to draw and Android has updated process importance.
+        wakeStartJob?.cancel()
+        wakeStartJob = lifecycleScope.launch {
+            delay(750)
+            if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                SettingsStore(this@MainActivity).also { settings ->
+                    if (settings.wakeWordEnabled && !settings.assistantPaused) {
+                        WakeWordService.start(this@MainActivity)
+                    }
+                }
+            }
         }
     }
 
     override fun onPause() {
+        wakeStartJob?.cancel()
         WakeEvents.appVisible.value = false
         super.onPause()
     }

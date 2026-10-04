@@ -24,6 +24,7 @@ import routine_briefing
 import file_manager
 import neural_voice
 import assistant_runtime
+import model_tool_router
 from action_ledger import EmailApprovalLedger
 from action_audit import ActionAuditLog
 
@@ -251,93 +252,6 @@ def maybe_run_action(user_text: str) -> Optional[str]:
     return None
 
 
-# --- Phone actions the Android app executes locally --------------
-CALL_RE = re.compile(r"\b(?:call|phone|dial|ring)\s+(?:up\s+)?(.+)$", re.IGNORECASE)
-OPEN_RE = re.compile(r"\b(?:open|launch|start|opening|go to)\s+(?:the\s+)?(.+)$", re.IGNORECASE)
-
-# Navigation is checked before OPEN_RE because "open maps and route to X" starts with
-# "open" but is a navigation request, not a request to launch an app.
-NAVIGATE_RE = re.compile(
-    r"\b(?:navigate|directions?|route|take me|drive me|guide me)\b[^.]*?\bto\s+(.+)$",
-    re.IGNORECASE,
-)
-
-# Trailing origin phrases Maps infers on its own — "from my current location" etc.
-ORIGIN_TAIL_RE = re.compile(
-    r"\s*\bfrom\s+(?:my\s+)?(?:the\s+)?(?:current\s+location|here|my\s+place|where\s+i\s+am)\b.*$",
-    re.IGNORECASE,
-)
-
-
-def _clean_destination(text: str) -> str:
-    text = ORIGIN_TAIL_RE.sub("", text)
-    text = text.strip().rstrip("?.!,")
-    text = re.sub(r"^\b(?:the\s+)?(?:city\s+of\s+)?", "", text, flags=re.IGNORECASE)
-    return text.strip()
-
-
-def _clean_target(text: str) -> str:
-    text = text.strip().rstrip("?.!")
-    text = re.sub(r"\b(please|now|for me|app|application|the)\b", "", text, flags=re.IGNORECASE)
-    return text.strip()
-
-
-FLASHLIGHT_RE = re.compile(r"\b(?:flashlight|torch|flash)\b", re.IGNORECASE)
-ALARM_RE = re.compile(r"\b(?:alarm|wake me up)\b", re.IGNORECASE)
-WHATSAPP_RE = re.compile(r"\b(?:whatsapp|whatsapp message)\b", re.IGNORECASE)
-
-
-def detect_device_action(user_text: str) -> Optional[Dict[str, str]]:
-    """Returns a directive {type, query} for the app to execute on the phone,
-    or None. 'call me X' is intentionally excluded — that sets the user's name."""
-    low = user_text.strip().lower()
-    low = re.sub(r"^(?:hey\s+)?(?:jarvis|jarvice)[,:\s]*", "", low).strip()
-
-    if low.startswith("call me") or low.startswith("call my"):
-        return None
-
-    # Camera intent
-    if any(k in low for k in ["open camera", "opening camera", "launch camera", "take a picture", "take a photo", "open the camera", "camera app"]):
-        return {"type": "OPEN_APP", "query": "camera"}
-
-    # Maps intent
-    if any(k in low for k in ["open maps", "opening maps", "open google maps", "launch maps", "show maps", "open the maps", "maps app"]):
-        return {"type": "OPEN_APP", "query": "maps"}
-
-    if FLASHLIGHT_RE.search(low):
-        action_state = "OFF" if "off" in low else "ON"
-        return {"type": "FLASHLIGHT", "query": action_state}
-
-    if ALARM_RE.search(low):
-        return {"type": "SET_ALARM", "query": user_text}
-
-    if WHATSAPP_RE.search(low):
-        msg_content = user_text
-        if "saying" in low:
-            msg_content = user_text.split("saying", 1)[1].strip()
-        return {"type": "WHATSAPP", "query": msg_content}
-
-    m = NAVIGATE_RE.search(low)
-    if m:
-        destination = _clean_destination(m.group(1))
-        if destination:
-            return {"type": "NAVIGATE", "query": destination}
-
-    m = CALL_RE.search(low)
-    if m:
-        target = _clean_target(m.group(1))
-        if target:
-            return {"type": "CALL", "query": target}
-
-    m = OPEN_RE.search(low)
-    if m:
-        target = _clean_target(m.group(1))
-        if target:
-            return {"type": "OPEN_APP", "query": target}
-    return None
-
-
-
 # ==========================================================================
 #  Memory teaching ("remember that ...")
 # ==========================================================================
@@ -429,6 +343,17 @@ def call_ollama(messages: List[Dict[str, Any]], model: Optional[str] = None, on_
         return assistant_runtime.generate(messages, model or DEFAULT_MODEL, OLLAMA_URL, OLLAMA_TIMEOUT, on_text) or None
     except Exception as e:
         logger.warning(f"Ollama call failed ({e}). Falling back to local phrasing.")
+        return None
+
+
+def call_ollama_with_phone_tools(messages: List[Dict[str, Any]], model: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    try:
+        return assistant_runtime.generate_message(
+            messages, model or DEFAULT_MODEL, OLLAMA_URL, OLLAMA_TIMEOUT,
+            tools=model_tool_router.ollama_tools(),
+        )
+    except Exception as exc:
+        logger.info("Native phone tool turn unavailable; continuing with normal generation: %s", exc)
         return None
 
 
@@ -749,21 +674,6 @@ def generate_reply(
         reply_text, pending = build_email_draft(user_text, address)
         return reply_text, None, pending, None, []
 
-    # Phone actions are handled deterministically and returned immediately (no LLM
-    # round-trip) so "call Mom" or "open WhatsApp" fire instantly and reliably.
-    device_action = detect_device_action(user_text) if not has_photo else None
-    if device_action:
-        target = device_action["query"]
-        if device_action["type"] == "CALL":
-            text = f"Calling {target} now, {address}."
-        elif device_action["type"] == "OPEN_APP":
-            text = f"Opening {target}, {address}."
-        elif device_action["type"] == "NAVIGATE":
-            text = f"Starting navigation to {target}, {address}."
-        else:
-            text = f"Right away, {address}."
-        return text, device_action, None, None, []
-
     stored = maybe_store_memory(user_text) if not has_photo else None
     action_note = maybe_run_action(user_text) if not has_photo else None
     memory_ctx = build_memory_context(user_text)
@@ -777,7 +687,6 @@ def generate_reply(
     context_block = (
         f"{identity}\n"
         f"Current date and time: {now:%A, %d %B %Y, %H:%M}.\n"
-        f"Phone status: {json.dumps(phone_context or {})}.\n"
         f"What you know about the user:\n{memory_ctx}"
     )
     if action_note:
@@ -908,7 +817,31 @@ def generate_reply(
     if voice_mode:
         messages[0]["content"] += "\nThis answer will be spoken: use two or three short sentences, no markdown, unless the user explicitly asks for more detail."
 
-    reply = call_ollama(messages, model=model_for_reply, on_text=on_text)
+    reply: Optional[str]
+    if has_photo:
+        reply = call_ollama(messages, model=model_for_reply, on_text=on_text)
+    else:
+        tool_message = call_ollama_with_phone_tools(messages, model=model_for_reply)
+        decision = model_tool_router.decision_from_message(tool_message)
+        if decision is not None and decision.name == "phone_status":
+            messages.append(tool_message)
+            messages.append({
+                "role": "tool",
+                "tool_name": decision.name,
+                "content": json.dumps(phone_context or {}, ensure_ascii=False),
+            })
+            reply = call_ollama(messages, model=model_for_reply, on_text=on_text)
+        elif decision is not None:
+            action = model_tool_router.android_action(decision)
+            if action is not None:
+                return model_tool_router.action_acknowledgement(decision), action, None, None, []
+            reply = None
+        elif tool_message is not None:
+            reply = str(tool_message.get("content", "")).strip() or None
+            if reply is not None and on_text is not None:
+                on_text(reply)
+        else:
+            reply = call_ollama(messages, model=model_for_reply, on_text=on_text)
     if reply is None:
         reply = fallback_reply(user_text, address, stored, name_set, action_note)
     return clean_reply(reply), None, None, None, web_sources

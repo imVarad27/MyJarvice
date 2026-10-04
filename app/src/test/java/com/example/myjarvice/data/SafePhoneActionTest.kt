@@ -4,26 +4,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SafePhoneActionTest {
-    @Test fun recognizesLowRiskActions() {
-        assertEquals(SafePhoneAction("DEVICE_STATUS", "", false), SafePhoneActionParser.parse("what is my battery?"))
-        assertEquals(SafePhoneAction("FLASHLIGHT", "on", false), SafePhoneActionParser.parse("turn the flashlight on"))
-        assertEquals(SafePhoneAction("OPEN_APP", "YouTube", false), SafePhoneActionParser.parse("open YouTube"))
-        assertEquals(SafePhoneAction("NAVIGATE", "Central Park", false), SafePhoneActionParser.parse("directions to Central Park"))
-        assertEquals(SafePhoneAction("SET_ALARM", "7 PM", false), SafePhoneActionParser.parse("set an alarm for 7 PM"))
-        assertEquals(SafePhoneAction("SET_TIMER", "10 minutes", false), SafePhoneActionParser.parse("start a timer for 10 minutes"))
-        assertEquals(SafePhoneAction("ADD_LOCAL_TASK", "buy milk", false), SafePhoneActionParser.parse("add a phone task to buy milk"))
-        assertEquals(SafePhoneAction("SHOW_LOCAL_TASKS", "", false), SafePhoneActionParser.parse("show my phone tasks"))
+    @Test fun validatesModelSelectedLowRiskActions() {
+        assertEquals(SafePhoneAction("DEVICE_STATUS", "", false), PhoneActionPolicy.validate("device_status", ""))
+        assertEquals(SafePhoneAction("FLASHLIGHT", "on", false), PhoneActionPolicy.validate("FLASHLIGHT", "on"))
+        assertEquals(SafePhoneAction("OPEN_APP", "YouTube", false), PhoneActionPolicy.validate("OPEN_APP", "YouTube"))
+        assertEquals(SafePhoneAction("NAVIGATE", "Central Park", false), PhoneActionPolicy.validate("NAVIGATE", "Central Park"))
     }
 
     @Test fun riskyActionsRequireConfirmation() {
-        assertTrue(SafePhoneActionParser.parse("call Mom")!!.requiresConfirmation)
-        assertEquals("WHATSAPP", SafePhoneActionParser.parse("send a WhatsApp message I am on my way")!!.type)
-        assertFalse(SafePhoneActionParser.parse("send an email to Mom")?.requiresConfirmation ?: false)
+        assertTrue(PhoneActionPolicy.validate("CALL", "Mom")!!.requiresConfirmation)
+        assertTrue(PhoneActionPolicy.validate("WHATSAPP", "I am on my way")!!.requiresConfirmation)
     }
 
-    @Test fun parserDoesNotTreatNormalQuestionsOrUnboundedInputAsActions() {
-        assertNull(SafePhoneActionParser.parse("Why is the sky blue?"))
-        assertNull(SafePhoneActionParser.parse("open " + "x".repeat(300)))
-        assertNull(SafePhoneActionParser.parse("turn the flashlight off and then call Mom"))
+    @Test fun policyRejectsUnknownMalformedAndUnboundedModelOutput() {
+        assertNull(PhoneActionPolicy.validate("SHELL", "anything"))
+        assertNull(PhoneActionPolicy.validate("DEVICE_STATUS", "unexpected"))
+        assertNull(PhoneActionPolicy.validate("OPEN_APP", "x".repeat(300)))
+        assertNull(PhoneActionPolicy.validate("FLASHLIGHT", "destroy"))
     }
 }

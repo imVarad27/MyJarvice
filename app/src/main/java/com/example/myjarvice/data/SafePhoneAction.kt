@@ -1,65 +1,38 @@
 package com.example.myjarvice.data
 
-/** A deliberately small allowlist for explicit phone commands. */
+/** A validated phone action selected by a model tool call, never by phrase matching. */
 data class SafePhoneAction(
     val type: String,
     val query: String,
     val requiresConfirmation: Boolean
 )
 
-object SafePhoneActionParser {
-    fun parse(input: String): SafePhoneAction? {
-        val text = input.trim().replace(Regex("\\s+"), " ")
-        if (text.isBlank() || text.length > 240) return null
-        val lower = text.lowercase()
+/** Safety and bounds stay deterministic even though intent selection is model-driven. */
+object PhoneActionPolicy {
+    private val noArgument = setOf("DEVICE_STATUS", "SHOW_LOCAL_TASKS")
+    private val boundedArguments = mapOf(
+        "FLASHLIGHT" to 6,
+        "OPEN_APP" to 80,
+        "NAVIGATE" to 160,
+        "SET_ALARM" to 80,
+        "SET_TIMER" to 80,
+        "ADD_LOCAL_TASK" to 180,
+        "CALL" to 120,
+        "WHATSAPP" to 500
+    )
+    private val confirmationRequired = setOf("CALL", "WHATSAPP")
 
-        if (lower.matches(Regex("^(what('?s| is) )?(my )?(phone )?(battery|battery level|phone status|wifi status|wi-fi status|connection status)\\??$")) ||
-            lower.matches(Regex("^(is my phone )?(charging|online|connected)\\??$"))) {
-            return SafePhoneAction("DEVICE_STATUS", "", false)
-        }
-
-        Regex("^(turn|switch|enable|disable|toggle) (the )?flashlight( (on|off))?\\??$").matchEntire(lower)?.let { match ->
-            val requested = match.groupValues[4].ifBlank {
-                when (match.groupValues[1]) { "disable" -> "off"; "enable" -> "on"; else -> "toggle" }
+    fun validate(type: String, query: String): SafePhoneAction? {
+        val normalizedType = type.trim().uppercase()
+        val normalizedQuery = query.trim()
+        if (normalizedType in noArgument) {
+            return normalizedQuery.takeIf { it.isEmpty() }?.let {
+                SafePhoneAction(normalizedType, "", normalizedType in confirmationRequired)
             }
-            return SafePhoneAction("FLASHLIGHT", requested, false)
         }
-
-        Regex("^(navigate to|directions to|go to|take me to) (.+)$", RegexOption.IGNORE_CASE).matchEntire(text)?.let { match ->
-            val destination = match.groupValues[2].trim().trimEnd('.', '?')
-            if (destination.isNotBlank() && destination.length <= 160) return SafePhoneAction("NAVIGATE", destination, false)
-        }
-
-        Regex("^(set|create) (an? )?alarm (for|at) (.+)$", RegexOption.IGNORE_CASE).matchEntire(text)?.let { match ->
-            return SafePhoneAction("SET_ALARM", match.groupValues[4].trim(), false)
-        }
-
-        Regex("^(set|start) (a )?timer for (.+)$", RegexOption.IGNORE_CASE).matchEntire(text)?.let { match ->
-            return SafePhoneAction("SET_TIMER", match.groupValues[3].trim(), false)
-        }
-
-        Regex("^(add|create) (a )?(phone |local )?task( to)? (.+)$", RegexOption.IGNORE_CASE).matchEntire(text)?.let { match ->
-            val title = match.groupValues[5].trim().trimEnd('.')
-            if (title.isNotBlank() && title.length <= 180) return SafePhoneAction("ADD_LOCAL_TASK", title, false)
-        }
-
-        if (lower.matches(Regex("^(show|list|what are) (my )?(phone |local )?tasks\\??$"))) {
-            return SafePhoneAction("SHOW_LOCAL_TASKS", "", false)
-        }
-
-        Regex("^(open|launch|start) (.+)$", RegexOption.IGNORE_CASE).matchEntire(text)?.let { match ->
-            val app = match.groupValues[2].trim().trimEnd('.', '?')
-            if (app.isNotBlank() && app.length <= 80) return SafePhoneAction("OPEN_APP", app, false)
-        }
-
-        Regex("^(call|dial) (.+)$", RegexOption.IGNORE_CASE).matchEntire(text)?.let { match ->
-            return SafePhoneAction("CALL", match.groupValues[2].trim(), true)
-        }
-
-        Regex("^(send|message) (a )?whatsapp( message)? (.+)$", RegexOption.IGNORE_CASE).matchEntire(text)?.let { match ->
-            return SafePhoneAction("WHATSAPP", match.groupValues[4].trim(), true)
-        }
-
-        return null
+        val maxLength = boundedArguments[normalizedType] ?: return null
+        if (normalizedQuery.isBlank() || normalizedQuery.length > maxLength) return null
+        if (normalizedType == "FLASHLIGHT" && normalizedQuery.lowercase() !in setOf("on", "off", "toggle")) return null
+        return SafePhoneAction(normalizedType, normalizedQuery, normalizedType in confirmationRequired)
     }
 }

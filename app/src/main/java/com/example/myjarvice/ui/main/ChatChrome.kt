@@ -4,6 +4,20 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.BookmarkBorder
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Computer
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.PhoneAndroid
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,7 +28,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.myjarvice.data.ConnectionStatus
 import com.example.myjarvice.data.SmartMode
-import com.example.myjarvice.ui.icons.*
 
 /** Shared, accessible touch target for the app's code-drawn icons. */
 @Composable
@@ -33,19 +46,32 @@ internal fun ChatTopBar(
     mode: SmartMode = SmartMode.AUTO
 ) {
     val colors = MaterialTheme.colorScheme
-    Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        ChatIconButton("Open conversation history", onOpenDrawer) { IconMenu(tint = colors.onSurfaceVariant) }
-        TextButton(onClick = onStatusClick, modifier = Modifier.weight(1f).semantics { contentDescription = "Choose response mode and connection" }) {
-            Column(Modifier.fillMaxWidth()) {
-                Text("Jarvis", style = MaterialTheme.typography.titleLarge, color = colors.onSurface)
-                Text(responseModeTopStatus(mode, connectionStatus), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Surface(color = colors.background.copy(alpha = 0.96f), tonalElevation = 1.dp) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            ChatIconButton("Open conversation history", onOpenDrawer) {
+                Icon(Icons.Rounded.Menu, contentDescription = null, tint = colors.onSurfaceVariant)
+            }
+            Surface(onClick = onStatusClick, color = androidx.compose.ui.graphics.Color.Transparent,
+                shape = RoundedCornerShape(16.dp), modifier = Modifier.weight(1f)
+                    .semantics { contentDescription = "Choose response mode and connection" }) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp)) {
+                    Text("Jarvis", style = MaterialTheme.typography.titleMedium, color = colors.onSurface)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(shape = RoundedCornerShape(50), color = if (connectionStatus == ConnectionStatus.CONNECTED)
+                            colors.tertiary else colors.outline, modifier = Modifier.size(7.dp)) {}
+                        Text(responseModeTopStatus(mode, connectionStatus), style = MaterialTheme.typography.labelSmall,
+                            color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = 6.dp))
+                    }
+                }
+            }
+            ChatIconButton("Open saved inbox", onOpenInbox) {
+                Icon(Icons.Rounded.BookmarkBorder, contentDescription = null, tint = colors.onSurfaceVariant)
+            }
+            ChatIconButton("New conversation", onNewChat) {
+                Icon(Icons.Rounded.Edit, contentDescription = null, tint = colors.onSurfaceVariant)
             }
         }
-        TextButton(onClick = onOpenInbox, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Open saved inbox" }) {
-            Text("Saved")
-        }
-        ChatIconButton("New conversation", onNewChat) { IconNewChat(tint = colors.onSurfaceVariant) }
     }
 }
 
@@ -75,34 +101,41 @@ internal fun ChatComposer(
     assistantPaused: Boolean = false
 ) {
     val colors = MaterialTheme.colorScheme
-    Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(28.dp), color = colors.surfaceContainer,
-        border = androidx.compose.foundation.BorderStroke(1.dp, colors.outlineVariant), shadowElevation = 4.dp) {
-        Column(Modifier.padding(8.dp)) {
-            OutlinedTextField(value = textInput, onValueChange = onTextChange,
+    Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(30.dp), color = colors.surfaceContainerLow,
+        border = androidx.compose.foundation.BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.7f)), shadowElevation = 8.dp) {
+        Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+            TextField(value = textInput, onValueChange = onTextChange,
                 placeholder = { Text(if (canSendAttachment) "Ask about this attachment" else "Message Jarvis") },
                 modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Message input" },
                 maxLines = 4,
                 textStyle = MaterialTheme.typography.bodyLarge,
                 supportingText = if (textInput.length >= 3600) ({ Text("${textInput.length}/4,000 characters") }) else null,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
-                    unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent))
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                    unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                    disabledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                    focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                    unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                    disabledIndicatorColor = androidx.compose.ui.graphics.Color.Transparent))
             Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                ChatIconButton("Add attachment or tool", onToggleToolsMenu, !isThinking) { IconPlus(tint = colors.onSurfaceVariant) }
+                ChatIconButton("Add attachment or tool", onToggleToolsMenu, !isThinking) {
+                    Icon(Icons.Rounded.Add, contentDescription = null, tint = colors.onSurfaceVariant)
+                }
                 ComposerModelSelector(mode, onChooseModel, enabled = !isThinking, modifier = Modifier.weight(1f))
                 ChatIconButton(if (isListening) "Stop dictation" else "Dictate message", onQuickVoice, !isThinking && !assistantPaused) {
-                    IconMicrophone(tint = if (isListening) colors.primary else colors.onSurfaceVariant)
+                    Icon(Icons.Rounded.Mic, contentDescription = null,
+                        tint = if (isListening) colors.primary else colors.onSurfaceVariant)
                 }
                 if (textInput.isNotBlank() || canSendAttachment) {
                     FilledIconButton(onClick = onSend, enabled = !isThinking && !assistantPaused,
                         modifier = Modifier.size(48.dp).semantics { contentDescription = "Send message" }) {
-                        IconSend(tint = if (isThinking) colors.onSurfaceVariant else colors.onPrimary)
+                        Icon(Icons.Rounded.ArrowUpward, contentDescription = null)
                     }
                 } else {
                     FilledIconButton(onClick = onVoiceMode, enabled = !isThinking && !assistantPaused,
                         modifier = Modifier.size(48.dp).semantics { contentDescription = "Start voice conversation" }) {
-                        IconVoiceWaveform(tint = colors.onPrimary, size = 22.dp)
+                        Icon(Icons.Rounded.GraphicEq, contentDescription = null)
                     }
                 }
             }
@@ -179,8 +212,8 @@ private fun ShortcutBrowser(shortcuts: List<Shortcut>, pcConnected: Boolean, pau
 }
 
 @Composable
-internal fun ComposerModelSelector(mode: SmartMode, onClick: () -> Unit, enabled: Boolean = true,
-    modifier: Modifier = Modifier) {
+internal fun ComposerModelSelector(mode: SmartMode, onClick: () -> Unit, modifier: Modifier = Modifier,
+    enabled: Boolean = true) {
     val colors = MaterialTheme.colorScheme
     Surface(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(50),
         color = colors.surfaceContainerHighest,
@@ -189,16 +222,20 @@ internal fun ComposerModelSelector(mode: SmartMode, onClick: () -> Unit, enabled
             .semantics { contentDescription = "Choose response mode. Current: ${responseModeTitle(mode)}" }) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-            Surface(shape = RoundedCornerShape(50), color = when (mode) {
+            Icon(imageVector = when (mode) {
+                SmartMode.AUTO -> Icons.Rounded.AutoAwesome
+                SmartMode.FAST_ON_DEVICE -> Icons.Rounded.PhoneAndroid
+                SmartMode.STRONG_HOST -> Icons.Rounded.Computer
+            }, contentDescription = null, tint = when (mode) {
                 SmartMode.AUTO -> colors.primary
                 SmartMode.FAST_ON_DEVICE -> colors.tertiary
                 SmartMode.STRONG_HOST -> colors.secondary
-            }, modifier = Modifier.size(8.dp)) {}
+            }, modifier = Modifier.size(17.dp))
             Text(responseModeCompactLabel(mode), style = MaterialTheme.typography.labelLarge,
                 color = colors.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(start = 8.dp))
-            Text("⌄", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant,
-                modifier = Modifier.padding(start = 6.dp))
+            Icon(Icons.Rounded.ArrowDropDown, contentDescription = null, tint = colors.onSurfaceVariant,
+                modifier = Modifier.padding(start = 2.dp).size(18.dp))
         }
     }
 }
@@ -207,14 +244,20 @@ internal fun ComposerModelSelector(mode: SmartMode, onClick: () -> Unit, enabled
 private fun ToolRow(title: String, subtitle: String, onClick: () -> Unit, enabled: Boolean = true) {
     val colors = MaterialTheme.colorScheme
     Surface(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(16.dp),
-        color = colors.surfaceContainerLow,
+        color = colors.surfaceContainer,
         contentColor = if (enabled) colors.onSurface else colors.onSurface.copy(alpha = 0.38f),
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Column(Modifier.padding(vertical = 14.dp, horizontal = 16.dp)) {
+        Row(Modifier.padding(vertical = 14.dp, horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Search, contentDescription = null, tint = if (enabled) colors.primary else colors.outline,
+                modifier = Modifier.size(20.dp))
+            Column(Modifier.weight(1f).padding(start = 14.dp)) {
             Text(title, style = MaterialTheme.typography.titleSmall)
             Text(subtitle, style = MaterialTheme.typography.bodyMedium,
                 color = if (enabled) colors.onSurfaceVariant else colors.onSurface.copy(alpha = 0.38f),
                 modifier = Modifier.padding(top = 4.dp))
+            }
+            Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = colors.onSurfaceVariant,
+                modifier = Modifier.size(18.dp))
         }
     }
 }

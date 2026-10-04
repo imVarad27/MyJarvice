@@ -45,6 +45,17 @@ class RuntimeTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "no model"):
                 runtime.generate([], "test", "http://localhost/chat", 10, lambda _: None)
 
+    def test_native_tool_message_is_preserved(self):
+        message = {"role": "assistant", "content": "", "tool_calls": [
+            {"function": {"name": "phone_status", "arguments": {}}}
+        ]}
+        response = io.BytesIO(json.dumps({"message": message}).encode())
+        with patch("urllib.request.urlopen", return_value=response):
+            self.assertEqual(
+                message,
+                runtime.generate_message([], "test", "http://localhost/chat", 10, tools=[{"type": "function"}]),
+            )
+
     def test_tasks_persist_and_complete_exact_id(self):
         with tempfile.TemporaryDirectory() as folder:
             db = str(Path(folder) / "test.db")

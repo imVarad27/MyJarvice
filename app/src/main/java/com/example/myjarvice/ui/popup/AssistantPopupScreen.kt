@@ -14,6 +14,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -30,7 +35,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myjarvice.theme.AssistantStyle
-import com.example.myjarvice.ui.icons.*
 import com.example.myjarvice.ui.main.ChatFeed
 import com.example.myjarvice.ui.main.ComposerModelSelector
 import com.example.myjarvice.ui.main.EmailApprovalDialog
@@ -97,7 +101,7 @@ fun AssistantPopupScreen(model: MainScreenViewModel, verifiedWake: Boolean,
                     }
                     TextButton(onClick = onExpand, enabled = !thinking) { Text("Expand") }
                     IconButton(onClick = onDismiss, modifier = Modifier.semantics { contentDescription = "Close Jarvis" }) {
-                        Text("×", style = MaterialTheme.typography.headlineSmall)
+                        Icon(Icons.Rounded.Close, contentDescription = null)
                     }
                 }
                 if (messages.isNotEmpty()) {
@@ -124,7 +128,7 @@ fun AssistantPopupScreen(model: MainScreenViewModel, verifiedWake: Boolean,
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     IconButton(onClick = onExpand, enabled = !thinking,
                         modifier = Modifier.semantics { contentDescription = "Open attachments and tools in full chat" }) {
-                        IconPlus(tint = colors.onSurfaceVariant)
+                        Icon(Icons.Rounded.Add, contentDescription = null, tint = colors.onSurfaceVariant)
                     }
                     ComposerModelSelector(mode, { chooseModel = true; model.pauseVoiceForTyping() },
                         enabled = !thinking, modifier = Modifier.weight(1f))
@@ -140,8 +144,8 @@ fun AssistantPopupScreen(model: MainScreenViewModel, verifiedWake: Boolean,
                     }, enabled = !thinking, modifier = Modifier.size(48.dp).semantics {
                         contentDescription = if (text.isNotBlank()) "Send popup message" else if (listening) "Stop popup microphone" else "Start popup microphone"
                     }) {
-                        if (text.isNotBlank()) IconSend(tint = colors.onPrimary)
-                        else IconMicrophone(tint = colors.onPrimary)
+                        if (text.isNotBlank()) Icon(Icons.Rounded.ArrowUpward, contentDescription = null)
+                        else Icon(Icons.Rounded.Mic, contentDescription = null)
                     }
                 }
                 Text("${modePresentation.title} · ${modePresentation.status}",

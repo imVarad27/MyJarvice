@@ -13,6 +13,13 @@ import androidx.compose.ui.unit.sp
  * (e.g. Inter / Google Sans) later without touching call sites.
  */
 val Typography = Typography(
+    displayLarge = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Medium,
+        fontSize = 48.sp,
+        lineHeight = 54.sp,
+        letterSpacing = (-1).sp
+    ),
     displaySmall = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Medium,
@@ -22,7 +29,7 @@ val Typography = Typography(
     ),
     headlineLarge = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 28.sp,
         lineHeight = 34.sp,
         letterSpacing = 0.sp
@@ -46,6 +53,13 @@ val Typography = Typography(
         lineHeight = 24.sp,
         letterSpacing = 0.1.sp
     ),
+    titleSmall = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.1.sp
+    ),
     bodyLarge = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Normal,
@@ -60,6 +74,13 @@ val Typography = Typography(
         lineHeight = 20.sp,
         letterSpacing = 0.2.sp
     ),
+    bodySmall = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Normal,
+        fontSize = 12.sp,
+        lineHeight = 17.sp,
+        letterSpacing = 0.2.sp
+    ),
     labelLarge = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.SemiBold,
@@ -72,6 +93,6 @@ val Typography = Typography(
         fontWeight = FontWeight.Medium,
         fontSize = 12.sp,
         lineHeight = 16.sp,
-        letterSpacing = 0.1.sp
+        letterSpacing = 0.4.sp
     )
 )

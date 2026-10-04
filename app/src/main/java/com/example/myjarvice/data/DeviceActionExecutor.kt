@@ -21,7 +21,7 @@ import androidx.core.content.ContextCompat
  */
 class DeviceActionExecutor(private val context: Context) {
 
-    /** Executes only an action produced by SafePhoneActionParser. */
+    /** Executes only an action accepted by [PhoneActionPolicy]. */
     fun executeLocalSafe(action: SafePhoneAction): Result<String> = runCatching {
         when (action.type) {
             "DEVICE_STATUS" -> {

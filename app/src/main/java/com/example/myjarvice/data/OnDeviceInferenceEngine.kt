@@ -56,7 +56,7 @@ class OnDeviceInferenceEngine(private val context: Context) : AutoCloseable {
                 "The imported on-device model is missing. Import it again in Settings."
             }
 
-            // Deterministic calculator/clock requests do not need to load the model.
+            // The model chooses from a bounded tool registry; tool execution remains deterministic.
             val localEngine by lazy { loadEngine(effectiveModelPath) }
             val knowledge = LocalKnowledgeStore(context).search(LocalConversationContext.retrievalQuery(query, chatHistory))
             val recentHistory = LocalConversationContext.history(chatHistory)

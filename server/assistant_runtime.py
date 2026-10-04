@@ -69,6 +69,23 @@ def generate(messages, model, url, timeout, on_text=None):
         return text
 
 
+def generate_message(messages, model, url, timeout, tools=None):
+    """Return one complete Ollama message, including native tool calls."""
+    payload = model_payload(messages, model, stream=False)
+    if tools:
+        payload["tools"] = tools
+    req = urllib.request.Request(url, data=json.dumps(payload).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as response:
+        result = json.load(response)
+    if result.get("error"):
+        raise RuntimeError(result["error"])
+    message = result.get("message")
+    if not isinstance(message, dict):
+        raise RuntimeError("Ollama returned no message")
+    return message
+
+
 def needs_web(text):
     # General knowledge should not wait for a network lookup.
     return bool(re.search(r"\b(weather|forecast|news|headlines?|latest|current|today's|"
