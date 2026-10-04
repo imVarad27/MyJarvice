@@ -1,12 +1,12 @@
 # Faster replies and Hey Jarvis
 
-The PC route now streams text, disables hidden reasoning for short replies, and keeps the Ollama model loaded for 30 minutes after use. Ordinary general-knowledge questions skip web search; time-sensitive questions still search. Selected neural voices remain available when spoken replies are enabled; choose Android native speech to avoid network speech synthesis. A cold model start can still take longer. These changes do not make a small local model equivalent to a frontier model.
+The PC route disables hidden reasoning for short replies and keeps the Ollama model loaded for 30 minutes after use. Native tool decisions use complete model messages; ordinary/photo generation supports streaming. The model is instructed to search only for current information or when requested, but can still choose unnecessarily. Selected neural voices remain available when spoken replies are enabled; choose Android native speech to avoid network speech synthesis. A cold model start and multi-pass tools take longer. These changes do not make a small local model equivalent to a frontier model.
 
 Configure `JARVIS_MODEL`, `JARVIS_CONTEXT_SIZE`, `JARVIS_MAX_TOKENS`, and `JARVIS_KEEP_ALIVE` in `server/.env`. The defaults target the installed Gemma model and an 8 GB GPU. Use `ollama ps` during inference to check GPU placement. Run `python benchmark_response.py` from `server` to measure first text and completion without using personal data. Keep the PC awake and connected for the PC route.
 
 ## Hands-free setup
 
-Open Settings → Hands-free voice → Set up voice profile first, then enable Listen for Hey Jarvis. Grant microphone and notification access. The first setup downloads the official Vosk small English model (about 40 MB, Apache 2.0) from https://alphacephei.com/vosk/models/. Afterwards wake detection is offline. Watch for “Listening for Hey Jarvis”. Say exactly “Hey Jarvis”, pause for the popup and ready tone, then give the command. “Hi Jarvis”, “Okay Jarvis”, mentions inside sentences, and same-breath commands are rejected. Completed word recognition and an enrolled acoustic match are both required; partial transcripts cannot activate the popup.
+Open Settings → Hands-free voice → Set up voice profile first, then enable Listen for Hey Jarvis. Grant microphone and notification access. The first setup downloads the official Vosk small English model (about 40 MB, Apache 2.0) from https://alphacephei.com/vosk/models/. Afterwards wake detection is offline. Watch for “Listening for Hey Jarvis”. Say exactly “Hey Jarvis”, pause for the popup and ready tone, then give the command. “Hi Jarvis”, “Okay Jarvis”, mentions inside sentences, and same-breath commands are rejected. The listener uses a restricted wake grammar and may accept a stable exact partial phrase to reduce endpoint delays; an enrolled acoustic match is still required before opening the popup.
 
 The listener releases the microphone during command capture and pauses while Jarvis speaks. Wait for the ready tone before speaking; it now plays after Android reports the command microphone is ready. The voice screen shows partial transcription and recognition errors. Android is asked to allow three seconds of silence before ending a command, although recognition providers may apply their own timing.
 
@@ -35,7 +35,7 @@ If a manually opened voice session is not verified, Jarvis still answers ordinar
 - `complete task 1` completes that exact task.
 - `plan my day` shows saved open tasks and the existing reminders summary.
 
-Tasks survive server restarts. These commands do not create calendar events or send notifications by themselves; use the existing reminder commands for timed alerts. Phone-only mode does not share this PC task database.
+Tasks survive server restarts. These examples are not required command syntax: the model now selects typed tools from natural requests. Task creation does not create calendar events or alerts. PC reminder tools require an explicit future time and a running server for delivery. Phone-only mode has a separate task database. See [Model-selected tools](model-selected-tools.md).
 
 ## Checks
 

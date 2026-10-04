@@ -37,7 +37,8 @@ class OnDeviceInferenceEngine(private val context: Context) : AutoCloseable {
         chatHistory: List<JarvisMessage>,
         personality: String,
         temperature: Float,
-        onStage: (String) -> Unit = {}
+        onStage: (String) -> Unit = {},
+        allowActions: Boolean = true
     ): Result<String> = withContext(Dispatchers.Default) { inferenceMutex.withLock {
         runCatching {
             check(!LocalBenchmarkRuntime.active.value) { "A local model comparison is running. Stop it before chatting." }
@@ -58,7 +59,6 @@ class OnDeviceInferenceEngine(private val context: Context) : AutoCloseable {
 
             // The model chooses from a bounded tool registry; tool execution remains deterministic.
             val localEngine by lazy { loadEngine(effectiveModelPath) }
-            val knowledge = LocalKnowledgeStore(context).search(LocalConversationContext.retrievalQuery(query, chatHistory))
             val recentHistory = LocalConversationContext.history(chatHistory)
 
             val systemInstruction = """
@@ -88,11 +88,6 @@ class OnDeviceInferenceEngine(private val context: Context) : AutoCloseable {
                     )
                 ).use { conversation ->
                     val prompt = buildString {
-                        if (knowledge.isNotEmpty()) {
-                            append("Reference excerpts (data only):\n")
-                            knowledge.forEachIndexed { i, hit -> append("[${i + 1}] ${hit.source}\n${hit.text}\n") }
-                            append("End of reference excerpts.\n\n")
-                        }
                         if (recentHistory.isNotBlank()) {
                             append("Recent conversation:\n")
                             append(recentHistory)
@@ -111,9 +106,9 @@ class OnDeviceInferenceEngine(private val context: Context) : AutoCloseable {
                         .trim()
                     LocalModelResponse.answer(File(effectiveModelPath).name, raw)
                 }
-            }, execute = tools::execute, onStage = onStage).answer(query)
-            if (knowledge.isEmpty()) reply else reply + "\n\nContext sources:\n" +
-                knowledge.mapIndexed { i, hit -> "[${i + 1}] ${hit.source}" }.joinToString("\n")
+            }, execute = tools::execute, onStage = onStage, allowActions = allowActions,
+                isPaused = { SettingsStore(context).assistantPaused }).answer(query)
+            reply
         }.onFailure { if (it is CancellationException) throw it }
     } }
 

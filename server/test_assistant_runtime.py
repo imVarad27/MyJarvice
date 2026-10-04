@@ -9,26 +9,12 @@ import assistant_runtime as runtime
 
 
 class RuntimeTests(unittest.TestCase):
-    def test_sensitive_voice_actions_are_classified_without_blocking_questions(self):
-        self.assertTrue(runtime.sensitive_voice_action("call Mom"))
-        self.assertTrue(runtime.sensitive_voice_action("lock my PC"))
-        self.assertTrue(runtime.sensitive_voice_action("add a reminder for 7"))
-        self.assertTrue(runtime.sensitive_voice_action("remind me at 7"))
-        self.assertFalse(runtime.sensitive_voice_action("how do phone calls work?"))
-        self.assertFalse(runtime.sensitive_voice_action("why is the sky blue?"))
-
     def test_bounded_fast_payload(self):
         payload = runtime.model_payload([], "test", True)
         self.assertFalse(payload["think"])
         self.assertTrue(payload["stream"])
-        self.assertEqual(payload["options"]["num_ctx"], 4096)
+        self.assertEqual(payload["options"]["num_ctx"], 8192)
         self.assertEqual(payload["options"]["num_predict"], 512)
-
-    def test_only_time_sensitive_questions_search(self):
-        for text in ["What is gravity?", "Tell me about Python", "Who is Sherlock Holmes?"]:
-            self.assertFalse(runtime.needs_web(text), text)
-        for text in ["latest news", "weather in Pune", "search the web for Vosk"]:
-            self.assertTrue(runtime.needs_web(text), text)
 
     def test_stream_ignores_thinking_and_accumulates_text(self):
         chunks = [{"message": {"thinking": "private"}}, {"message": {"content": "Hello"}},
@@ -59,13 +45,15 @@ class RuntimeTests(unittest.TestCase):
     def test_tasks_persist_and_complete_exact_id(self):
         with tempfile.TemporaryDirectory() as folder:
             db = str(Path(folder) / "test.db")
-            self.assertIsNone(runtime.task_command("Can you discuss tasks?", db))
+            with self.assertRaises(ValueError):
+                runtime.task_tool("Can you discuss tasks?", {}, db)
             self.assertFalse(Path(db).exists())
-            self.assertIn("#1", runtime.task_command("add task buy groceries", db))
-            self.assertIn("buy groceries", runtime.task_command("plan my day", db))
-            self.assertIn("couldn't find", runtime.task_command("complete task 9", db))
-            self.assertIn("complete", runtime.task_command("complete task 1", db))
-            self.assertIn("no open tasks", runtime.task_command("show my tasks", db))
+            self.assertIn("#1", runtime.task_tool("add_task", {"title": "buy groceries"}, db))
+            self.assertIn("buy groceries", runtime.task_tool("list_tasks", {}, db))
+            with self.assertRaisesRegex(LookupError, "couldn't find"):
+                runtime.task_tool("complete_task", {"id": 9}, db)
+            self.assertIn("complete", runtime.task_tool("complete_task", {"id": 1}, db))
+            self.assertIn("no open PC tasks", runtime.task_tool("list_tasks", {}, db))
 
 
 if __name__ == "__main__":

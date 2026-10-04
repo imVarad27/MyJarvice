@@ -31,8 +31,10 @@ object PhoneActionPolicy {
             }
         }
         val maxLength = boundedArguments[normalizedType] ?: return null
-        if (normalizedQuery.isBlank() || normalizedQuery.length > maxLength) return null
+        if (normalizedQuery.isBlank() || normalizedQuery.length > maxLength || '\u0000' in normalizedQuery) return null
         if (normalizedType == "FLASHLIGHT" && normalizedQuery.lowercase() !in setOf("on", "off", "toggle")) return null
+        if (normalizedType == "SET_ALARM" && runCatching { ClockActionParameters.alarm(normalizedQuery) }.isFailure) return null
+        if (normalizedType == "SET_TIMER" && runCatching { ClockActionParameters.timerSeconds(normalizedQuery) }.isFailure) return null
         return SafePhoneAction(normalizedType, normalizedQuery, normalizedType in confirmationRequired)
     }
 }

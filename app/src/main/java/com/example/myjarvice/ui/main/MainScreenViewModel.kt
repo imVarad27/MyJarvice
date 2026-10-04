@@ -53,6 +53,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     private val historyStore = ChatHistoryStore(application.applicationContext)
     private val onDeviceEngine = OnDeviceInferenceEngine(application.applicationContext)
     private var localRequestActive = false
+    private var hostActionsAllowed = true
     private var listeningJob: Job? = null
     private val preparingMic = MutableStateFlow(false)
 
@@ -201,11 +202,15 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                             sender = "JARVIS (Safety)", text = "The proposed phone action was invalid, so nothing ran.",
                             type = "ERROR", timestamp = timestampNow()
                         ))
+                    } else if (!hostActionsAllowed) {
+                        wsClient.addLocalMessage(JarvisMessage(
+                            sender = "JARVIS (Voice protection)", text = "This voice session wasn't verified, so the proposed phone action was blocked.",
+                            type = "ERROR", timestamp = timestampNow()
+                        ))
                     } else if (validated.requiresConfirmation) {
                         _pendingAction.value = it.copy(type = validated.type, query = validated.query)
                     } else {
-                        actionExecutor.execute(it.copy(type = validated.type, query = validated.query))
-                        viewModelScope.launch { JarvisSoundFx.playSuccessChime() }
+                        reportPhoneResult(actionExecutor.executeLocalSafe(validated))
                     }
                 }
             }
@@ -370,14 +375,17 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             return
         }
         if (approved) {
-            if (action.id.startsWith("local:")) {
-                if (action.type == "CALL" || action.type == "WHATSAPP") {
-                    actionExecutor.execute(action)
-                } else actionExecutor.executeLocalSafe(SafePhoneAction(action.type, action.query, true))
-                    .onSuccess { result -> wsClient.addLocalMessage(JarvisMessage(sender = "JARVIS (Phone)", text = result, timestamp = timestampNow())) }
-                    .onFailure { error -> wsClient.addLocalMessage(JarvisMessage(sender = "JARVIS (Phone)", text = error.message ?: "Phone action failed.", type = "ERROR", timestamp = timestampNow())) }
-            } else actionExecutor.execute(action)
+            reportPhoneResult(actionExecutor.execute(action, approved = true))
+        }
+    }
+
+    private fun reportPhoneResult(result: Result<String>) {
+        result.onSuccess { text ->
+            wsClient.addLocalMessage(JarvisMessage(sender = "JARVIS (Phone)", text = text, timestamp = timestampNow()))
             viewModelScope.launch { JarvisSoundFx.playSuccessChime() }
+        }.onFailure { error ->
+            wsClient.addLocalMessage(JarvisMessage(sender = "JARVIS (Phone)",
+                text = error.message ?: "Phone action failed.", type = "ERROR", timestamp = timestampNow()))
         }
     }
 
@@ -433,22 +441,10 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         }
 
         val profileEnabled = settings.voiceMatchEnabled && settings.isVoiceProfileEnrolled
-        if (photo == null && VoiceActionPolicy.shouldBlock(
-                command = text,
-                voiceMode = fromVoice,
-                profileEnabled = profileEnabled,
-                ownerVerified = _voiceOwnerVerified.value
-            )
-        ) {
-            wsClient.addLocalMessage(JarvisMessage(sender = "USER", text = text, type = "QUERY", timestamp = timestampNow()))
-            wsClient.addLocalMessage(JarvisMessage(
-                sender = "JARVIS (Voice protection)",
-                text = "I didn't verify the enrolled voice for this session, so I won't perform that action. Type it in chat or start with your verified ‘Hey Jarvis’. Questions still work normally.",
-                type = "ERROR",
-                timestamp = timestampNow()
-            ))
-            return
-        }
+        val allowLocalActions = photo == null && !VoiceActionPolicy.shouldBlock(
+            changesState = true, voiceMode = fromVoice,
+            profileEnabled = profileEnabled, ownerVerified = _voiceOwnerVerified.value
+        )
 
         _isThinking.value = true
         val useOnDevice = when (settings.smartMode) {
@@ -459,6 +455,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             SmartMode.AUTO -> connectionStatus.value != ConnectionStatus.CONNECTED && hasOnDeviceModel()
         }
         if (!useOnDevice) {
+            hostActionsAllowed = allowLocalActions
             _responseRoute.value = if (photo == null) {
                 "Using your connected PC"
             } else {
@@ -518,7 +515,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                     chatHistory = chatHistory.value.dropLast(1),
                     personality = settings.aiPersonality,
                     temperature = settings.temperature,
-                    onStage = { _responseRoute.value = it }
+                    onStage = { _responseRoute.value = it },
+                    allowActions = allowLocalActions
                 )
             }
             _isThinking.value = false

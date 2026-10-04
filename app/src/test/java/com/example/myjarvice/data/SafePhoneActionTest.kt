@@ -21,5 +21,10 @@ class SafePhoneActionTest {
         assertNull(PhoneActionPolicy.validate("DEVICE_STATUS", "unexpected"))
         assertNull(PhoneActionPolicy.validate("OPEN_APP", "x".repeat(300)))
         assertNull(PhoneActionPolicy.validate("FLASHLIGHT", "destroy"))
+        assertNull(PhoneActionPolicy.validate("OPEN_APP", "You\u0000Tube"))
+        assertNull(PhoneActionPolicy.validate("SET_ALARM", "tomorrow"))
+        assertNull(PhoneActionPolicy.validate("SET_TIMER", "10"))
+        assertNotNull(PhoneActionPolicy.validate("SET_ALARM", "7:30 PM"))
+        assertNotNull(PhoneActionPolicy.validate("SET_TIMER", "10 minutes"))
     }
 }

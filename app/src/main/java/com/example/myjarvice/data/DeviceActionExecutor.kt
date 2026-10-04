@@ -71,17 +71,13 @@ class DeviceActionExecutor(private val context: Context) {
         "gallery" to "com.coloros.gallery3d"
     )
 
-    fun execute(action: JarvisAction) {
-        Log.i(TAG, "Executing ${action.type} -> '${action.query}'")
-
-        when (action.type.uppercase()) {
-            "CALL" -> placeCall(action.query)
-            "OPEN_APP" -> openApp(action.query)
-            "NAVIGATE" -> navigateTo(action.query)
-            "FLASHLIGHT" -> toggleFlashlight(action.query)
-            "SET_ALARM" -> setAlarm(action.query)
-            "WHATSAPP" -> sendWhatsAppMessage(action.query)
-            else -> Log.w(TAG, "Unknown action type: ${action.type}")
+    fun execute(action: JarvisAction, approved: Boolean = false): Result<String> = runCatching {
+        val validated = PhoneActionPolicy.validate(action.type, action.query) ?: error("Invalid phone action.")
+        check(!validated.requiresConfirmation || approved) { "This phone action needs your explicit approval." }
+        when (validated.type) {
+            "CALL" -> { placeCall(validated.query); "Requested the approved call flow." }
+            "WHATSAPP" -> { sendWhatsAppMessage(validated.query); "Opened the approved WhatsApp draft. Review it in WhatsApp before sending." }
+            else -> executeLocalSafe(validated).getOrThrow()
         }
     }
 
@@ -187,7 +183,7 @@ class DeviceActionExecutor(private val context: Context) {
             val cameraId = cameraManager?.cameraIdList?.firstOrNull()
             if (cameraId == null) {
                 toast("No camera flash available")
-                return
+                error("No camera flash available.")
             }
             val turnOn = command.lowercase().contains("on") || (!isTorchOn && !command.lowercase().contains("off"))
             cameraManager.setTorchMode(cameraId, turnOn)
@@ -196,20 +192,18 @@ class DeviceActionExecutor(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Error toggling flashlight: ${e.message}")
             toast("Flashlight control failed")
+            throw e
         }
     }
 
     // --- Alarm ------------------------------------------------------------
     private fun setAlarm(timeQuery: String) {
         try {
-            val hour = Regex("""(\d{1,2})""").find(timeQuery)?.groupValues?.get(1)?.toIntOrNull() ?: 7
-            val isPm = timeQuery.lowercase().contains("pm")
-            val finalHour = if (isPm && hour < 12) hour + 12 else if (!isPm && hour == 12) 0 else hour
-            val minute = Regex(""":(\d{2})""").find(timeQuery)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+            val alarm = ClockActionParameters.alarm(timeQuery)
 
             val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
-                putExtra(AlarmClock.EXTRA_HOUR, finalHour)
-                putExtra(AlarmClock.EXTRA_MINUTES, minute)
+                putExtra(AlarmClock.EXTRA_HOUR, alarm.hour)
+                putExtra(AlarmClock.EXTRA_MINUTES, alarm.minute)
                 putExtra(AlarmClock.EXTRA_MESSAGE, "JARVIS Alarm")
                 putExtra(AlarmClock.EXTRA_SKIP_UI, false)
             }
@@ -217,22 +211,15 @@ class DeviceActionExecutor(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Error setting alarm: ${e.message}")
             toast("Failed to set alarm")
+            throw e
         }
     }
 
     private fun setTimer(durationQuery: String) {
         try {
-            val amount = Regex("(\\d+(?:\\.\\d+)?)").find(durationQuery)?.groupValues?.get(1)?.toDoubleOrNull()
-                ?: error("Tell me the timer duration, for example ten minutes.")
-            val lower = durationQuery.lowercase()
-            val seconds = when {
-                "hour" in lower -> amount * 3600
-                "second" in lower -> amount
-                else -> amount * 60
-            }
-            require(seconds in 1.0..86_400.0) { "Use a timer between one second and 24 hours." }
+            val seconds = ClockActionParameters.timerSeconds(durationQuery)
             val intent = Intent(AlarmClock.ACTION_SET_TIMER).apply {
-                putExtra(AlarmClock.EXTRA_LENGTH, seconds.toInt())
+                putExtra(AlarmClock.EXTRA_LENGTH, seconds)
                 putExtra(AlarmClock.EXTRA_MESSAGE, "JARVIS Timer")
                 putExtra(AlarmClock.EXTRA_SKIP_UI, false)
             }
@@ -255,13 +242,14 @@ class DeviceActionExecutor(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Error opening WhatsApp: ${e.message}")
             toast("WhatsApp not available")
+            throw e
         }
     }
 
     // --- Open app ---------------------------------------------------------
     private fun openApp(rawQuery: String) {
         val q = rawQuery.trim().lowercase()
-        if (q.isBlank()) return
+        require(q.isNotBlank()) { "Supply an app name." }
         val pm = context.packageManager
 
         // 1) Specialized System Targets
@@ -303,6 +291,7 @@ class DeviceActionExecutor(private val context: Context) {
 
         Log.w(TAG, "No installed app matched '$q'")
         toast("Couldn't find an app called \"$rawQuery\"")
+        error("Couldn't find an installed app called $rawQuery.")
     }
 
     // --- Place call -------------------------------------------------------
@@ -316,7 +305,7 @@ class DeviceActionExecutor(private val context: Context) {
 
         if (number.isNullOrBlank()) {
             toast("No number found for \"$rawQuery\"")
-            return
+            error("No phone number found for $rawQuery.")
         }
 
         val canCallDirectly = ContextCompat.checkSelfPermission(
@@ -359,6 +348,7 @@ class DeviceActionExecutor(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to launch: ${e.message}", e)
             toast("Couldn't complete that action")
+            throw e
         }
     }
 

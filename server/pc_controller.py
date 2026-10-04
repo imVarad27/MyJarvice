@@ -259,7 +259,7 @@ def set_master_volume(level_percent: int) -> str:
         return f"Host PC volume set to {level_percent}%."
     except Exception as e:
         logger.warning(f"pycaw volume adjustment failed: {e}")
-        return f"Adjusted host PC volume to {level_percent}%."
+        raise RuntimeError("PC volume could not be changed") from e
 
 
 def toggle_mute() -> str:
@@ -354,17 +354,21 @@ APP_ALIASES = {
 def launch_pc_application(app_name: str) -> str:
     """Launches an application or protocol on the Windows PC host."""
     name_clean = app_name.lower().strip()
-    target_cmd = APP_ALIASES.get(name_clean, name_clean)
+    # App aliases are a capability allowlist, not a shell interpreter. Never
+    # fall back to a raw model-supplied command, path or URL.
+    if name_clean not in APP_ALIASES:
+        raise ValueError("This PC app is not allowlisted")
+    target_cmd = APP_ALIASES[name_clean]
 
     try:
         if target_cmd.endswith(":") or target_cmd.startswith("ms-") or target_cmd.startswith("microsoft."):
-            subprocess.Popen(f"start {target_cmd}", shell=True)
-            return f"Opening {app_name.capitalize()} on your PC, Sir."
+            os.startfile(target_cmd)
+            return f"Opening {app_name} on your PC."
         elif shutil.which(target_cmd):
-            subprocess.Popen([target_cmd], shell=True)
-            return f"Launching {app_name.capitalize()} on your PC, Sir."
+            subprocess.Popen([target_cmd], shell=False)
+            return f"Requested launch of {app_name} on your PC."
         else:
-            subprocess.Popen(f"start {target_cmd}", shell=True)
-            return f"Dispatched launch command for {app_name} on your PC."
+            os.startfile(target_cmd)
+            return f"Requested launch of {app_name} on your PC."
     except Exception as e:
-        return f"Could not launch {app_name} on host PC: {e}"
+        raise RuntimeError(f"Could not launch {app_name} on the PC") from e

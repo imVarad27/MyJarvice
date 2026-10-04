@@ -1,63 +1,45 @@
 # Local assistant
 
-Settings → Model & Intelligence → Local memory & documents contains the local library.
+Settings → AI & personal knowledge contains the phone's private memory, imported documents and model lab.
 
-- Save a fact (up to 300 characters). Only facts explicitly saved here or with `Remember: ...` become persistent memories.
-- Import a text-based PDF, UTF-8 TXT, or Markdown file. Limits: 20 documents, 5 MB per file, 50 PDF pages, 100,000 extracted characters per document. Scans need OCR; encrypted PDFs are not supported.
-- Review saved facts and document names; Delete requires confirmation. Deleting a library entry does not erase the original file or past chat messages.
+- Explicitly save a fact (up to 300 characters, maximum 50 facts), or ask the phone model to remember it.
+- Import a text-based PDF, UTF-8 TXT or Markdown file. Limits: 20 documents, 5 MB per file, 50 PDF pages and 100,000 extracted characters per document. Scans need OCR; encrypted PDFs are unsupported.
+- Deleting a library entry requires confirmation and does not erase the original file or past chats.
 
-Chat commands work without loading the model and never go to the host:
+## Model-selected tools
 
-```
-Remember: I prefer short answers.
-Show memories
-Calculate (18 + 7) * 4
-Search documents: physics examination
-```
+Phone mode and Auto's offline fallback use the existing LiteRT model in a bounded capability loop. There are no keyword/preflight command shortcuts: the model decides whether a tool is needed, then the app validates its name and arguments.
 
-## Safe phone actions
+Available tools: calculator; phone date/time; phone status; saved library/inbox search; list/save memory; list/add phone tasks; app launcher; navigation; flashlight; alarm and timer preparation. Calls, messages, payments, deletion, shell commands, arbitrary paths and web access are unavailable in the local loop. Normal conversation should use no tool.
 
-Explicit local commands can read phone status or start a low-risk Android flow without loading the language model: `phone status`, `what is my battery?`, `turn the flashlight on/off`, `open YouTube`, `directions to Central Park`, `set an alarm for 7 PM`, and `start a timer for 10 minutes`. The app uses an allowlist and bounded arguments; ordinary questions are not interpreted as actions. Android's alarm/timer UI remains visible for review. Calls and WhatsApp messages enter the existing confirmation dialog, and server-directed calls/messages use the same confirmation gate. No arbitrary package names, shell commands, file paths, or hidden background actions are accepted.
+Try natural requests, rather than a required command syntax:
 
-The calculator supports decimal numbers, unary signs, parentheses, and `+ - * /` with decimal64 precision. It rejects invalid expressions and division by zero; it never executes code.
+- “Could you check how much charge my phone has left?”
+- “Put buying groceries on my to-do list.”
+- “Find the physics timetable in my saved documents.”
+- “Work out 37 times 19 using the calculator.”
 
-Fast mode retrieves up to three matching passages or saved facts and supplies them to the on-device model. Retrieval uses length-normalized, rarity-weighted lexical matching, not semantic embeddings: specific keywords work best. Generic search words are ignored and exam/examination share a keyword. Common follow-ups such as “explain that” include the previous user topic in the retrieval query. The response includes a list of retrieved sources; that list is evidence supplied to the model, not proof that every generated claim is correct. Inspect the original text or use `Search documents:` for exact excerpts.
+The loop permits two tool calls and three model passes. Repeated or malformed requests stop safely. Tool failures/empty searches return an honest app-generated result without speculative model rewriting. Writes finish with the executor's result, so they cannot be repeated by another model pass. Tool observations are bounded to 1,800 characters; input to 6,000 characters; history to six short messages within a shared 1,800-character budget; each inference to 256 output tokens.
 
-Strong sends the current request to the configured PC/server. Auto uses the connected host, or the local model when available offline. Saved library entries are not added to server payloads. The chat screen labels the route. Local errors are not automatically forwarded to a server.
+Voice protection checks the selected capability, not words in the transcript. An unverified protected voice session can answer questions and use read-only tools, but cannot change memory/tasks or control the device. Photo/OCR requests are read-only. Pause is checked immediately before each tool. After reading saved content, later writes/device controls are blocked for that turn; a fresh direct request is needed. These guards reduce prompt-injection risk; they do not guarantee accurate model answers or secure speaker authentication.
 
-## On-device agent harness
+Search is length-normalized, rarity-weighted lexical retrieval, not semantic embeddings. Model-selected search retrieves matching excerpts and supplies source names. Sources show what was retrieved, not proof of every generated claim. Imported text, saved facts and observations are untrusted information, not instructions. Saved audio is not transcribed by inbox search, and images are searchable only through saved OCR.
 
-Phone mode and Auto's offline fallback now wrap the existing LiteRT model in a small, read-only tool loop. No Harness developer-platform dependency or extra model is installed.
+Phone mode uses the CPU backend for this device's driver compatibility. Native inference cannot be immediately interrupted; cancellation is checked between passes. A process-wide lock prevents overlapping native model loads. The model must load even for simple tool requests, and may ignore a tool or select it incorrectly. This implementation improves access to reliable capabilities; it does not retrain the model or make it equivalent to a frontier model.
 
-Empty searches and tool failures return direct app-generated messages. They are not sent back to the model for speculative rewriting.
+## PC versus phone data
 
-Clear arithmetic, date/time and saved-text search requests are routed deterministically before asking the model. Pure arithmetic and clock results are returned directly, with no model load or unreliable model rewrite. Saved-text results are supplied to the model for explanation. For other requests, the model can request one strict JSON tool call per turn: `calculate`, `search_library` (explicit memories/documents), `search_inbox` (saved text/OCR) or `clock` (phone date/time/timezone). The app validates the tool and arguments before running anything, then supplies the bounded result for a natural-language answer. The route label shows the current local stage, and replies list tools actually invoked and retrieved source names. Source lists are not a guarantee that generated claims are correct.
+Connected PC uses the configured Ollama host; Auto prefers a reachable host, otherwise the installed phone model. Errors are not silently forwarded between routes. Phone knowledge and task stores are separate from PC memory/tasks and are not uploaded automatically.
 
-Try Phone mode with:
+The PC tool loop supports model-selected PC controls, tasks, reminders, memory, web/document search and email drafts. See [Model-selected tools](model-selected-tools.md) for capability limits and approval rules.
 
-```
-Use your calculator to work out 37 * 19.
-Find the physics timetable in my saved documents and explain it briefly.
-Find the product label I saved in my inbox.
-Use the phone clock to tell me today's date.
-```
+## Validation and installation
 
-The maximum is two tool calls and three model passes, counting pre-routed searches against the tool budget; repeated calls stop the loop. Unknown/malformed tool requests cannot execute, and failures are supplied as failures rather than invented successful results. Ordinary answers need one model pass. Model-selected tool use adds latency, and a small model may still ignore the protocol or calculate incorrectly without a tool; explicit `Calculate` and `Search documents:` commands remain available without inference. Query length is capped at 6,000 characters; each observation at 1,800 characters; recent history at six messages of at most 420 characters within a shared 1,800-character budget; each inference at 256 output tokens. Existing lexical retrieval supplies up to three 700-character excerpts.
+Run JVM tests, build and lint with:
 
-Tools never send data to a PC or web service, read arbitrary paths, open URLs, execute code, place calls, send messages, create reminders, or alter memories. Inbox search does not listen to saved audio or understand an image beyond saved OCR text. Memory writes remain explicit existing commands, protected by the voice-action policy. The model still has no live web knowledge. Imported text and tool observations are marked as untrusted data; this reduces prompt-injection risk, not a guarantee against misleading model answers.
+`gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lintDebug`
 
-Local generation retains the CPU backend and synchronous LiteRT response API. Cancellation is checked between passes, but cannot immediately interrupt a blocking native inference. Requests and native model handoffs share a process-wide lock, avoiding concurrent chat/popup/benchmark models in memory. This improves practical usefulness; it does not retrain the phone model or turn it into a frontier model.
-
-Validation:
-
-```
-gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:compileDebugAndroidTestKotlin :app:lintDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
-
-Use manual tests on personal phones and `adb install -r` only, never uninstall/clear data or run Gradle connected instrumentation. Instrumentation must run on an emulator or a dedicated device with verified backups. The existing device smoke test needs `files/models/jarvis-on-device.litertlm`; its memory/PDF tests use an isolated library. Harness JVM tests inject fake inference/tools to check bounds, validation, observations and cancellation independently of acoustic or model quality.
-
-2026-09-17 verification: debug build, 36 JVM tests, compile-only instrumentation and lint passed (warnings remain, no errors). Updated the RMX2061 with `adb install -r`; no app data was cleared and the installed model was retained. Initial actual-model tests showed that Gemma ignored the calculator protocol (37 × 19 → 687) and gave a vague response to an empty search. Added deterministic arithmetic/date/search routing and direct empty/error responses in response to those failures. Phone retests returned `37 * 19 = 703` with Calculator provenance and an honest missing-library result with Memory & documents provenance. These verify the deterministic safeguards, not reliable general model-selected multi-step planning. Positive document summarization, inbox/clock UI tests and more complex tool selection still need broader real-model checks. Synthetic smoke-test chats remain in local history; private conversations were not exported or deleted.
+On a personal phone use manual checks and `adb install -r` only. Never uninstall, clear data or run connected Gradle instrumentation on a personal device. Instrumentation requires an emulator or dedicated test device with verified backups.
 
 ## Local model lab
 

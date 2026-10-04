@@ -16,11 +16,13 @@ private data class LocalToolSpec(
     val allowedValues: Set<String> = emptySet()
 )
 
-/** A bounded, read-only tool loop. Model output is data, never executable code. */
+/** A bounded capability loop. Model output is data, never executable code. */
 class LocalAgentHarness(
     private val infer: suspend (prompt: String, allowTools: Boolean) -> String,
     private val execute: suspend (LocalToolCall) -> LocalToolResult,
-    private val onStage: (String) -> Unit = {}
+    private val onStage: (String) -> Unit = {},
+    private val allowActions: Boolean = true,
+    private val isPaused: () -> Boolean = { false }
 ) {
     suspend fun answer(query: String): String {
         require(query.isNotBlank() && query.length <= 6000) { "Use a question of at most 6,000 characters." }
@@ -28,6 +30,7 @@ class LocalAgentHarness(
         val sources = linkedSetOf<String>()
         val used = linkedSetOf<String>()
         val seen = mutableSetOf<LocalToolCall>()
+        var readOnly = !allowActions
         repeat(3) { pass ->
             currentCoroutineContext().ensureActive()
             val allowTools = pass < 2 && seen.size < 2
@@ -51,6 +54,10 @@ class LocalAgentHarness(
             }
             if (!allowTools) return failure("The phone model reached its local tool limit. Try a more specific question.", used, sources)
             if (!seen.add(call)) return failure("The phone model repeated the same tool request. Try a more specific question.", used, sources)
+            if (isPaused()) return failure("Jarvis was paused. No further tools ran.", used, sources)
+            if (readOnly && isActionTool(call.name)) {
+                return failure("I can't change anything in this turn. Type a fresh request or use your verified Hey Jarvis. No action was taken.", used, sources)
+            }
             onStage("On this phone · ${label(call.name)}")
             val result = try { execute(call) }
             catch (error: CancellationException) { throw error }
@@ -59,6 +66,9 @@ class LocalAgentHarness(
             observations.add("${call.name}: ${result.text.take(1800)}")
             sources.addAll(result.sources.take(3).map { it.take(160) })
             used.add(label(call.name))
+            // Saved content cannot authorize a later write or device action.
+            if (call.name in setOf("search_library", "search_inbox", "list_memories", "list_tasks")) readOnly = true
+            if (isActionTool(call.name)) return decorate(result.text, used, sources)
         }
         return failure("Unable to complete the local request within the tool budget.", used, sources)
     }
@@ -72,21 +82,23 @@ class LocalAgentHarness(
     }
 
     companion object {
+        private val actionTools = setOf("remember", "add_task", "open_app", "navigate", "flashlight", "set_alarm", "set_timer")
+        fun isActionTool(name: String): Boolean = name in actionTools
         private val specs = linkedMapOf(
             "calculate" to LocalToolSpec("Evaluate arithmetic using digits, decimal points, parentheses and + - * /.", "expression", 200),
             "search_library" to LocalToolSpec("Search explicitly saved memories and imported documents.", "query", 200),
             "search_inbox" to LocalToolSpec("Search items saved in the Remember inbox.", "query", 200),
             "clock" to LocalToolSpec("Read the phone's current date, time and timezone."),
             "phone_status" to LocalToolSpec("Read battery, charging, network and time from this phone."),
-            "remember" to LocalToolSpec("Save a fact the user explicitly asked Jarvis to remember.", "fact", 500),
+            "remember" to LocalToolSpec("Save a fact the user explicitly asked Jarvis to remember.", "fact", 300),
             "list_memories" to LocalToolSpec("List facts explicitly saved in local memory."),
             "add_task" to LocalToolSpec("Add a task to the private task list on this phone.", "title", 180),
             "list_tasks" to LocalToolSpec("List open tasks stored on this phone."),
             "open_app" to LocalToolSpec("Open an installed phone app.", "app", 80),
             "navigate" to LocalToolSpec("Open phone navigation to a destination.", "destination", 160),
             "flashlight" to LocalToolSpec("Change the phone flashlight.", "state", 6, setOf("on", "off", "toggle")),
-            "set_alarm" to LocalToolSpec("Prepare an alarm in the phone clock app.", "when", 80),
-            "set_timer" to LocalToolSpec("Prepare a timer in the phone clock app.", "duration", 80)
+            "set_alarm" to LocalToolSpec("Prepare an alarm. Use HH:mm (24-hour) or h:mm AM/PM; ask if time is ambiguous.", "when", 80),
+            "set_timer" to LocalToolSpec("Prepare a timer. Use numeric duration and seconds, minutes or hours (e.g. 10 minutes).", "duration", 80)
         )
 
         val TOOL_INSTRUCTION: String = buildString {

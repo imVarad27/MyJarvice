@@ -1,26 +1,11 @@
-"""Bounded local inference and deterministic personal task commands."""
+"""Bounded Ollama inference and typed personal task storage."""
 import datetime
 import json
 import os
-import re
 import sqlite3
 import time
 import urllib.request
 from contextlib import closing
-
-
-def sensitive_voice_action(text):
-    """Actions that need a matched profile when voice protection is enabled."""
-    command = text.strip().lower()
-    patterns = (
-        r"^(call|dial)\b",
-        r"^(send|email|mail|message)\b",
-        r"^(remember|forget|delete|remove)\b",
-        r"^(remind me|schedule)\b",
-        r"^(add|create|complete|finish|cancel|delete|remove)\s+(a\s+|my\s+)?(task|reminder|event)\b",
-        r"\b(lock|shutdown|shut down|restart|delete|remove)\b.*\b(pc|computer|laptop|file|folder)\b",
-    )
-    return any(re.search(pattern, command) for pattern in patterns)
 
 
 def model_payload(messages, model, stream=False):
@@ -30,7 +15,7 @@ def model_payload(messages, model, stream=False):
         "think": False,
         "keep_alive": os.environ.get("JARVIS_KEEP_ALIVE", "30m"),
         "options": {
-            "num_ctx": int(os.environ.get("JARVIS_CONTEXT_SIZE", "4096")),
+            "num_ctx": int(os.environ.get("JARVIS_CONTEXT_SIZE", "8192")),
             "num_predict": int(os.environ.get("JARVIS_MAX_TOKENS", "512")),
             "temperature": 0.6,
         },
@@ -86,30 +71,27 @@ def generate_message(messages, model, url, timeout, tools=None):
     return message
 
 
-def needs_web(text):
-    # General knowledge should not wait for a network lookup.
-    return bool(re.search(r"\b(weather|forecast|news|headlines?|latest|current|today's|"
-                          r"stock price|price of|search (?:the web|online)|look up)\b", text, re.I))
-
-
-def task_command(text, db_path):
-    """Explicit add/list/complete commands; unrelated conversation is untouched."""
-    clean = text.strip()
-    add = re.fullmatch(r"(?:add (?:a )?task|todo|to-do)\s*[:\-]?\s+(.{1,500})", clean, re.I)
-    complete = re.fullmatch(r"(?:complete|finish) task\s+#?(\d+)[.!]?", clean, re.I)
-    show = re.fullmatch(r"(?:show|list)(?: my)? tasks[.!]?|my tasks[.!]?|plan my day[.!]?", clean, re.I)
-    if not (add or complete or show):
-        return None
+def task_tool(name, arguments, db_path):
+    """Validated operations; callers supply tool names, never raw user phrases."""
+    import model_tool_router
+    decision = model_tool_router.decision_from_message({"tool_calls": [
+        {"function": {"name": name, "arguments": arguments}}
+    ]})
+    if decision is None or name not in {"add_task", "complete_task", "list_tasks"}:
+        raise ValueError("Invalid task operation")
     with closing(sqlite3.connect(db_path, timeout=10)) as db, db:
         db.execute("CREATE TABLE IF NOT EXISTS assistant_tasks (id INTEGER PRIMARY KEY, title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)")
-        if add:
-            title = add[1].strip()
+        if name == "add_task":
+            title = decision.argument
             cursor = db.execute("INSERT INTO assistant_tasks(title,created_at) VALUES (?,?)", (title, datetime.datetime.now().isoformat()))
-            return f"Added task #{cursor.lastrowid}: {title}. Say ‘complete task {cursor.lastrowid}’ when it's done."
-        if complete:
-            cursor = db.execute("UPDATE assistant_tasks SET done=1 WHERE id=? AND done=0", (int(complete[1]),))
-            return f"Task #{complete[1]} is complete." if cursor.rowcount else f"I couldn't find an open task #{complete[1]}."
+            return f"Added PC task #{cursor.lastrowid}: {title}."
+        if name == "complete_task":
+            task_id = decision.arguments["id"]
+            cursor = db.execute("UPDATE assistant_tasks SET done=1 WHERE id=? AND done=0", (task_id,))
+            if not cursor.rowcount:
+                raise LookupError(f"I couldn't find an open PC task #{task_id}. Nothing changed.")
+            return f"PC task #{task_id} is complete."
         rows = db.execute("SELECT id,title FROM assistant_tasks WHERE done=0 ORDER BY id LIMIT 30").fetchall()
         if not rows:
-            return "You have no open tasks. Say ‘add task finish my assignment’ to save one."
+            return "You have no open PC tasks."
         return "Your open tasks:\n" + "\n".join(f"#{key}: {title}" for key, title in rows)
