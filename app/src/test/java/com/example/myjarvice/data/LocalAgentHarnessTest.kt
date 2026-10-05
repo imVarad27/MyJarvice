@@ -6,6 +6,54 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LocalAgentHarnessTest {
+    @Test fun auditReceivesMetadataOnlyForCompletedAndBlockedTools() = runTest {
+        val events = mutableListOf<Pair<String, String>>()
+        val harness = LocalAgentHarness({ _, _ -> """{"tool":"remember","argument":"Sensitive fact"}""" },
+            { LocalToolResult("Saved Sensitive fact") }, audit = { name, status -> events += name to status })
+        harness.answer("Remember Sensitive fact")
+        assertEquals(listOf("remember" to "completed"), events)
+        assertFalse(events.toString().contains("Sensitive fact"))
+        events.clear()
+        val blocked = LocalAgentHarness({ _, _ -> """{"tool":"remember","argument":"Sensitive fact"}""" },
+            { error("Must not execute") }, allowActions = false, audit = { name, status -> events += name to status })
+        blocked.answer("Remember Sensitive fact")
+        assertEquals(listOf("remember" to "blocked"), events)
+    }
+
+    @Test fun auditDistinguishesMissingDataFromFailedExecution() = runTest {
+        val events = mutableListOf<Pair<String, String>>()
+        val missing = LocalAgentHarness({ _, _ -> """{"tool":"search_library","argument":"private query"}""" },
+            { LocalToolResult("No matches", hasData = false) }, audit = { name, status -> events += name to status })
+        missing.answer("Find private query")
+        assertEquals("no_data", events.single().second)
+        events.clear()
+        val failed = LocalAgentHarness({ _, _ -> """{"tool":"flashlight","argument":"on"}""" },
+            { error("Unavailable") }, audit = { name, status -> events += name to status })
+        failed.answer("Turn on the torch")
+        assertEquals("failed", events.single().second)
+    }
+
+    @Test fun loggingFailureDoesNotTurnCompletedWriteIntoFailure() = runTest {
+        val harness = LocalAgentHarness({ _, _ -> """{"tool":"add_task","argument":"Buy milk"}""" },
+            { LocalToolResult("Task saved") }, audit = { _, _ -> error("Disk unavailable") })
+        assertTrue(harness.answer("Add milk to my list").startsWith("Task saved"))
+    }
+
+    @Test fun appPreparationIsNotLoggedAsCompletedDeviceAction() = runTest {
+        var status = ""
+        val harness = LocalAgentHarness({ _, _ -> """{"tool":"set_timer","argument":"10 minutes"}""" },
+            { LocalToolResult("Clock opened for review") }, audit = { _, outcome -> status = outcome })
+        harness.answer("Prepare a ten minute timer")
+        assertEquals("prepared", status)
+    }
+
+    @Test fun invalidProtocolLogsGenericValidationNotUnknownPayload() = runTest {
+        val events = mutableListOf<Pair<String, String>>()
+        val harness = LocalAgentHarness({ _, _ -> """{"tool":"private secret text","argument":"another secret"}""" },
+            { error("Must not execute") }, audit = { name, status -> events += name to status })
+        harness.answer("Hi")
+        assertEquals(listOf("model.tool" to "rejected"), events)
+    }
     @Test fun unverifiedVoiceBlocksSelectedActionRegardlessOfWording() = runTest {
         val harness = LocalAgentHarness({ _, _ -> """{"tool":"open_app","argument":"YouTube"}""" },
             { error("Must not execute") }, allowActions = false)

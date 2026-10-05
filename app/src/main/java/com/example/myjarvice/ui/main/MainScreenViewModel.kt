@@ -21,6 +21,8 @@ import com.example.myjarvice.data.SmartMode
 import com.example.myjarvice.data.SafePhoneAction
 import com.example.myjarvice.data.PhoneActionPolicy
 import com.example.myjarvice.data.PhotoAttachment
+import com.example.myjarvice.data.LocalActionAuditStore
+import com.example.myjarvice.data.ActionTimeline
 import com.example.myjarvice.data.VoiceOption
 import com.example.myjarvice.wake.WakeEvents
 import com.example.myjarvice.wake.VoiceActionPolicy
@@ -50,6 +52,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val speechManager = SpeechManager(application.applicationContext)
     val neuralAudioPlayer = NeuralAudioPlayer(application.applicationContext)
     private val actionExecutor = DeviceActionExecutor(application.applicationContext)
+    private val activityStore = LocalActionAuditStore(application.applicationContext)
     private val historyStore = ChatHistoryStore(application.applicationContext)
     private val onDeviceEngine = OnDeviceInferenceEngine(application.applicationContext)
     private var localRequestActive = false
@@ -194,23 +197,29 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         // Execute phone actions (call / open app) the server directs.
         viewModelScope.launch {
             wsClient.latestAction.collect { action ->
-                if (settings.assistantPaused) return@collect
+                if (settings.assistantPaused) {
+                    if (action != null) activityStore.record("device.invalid", "paused")
+                    return@collect
+                }
                 action?.let {
                     val validated = PhoneActionPolicy.validate(it.type, it.query)
                     if (validated == null) {
+                        activityStore.record("device.invalid", "rejected")
                         wsClient.addLocalMessage(JarvisMessage(
                             sender = "JARVIS (Safety)", text = "The proposed phone action was invalid, so nothing ran.",
                             type = "ERROR", timestamp = timestampNow()
                         ))
                     } else if (!hostActionsAllowed) {
+                        activityStore.record("device.${validated.type.lowercase()}", "blocked")
                         wsClient.addLocalMessage(JarvisMessage(
                             sender = "JARVIS (Voice protection)", text = "This voice session wasn't verified, so the proposed phone action was blocked.",
                             type = "ERROR", timestamp = timestampNow()
                         ))
                     } else if (validated.requiresConfirmation) {
+                        activityStore.record("device.${validated.type.lowercase()}", "awaiting_approval")
                         _pendingAction.value = it.copy(type = validated.type, query = validated.query)
                     } else {
-                        reportPhoneResult(actionExecutor.executeLocalSafe(validated))
+                        reportPhoneResult(actionExecutor.executeLocalSafe(validated), validated.type)
                     }
                 }
             }
@@ -350,6 +359,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     /** Nothing leaves the host server until this is called with approved = true. */
     fun resolvePendingEmail(id: String, approved: Boolean) {
         if (settings.assistantPaused && approved) {
+            activityStore.record("email.approval", "blocked")
             wsClient.resolvePendingEmail(id, false)
             wsClient.addLocalMessage(JarvisMessage(
                 sender = "JARVIS (Safety)",
@@ -359,6 +369,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             ))
             return
         }
+        activityStore.record("email.approval", if (approved) "approved" else "discarded")
         wsClient.resolvePendingEmail(id, approved)
     }
 
@@ -366,6 +377,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         val action = _pendingAction.value ?: return
         _pendingAction.value = null
         if (settings.assistantPaused && approved) {
+            activityStore.record("device.${action.type.lowercase()}", "blocked")
             wsClient.addLocalMessage(JarvisMessage(
                 sender = "JARVIS (Safety)",
                 text = "Jarvis is paused, so I did not run that phone action.",
@@ -375,15 +387,19 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             return
         }
         if (approved) {
-            reportPhoneResult(actionExecutor.execute(action, approved = true))
+            reportPhoneResult(actionExecutor.execute(action, approved = true), action.type)
+        } else {
+            activityStore.record("device.${action.type.lowercase()}", "discarded")
         }
     }
 
-    private fun reportPhoneResult(result: Result<String>) {
+    private fun reportPhoneResult(result: Result<String>, type: String) {
         result.onSuccess { text ->
+            activityStore.record("device.${type.lowercase()}", ActionTimeline.phoneSuccessOutcome(type))
             wsClient.addLocalMessage(JarvisMessage(sender = "JARVIS (Phone)", text = text, timestamp = timestampNow()))
             viewModelScope.launch { JarvisSoundFx.playSuccessChime() }
         }.onFailure { error ->
+            activityStore.record("device.${type.lowercase()}", "failed")
             wsClient.addLocalMessage(JarvisMessage(sender = "JARVIS (Phone)",
                 text = error.message ?: "Phone action failed.", type = "ERROR", timestamp = timestampNow()))
         }

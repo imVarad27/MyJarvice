@@ -8,7 +8,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 data class LocalToolCall(val name: String, val argument: String)
-data class LocalToolResult(val text: String, val sources: List<String> = emptyList(), val hasData: Boolean = true)
+data class LocalToolResult(val text: String, val sources: List<String> = emptyList(), val hasData: Boolean = true, val succeeded: Boolean = true)
 private data class LocalToolSpec(
     val description: String,
     val argumentName: String? = null,
@@ -22,8 +22,10 @@ class LocalAgentHarness(
     private val execute: suspend (LocalToolCall) -> LocalToolResult,
     private val onStage: (String) -> Unit = {},
     private val allowActions: Boolean = true,
-    private val isPaused: () -> Boolean = { false }
+    private val isPaused: () -> Boolean = { false },
+    private val audit: (name: String, outcome: String) -> Unit = { _, _ -> }
 ) {
+    private fun record(name: String, outcome: String) { runCatching { audit(name, outcome) } }
     suspend fun answer(query: String): String {
         require(query.isNotBlank() && query.length <= 6000) { "Use a question of at most 6,000 characters." }
         val observations = mutableListOf<String>()
@@ -49,20 +51,39 @@ class LocalAgentHarness(
             val call = parseCall(reply)
             if (call == null) {
                 // Do not display malformed tool protocol as a successful answer.
-                if (looksLikeCall(reply)) return failure("The phone model produced an invalid tool request. Try rephrasing the request.", used, sources)
+                if (looksLikeCall(reply)) {
+                    record("model.tool", "rejected")
+                    return failure("The phone model produced an invalid tool request. Try rephrasing the request.", used, sources)
+                }
                 return decorate(reply.ifBlank { "The phone model returned no answer. Try a shorter question." }, used, sources)
             }
-            if (!allowTools) return failure("The phone model reached its local tool limit. Try a more specific question.", used, sources)
-            if (!seen.add(call)) return failure("The phone model repeated the same tool request. Try a more specific question.", used, sources)
-            if (isPaused()) return failure("Jarvis was paused. No further tools ran.", used, sources)
+            if (!allowTools) {
+                record(call.name, "rejected")
+                return failure("The phone model reached its local tool limit. Try a more specific question.", used, sources)
+            }
+            if (!seen.add(call)) {
+                record(call.name, "rejected")
+                return failure("The phone model repeated the same tool request. Try a more specific question.", used, sources)
+            }
+            if (isPaused()) {
+                record(call.name, "paused")
+                return failure("Jarvis was paused. No further tools ran.", used, sources)
+            }
             if (readOnly && isActionTool(call.name)) {
+                record(call.name, "blocked")
                 return failure("I can't change anything in this turn. Type a fresh request or use your verified Hey Jarvis. No action was taken.", used, sources)
             }
             onStage("On this phone · ${label(call.name)}")
             val result = try { execute(call) }
-            catch (error: CancellationException) { throw error }
-            catch (_: Exception) { LocalToolResult("The local tool couldn't complete this request. Try a more specific request.", hasData = false) }
-            if (!result.hasData) return decorate(result.text, used + label(call.name), sources + result.sources.take(3).map { it.take(160) })
+            catch (error: CancellationException) { record(call.name, "outcome_unknown"); throw error }
+            catch (_: Exception) { LocalToolResult("The local tool couldn't complete this request. Try a more specific request.", hasData = false, succeeded = false) }
+            record(call.name, when {
+                !result.succeeded -> "failed"
+                !result.hasData -> "no_data"
+                call.name in setOf("open_app", "navigate", "set_alarm", "set_timer") -> "prepared"
+                else -> "completed"
+            })
+            if (!result.hasData || !result.succeeded) return decorate(result.text, used + label(call.name), sources + result.sources.take(3).map { it.take(160) })
             observations.add("${call.name}: ${result.text.take(1800)}")
             sources.addAll(result.sources.take(3).map { it.take(160) })
             used.add(label(call.name))

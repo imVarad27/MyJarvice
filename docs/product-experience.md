@@ -23,6 +23,7 @@ Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer co
 - Appearance offers Pixel-inspired or original Jarvis accents. Verified “Hey Jarvis” opens a compact assistant popup on an unlocked phone, with typing, voice, route selection, dismiss and expand controls. Preview is explicitly manual and unverified; it does not bypass voice protection.
 - Data & storage can create and merge a local backup of conversations, explicit memories/documents, saved inbox media, and safe preferences. Credentials, voiceprints, wake state, and model files are excluded; restore is reviewed and non-destructive.
 - Today includes editable phone-native tasks with due dates, overdue state, direct completion and offline storage. Phone and PC tasks are labeled separately, and phone tasks are included in local backups.
+- Activity is a full-screen, searchable phone/PC timeline with readable outcomes and timestamps. Phone tool/action metadata works offline, stays outside backups and can be cleared separately after confirmation; prompts and tool arguments are never stored in the phone log.
 
 ## What a personal assistant needs next
 

@@ -105,6 +105,7 @@ import com.example.myjarvice.data.ChatSession
 import com.example.myjarvice.data.ConnectionStatus
 import com.example.myjarvice.data.ActionAuditEvent
 import com.example.myjarvice.data.ActionAuditManager
+import com.example.myjarvice.data.LocalActionAuditStore
 import com.example.myjarvice.data.FileTransferManager
 import com.example.myjarvice.data.ImageUnderstanding
 import com.example.myjarvice.data.PhotoAttachment
@@ -202,6 +203,18 @@ fun MainScreen(
     var actionHistory by remember { mutableStateOf<List<ActionAuditEvent>>(emptyList()) }
     var actionHistoryLoading by remember { mutableStateOf(false) }
     var actionHistoryError by remember { mutableStateOf<String?>(null) }
+    val phoneActivityStore = remember { LocalActionAuditStore(context.applicationContext) }
+    val phoneActivityFlow = remember(phoneActivityStore) { phoneActivityStore.observe() }
+    val phoneHistory by phoneActivityFlow.collectAsStateWithLifecycle(initialValue = Result.success(emptyList()))
+    var historyRefreshJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var historyRefreshGeneration by remember { mutableStateOf(0L) }
+    LaunchedEffect(serverIp, serverToken) {
+        historyRefreshGeneration++
+        historyRefreshJob?.cancel()
+        actionHistory = emptyList()
+        actionHistoryError = null
+        actionHistoryLoading = false
+    }
     var showRememberInbox by rememberSaveable { mutableStateOf(false) }
     var selectedInboxId by rememberSaveable { mutableStateOf<String?>(null) }
     var showDraftComposer by rememberSaveable { mutableStateOf(false) }
@@ -210,13 +223,25 @@ fun MainScreen(
     var pendingChatDeletion by remember { mutableStateOf<String?>(null) }
     var pendingVoiceMode by remember { mutableStateOf(false) }
     fun refreshActionHistory() {
-        actionHistoryLoading = true
+        val generation = ++historyRefreshGeneration
+        historyRefreshJob?.cancel()
         actionHistoryError = null
-        coroutineScope.launch {
-            ActionAuditManager.recent(serverIp, serverToken)
-                .onSuccess { actionHistory = it }
-                .onFailure { actionHistoryError = "Could not load activity: ${it.message ?: "check your PC connection"}" }
+        if (connectionStatus != ConnectionStatus.CONNECTED) {
+            actionHistoryError = "PC is offline. Phone activity is available below; previously loaded PC entries may be out of date."
             actionHistoryLoading = false
+            return
+        }
+        actionHistoryLoading = true
+        historyRefreshJob = coroutineScope.launch {
+            try {
+                val result = ActionAuditManager.recent(serverIp, serverToken)
+                if (generation == historyRefreshGeneration) {
+                    result.onSuccess { actionHistory = it }
+                        .onFailure { actionHistoryError = "Couldn't refresh PC activity. Phone history is still available. Check your PC connection." }
+                }
+            } finally {
+                if (generation == historyRefreshGeneration) actionHistoryLoading = false
+            }
         }
     }
     val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed ->
@@ -434,12 +459,32 @@ fun MainScreen(
     }
 
     if (showActionHistory) {
+        LaunchedEffect(connectionStatus) {
+            if (connectionStatus != ConnectionStatus.CONNECTED) {
+                historyRefreshGeneration++
+                historyRefreshJob?.cancel()
+                actionHistoryLoading = false
+                actionHistoryError = "PC is offline. Previously loaded PC entries may be out of date."
+            }
+        }
         ActionHistoryDialog(
-            events = actionHistory,
+            events = phoneHistory.getOrDefault(emptyList()) + actionHistory,
             loading = actionHistoryLoading,
             error = actionHistoryError,
-            onDismiss = { showActionHistory = false },
-            onRefresh = ::refreshActionHistory
+            phoneError = phoneHistory.exceptionOrNull()?.let { "Phone activity couldn't be read. Your existing log was kept; no records were overwritten." },
+            onDismiss = {
+                historyRefreshGeneration++
+                historyRefreshJob?.cancel()
+                actionHistoryLoading = false
+                showActionHistory = false
+            },
+            onRefresh = ::refreshActionHistory,
+            onClearPhone = {
+                coroutineScope.launch {
+                    withContext(Dispatchers.IO) { phoneActivityStore.clear() }
+                        .onFailure { Toast.makeText(context, "Couldn't clear the phone log. Try again.", Toast.LENGTH_SHORT).show() }
+                }
+            }
         )
     }
 

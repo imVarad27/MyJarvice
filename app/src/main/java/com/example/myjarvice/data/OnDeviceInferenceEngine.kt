@@ -107,7 +107,8 @@ class OnDeviceInferenceEngine(private val context: Context) : AutoCloseable {
                     LocalModelResponse.answer(File(effectiveModelPath).name, raw)
                 }
             }, execute = tools::execute, onStage = onStage, allowActions = allowActions,
-                isPaused = { SettingsStore(context).assistantPaused }).answer(query)
+                isPaused = { SettingsStore(context).assistantPaused },
+                audit = { name, outcome -> LocalActionAuditStore(context).record("tool.$name", outcome) }).answer(query)
             reply
         }.onFailure { if (it is CancellationException) throw it }
     } }
