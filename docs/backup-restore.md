@@ -9,6 +9,7 @@ Included:
 
 - conversation history and cited-source metadata;
 - explicit memories and imported document text;
+- per-item phone-model retrieval/exclusion settings (excluded text is still included);
 - saved inbox notes, links, photos, voice notes and future reminder times;
 - phone-native tasks, due dates and completion state;
 - appearance, speech, assistant personality and response-mode preferences;
@@ -29,6 +30,8 @@ Import applies bounded parsing: version validation, duplicate ZIP-entry rejectio
 safe entry names, per-media and expanded-archive limits, item-count and text-size
 limits, and regenerated app-private media paths. Backup content remains data and is
 never executed or automatically added to an AI prompt.
+
+New exports use version 2 to preserve knowledge exclusion. Version-1 archives remain readable; entries without an exclusion setting default to their previous enabled behavior. Earlier Jarvis versions reject version-2 archives rather than silently ignoring permissions. Existing entries and their current settings win during merge restore.
 
 Verification:
 

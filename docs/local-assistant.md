@@ -29,6 +29,8 @@ Phone mode uses the CPU backend for this device's driver compatibility. Native i
 
 ## PC versus phone data
 
+Settings → AI & personal knowledge → Manage library offers search, preview, memory editing and confirmed removal. Per-item exclusion removes that item from future library search and memory-list tool results, not past chats or in-progress observations. It remains stored and included in user-created backups. See [Personal memory controls](personal-memory.md).
+
 Connected PC uses the configured Ollama host; Auto prefers a reachable host, otherwise the installed phone model. Errors are not silently forwarded between routes. Phone knowledge and task stores are separate from PC memory/tasks and are not uploaded automatically.
 
 The PC tool loop supports model-selected PC controls, tasks, reminders, memory, web/document search and email drafts. See [Model-selected tools](model-selected-tools.md) for capability limits and approval rules.

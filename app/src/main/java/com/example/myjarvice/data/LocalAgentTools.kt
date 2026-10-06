@@ -37,9 +37,9 @@ class LocalAgentTools(private val context: Context) {
             LocalToolResult("Saved this fact in private local memory: ${call.argument}")
         }
         "list_memories" -> {
-            val memories = LocalKnowledgeStore(context).entries().filter { it.memory }
+            val memories = LocalKnowledgeStore(context).entries().filter { it.memory && it.enabled }
             LocalToolResult(
-                memories.joinToString("\n") { "• ${it.text}" }.ifBlank { "No facts are saved in local memory." },
+                memories.joinToString("\n") { "• ${it.text}" }.ifBlank { "No saved memories are enabled for phone-model use." },
                 hasData = memories.isNotEmpty()
             )
         }

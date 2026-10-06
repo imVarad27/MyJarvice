@@ -26,6 +26,8 @@ data class BackupPreview(
 }
 
 internal object JarvisBackupPolicy {
+    const val CURRENT_VERSION = 2
+    fun isSupportedVersion(version: Int): Boolean = version in 1..CURRENT_VERSION
     private val mediaEntry = Regex("media/[A-Za-z0-9._-]{1,220}")
     fun isSafeMediaEntry(name: String): Boolean = ".." !in name && mediaEntry.matches(name)
 }
@@ -61,7 +63,7 @@ class JarvisBackupManager(private val context: Context) {
         val createdAt = System.currentTimeMillis()
         val manifest = JSONObject()
             .put("format", FORMAT)
-            .put("version", VERSION)
+            .put("version", JarvisBackupPolicy.CURRENT_VERSION)
             .put("createdAt", createdAt)
             .put("conversations", encodeSessions(sessions))
             .put("knowledge", encodeKnowledge(entries))
@@ -141,7 +143,7 @@ class JarvisBackupManager(private val context: Context) {
             }
         }
         val root = manifest ?: error("This is not a Jarvis backup: manifest is missing.")
-        require(root.optString("format") == FORMAT && root.optInt("version") == VERSION) {
+        require(root.optString("format") == FORMAT && JarvisBackupPolicy.isSupportedVersion(root.optInt("version"))) {
             "This backup version is not supported."
         }
         root.getJSONArray("conversations")
@@ -198,15 +200,10 @@ class JarvisBackupManager(private val context: Context) {
         }
     }
 
-    private fun encodeKnowledge(entries: List<KnowledgeEntry>) = JSONArray().also { array -> entries.forEach { entry ->
-        array.put(JSONObject().put("id", entry.id).put("name", entry.name).put("text", entry.text).put("memory", entry.memory))
-    } }
+    private fun encodeKnowledge(entries: List<KnowledgeEntry>) = JSONArray(KnowledgeLibrary.encode(entries))
 
     private fun decodeKnowledge(array: JSONArray): List<KnowledgeEntry> {
-        require(array.length() <= 70) { "Backup contains too many memory entries." }
-        return List(array.length()) { index -> array.getJSONObject(index).let { obj ->
-            KnowledgeEntry(obj.getString("id").take(160), obj.getString("name").take(160), obj.getString("text"), obj.getBoolean("memory"))
-        } }
+        return KnowledgeLibrary.decode(array.toString())
     }
 
     private fun encodeSavedItems(items: List<RememberItem>, mediaNames: Map<String, String>) = JSONArray().also { array ->
@@ -329,7 +326,6 @@ class JarvisBackupManager(private val context: Context) {
 
     companion object {
         private const val FORMAT = "jarvis-local-backup"
-        private const val VERSION = 1
         private const val MANIFEST = "manifest.json"
         private const val MAX_MANIFEST_BYTES = 20 * 1024 * 1024
         private const val MAX_MEDIA_BYTES = 12L * 1024 * 1024

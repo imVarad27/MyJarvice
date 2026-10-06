@@ -7,12 +7,9 @@ import android.util.AtomicFile
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.text.PDFTextStripper
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 
-data class KnowledgeEntry(val id: String, val name: String, val text: String, val memory: Boolean)
 data class KnowledgeHit(val source: String, val text: String)
 
 /** Explicitly saved facts and imported text only. Never included in host payloads. */
@@ -20,28 +17,24 @@ class LocalKnowledgeStore(private val context: Context) {
     private val file get() = AtomicFile(File(context.filesDir, "local-knowledge.json"))
 
     fun entries(): List<KnowledgeEntry> = synchronized(lock) {
-        if (!file.baseFile.exists()) return@synchronized emptyList()
-        val array = JSONArray(String(file.readFully(), Charsets.UTF_8))
-        List(array.length()) { i -> array.getJSONObject(i).let {
-            KnowledgeEntry(it.getString("id"), it.getString("name"), it.getString("text"), it.getBoolean("memory"))
-        } }
+        val atomic = file
+        if (!atomic.baseFile.exists() && !File(atomic.baseFile.path + ".bak").exists()) return@synchronized emptyList()
+        atomic.openRead().use { KnowledgeLibrary.decode(KnowledgeLibrary.readBounded(it)) }
     }
 
     private fun save(entries: List<KnowledgeEntry>) {
-        val json = JSONArray()
-        entries.forEach { json.put(JSONObject().put("id", it.id).put("name", it.name)
-            .put("text", it.text).put("memory", it.memory)) }
+        val encoded = KnowledgeLibrary.encode(entries)
         val atomic = file
         val output = atomic.startWrite()
         try {
-            output.write(json.toString().toByteArray(Charsets.UTF_8))
+            output.write(encoded.toByteArray(Charsets.UTF_8))
             atomic.finishWrite(output)
         } catch (e: Exception) { atomic.failWrite(output); throw e }
     }
 
     fun remember(text: String): KnowledgeEntry = synchronized(lock) {
         val fact = text.trim()
-        require(fact.isNotEmpty() && fact.length <= 300) { "Use 1–300 characters per memory." }
+        require(fact.isNotEmpty() && fact.length <= 300 && '\u0000' !in fact) { "Use 1–300 characters per memory." }
         val all = entries()
         all.firstOrNull { it.memory && it.text == fact }?.let { return@synchronized it }
         require(all.count { it.memory } < 50) { "Memory is full. Delete a saved fact first (maximum 50)." }
@@ -49,6 +42,18 @@ class LocalKnowledgeStore(private val context: Context) {
     }
 
     fun delete(id: String) = synchronized(lock) { save(entries().filterNot { it.id == id }) }
+
+    fun editMemory(id: String, text: String, expectedText: String) = synchronized(lock) {
+        save(KnowledgeLibrary.editMemory(entries(), id, text, expectedText))
+    }
+
+    fun setEnabled(id: String, enabled: Boolean) = synchronized(lock) {
+        save(KnowledgeLibrary.setEnabled(entries(), id, enabled))
+    }
+
+    fun deleteReviewed(entry: KnowledgeEntry) = synchronized(lock) {
+        save(KnowledgeLibrary.deleteReviewed(entries(), entry))
+    }
 
     /** Merge explicit memories/documents from a backup while preserving current entries and limits. */
     fun mergeEntries(incoming: List<KnowledgeEntry>): Int = synchronized(lock) {
@@ -137,7 +142,7 @@ class LocalKnowledgeStore(private val context: Context) {
             val keywords = terms(query)
             if (keywords.isEmpty()) return emptyList()
             data class Passage(val hit: KnowledgeHit, val body: Set<String>, val title: Set<String>)
-            val passages = entries.flatMap { entry ->
+            val passages = entries.filter { it.enabled }.flatMap { entry ->
                 entry.text.windowed(700, 550, partialWindows = true).mapIndexed { index, chunk ->
                     Passage(KnowledgeHit(if (entry.memory) "Saved memory" else "${entry.name} · passage ${index + 1}", chunk), terms(chunk), if (entry.memory) emptySet() else terms(entry.name))
                 }

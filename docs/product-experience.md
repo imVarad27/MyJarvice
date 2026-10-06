@@ -24,6 +24,7 @@ Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer co
 - Data & storage can create and merge a local backup of conversations, explicit memories/documents, saved inbox media, and safe preferences. Credentials, voiceprints, wake state, and model files are excluded; restore is reviewed and non-destructive.
 - Today includes editable phone-native tasks with due dates, overdue state, direct completion and offline storage. Phone and PC tasks are labeled separately, and phone tasks are included in local backups.
 - Activity is a full-screen, searchable phone/PC timeline with readable outcomes and timestamps. Phone tool/action metadata works offline, stays outside backups and can be cleared separately after confirmation; prompts and tool arguments are never stored in the phone log.
+- Memory & documents now has a full-screen searchable library, saved-text previews, editable facts, confirmed removal and per-item exclusion from future phone-model tool retrieval. Excluded content stays local and remains in user-initiated backups; there is no automatic PC sharing.
 
 ## What a personal assistant needs next
 
@@ -31,7 +32,7 @@ Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer co
 2. **Today follow-through:** add optional task notifications and recurring tasks only after the basic local workflow is tested on-device. Keep phone and PC storage visibly distinct.
 3. **Dependable voice:** end-to-end acoustic tests, interruption handling, clear errors, and transparent Android background/lock-screen limits. UI tests alone do not establish recognition accuracy.
 4. **Permissioned integrations:** calendar and contacts, followed by messaging/email where useful. Show a preview and require confirmation for consequential actions. Do not claim integrations until connected and tested.
-5. **Personal memory controls:** inspect, edit, forget, and choose what can be shared with the PC. Avoid inferred sensitive memories and hidden personalization.
+5. **Personal memory follow-through:** validate inspect/edit/exclude/remove on-device, then consider explicitly reviewed PC sharing. Avoid inferred sensitive memories and hidden personalization.
 6. **Connection onboarding:** QR pairing, health diagnostics and a stable discoverable host identity; manual IP addresses belong in advanced settings.
 
 Later candidates: project spaces, an Android widget, and reusable routines. Image/video generation, social feeds and elaborate animations are not priorities for Jarvis's core personal-assistant use case.

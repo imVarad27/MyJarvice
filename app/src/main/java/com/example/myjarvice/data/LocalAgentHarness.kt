@@ -112,7 +112,7 @@ class LocalAgentHarness(
             "clock" to LocalToolSpec("Read the phone's current date, time and timezone."),
             "phone_status" to LocalToolSpec("Read battery, charging, network and time from this phone."),
             "remember" to LocalToolSpec("Save a fact the user explicitly asked Jarvis to remember.", "fact", 300),
-            "list_memories" to LocalToolSpec("List facts explicitly saved in local memory."),
+            "list_memories" to LocalToolSpec("List explicit local memories enabled for phone-model use."),
             "add_task" to LocalToolSpec("Add a task to the private task list on this phone.", "title", 180),
             "list_tasks" to LocalToolSpec("List open tasks stored on this phone."),
             "open_app" to LocalToolSpec("Open an installed phone app.", "app", 80),
