@@ -901,6 +901,8 @@ fun SettingsScreen(
                             unfocusedBorderColor = scheme.outline.copy(alpha = 0.4f)
                         )
                     )
+                    Spacer(Modifier.height(12.dp))
+                    PcDiagnosticsPanel(serverIp, serverToken)
                 }
 
                 Spacer(Modifier.height(24.dp))

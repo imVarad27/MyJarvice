@@ -205,7 +205,7 @@ class SettingsStore(context: Context) {
 
     companion object {
         const val DEFAULT_SERVER_IP = "127.0.0.1:8000"
-        const val DEFAULT_SERVER_TOKEN = "jarvis_local_token"
+        const val DEFAULT_SERVER_TOKEN = ""
 
         private const val PREFS_NAME = "jarvis_settings"
         private const val KEY_SERVER_IP = "server_ip"

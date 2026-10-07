@@ -1,22 +1,12 @@
 package com.example.myjarvice.data
 
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlinx.serialization.json.*
 
 /** Preserve secure schemes and never place a pairing token into a URL. */
 internal object ActivityApiPolicy {
     fun endpoint(address: String): HttpUrl {
-        val clean = address.trim()
-        require(clean.isNotEmpty()) { "Connect your PC to load its activity." }
-        val base = when {
-            clean.startsWith("wss://", true) -> "https://" + clean.substring(6)
-            clean.startsWith("ws://", true) -> "http://" + clean.substring(5)
-            clean.contains("://") -> clean
-            else -> "http://$clean"
-        }.toHttpUrlOrNull() ?: error("The PC address isn't valid.")
-        require(base.username.isEmpty() && base.password.isEmpty() && base.query == null && base.fragment == null) { "Use a PC address without credentials, query or fragment." }
-        return base.newBuilder().encodedPath("/api/audit/recent").query("limit=50").build()
+        return PcEndpoint.api(address, "/api/audit/recent").newBuilder().query("limit=50").build()
     }
 
     fun decode(text: String): List<ActionAuditEvent> {

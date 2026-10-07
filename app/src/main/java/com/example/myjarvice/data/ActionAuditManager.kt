@@ -22,7 +22,7 @@ object ActionAuditManager {
     suspend fun recent(serverIp: String, token: String): Result<List<ActionAuditEvent>> = withContext(Dispatchers.IO) {
         var connection: HttpURLConnection? = null
         try {
-            require(token.isNotBlank()) { "Pair your PC before loading its activity." }
+            require(PcEndpoint.validToken(token)) { "Pair your PC before loading its activity." }
             connection = (URL(ActivityApiPolicy.endpoint(serverIp).toString()).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = 6_000

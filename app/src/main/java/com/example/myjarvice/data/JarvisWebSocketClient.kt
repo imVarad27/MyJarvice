@@ -16,6 +16,7 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 enum class ConnectionStatus {
     DISCONNECTED,
@@ -69,9 +70,12 @@ class JarvisWebSocketClient {
         .readTimeout(0, TimeUnit.MILLISECONDS)   // 0 = no read timeout; pings police liveness
         .connectTimeout(5, TimeUnit.SECONDS)
         .pingInterval(20, TimeUnit.SECONDS)      // detects a silently dead link
+        .followRedirects(false)
+        .followSslRedirects(false)
         .build()
 
     private var webSocket: WebSocket? = null
+    private val connectionGeneration = AtomicLong(0)
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var reconnectJob: Job? = null
@@ -113,6 +117,7 @@ class JarvisWebSocketClient {
     }
 
     fun connect(rawIpOrUrl: String = "", pairingToken: String = "") {
+        val generation = connectionGeneration.incrementAndGet()
         keepConnected = true
         reconnectJob?.cancel()
         _connectionStatus.value = ConnectionStatus.CONNECTING
@@ -120,35 +125,39 @@ class JarvisWebSocketClient {
         // A configured host is authoritative. Rotating through old LAN addresses after
         // a transient failure can strand the client on somebody else's network range.
         val effectiveIp = rawIpOrUrl.trim().ifBlank { serverIp.ifBlank { DEFAULT_SERVER } }
-        val effectiveToken = if (pairingToken.isNotBlank()) pairingToken.trim() else if (serverToken.isNotBlank()) serverToken else "jarvis_local_token"
+        val effectiveToken = pairingToken.trim()
 
         this.serverIp = effectiveIp
         this.serverToken = effectiveToken
 
-        val wsUrl = when {
-            serverIp.startsWith("ws://") || serverIp.startsWith("wss://") -> serverIp
-            serverIp.contains(":") -> "ws://$serverIp/ws/jarvis"
-            else -> "ws://$serverIp:8000/ws/jarvis"
+        val wsUrl = runCatching { PcEndpoint.websocket(effectiveIp) }.getOrNull()
+        if (wsUrl == null || !PcEndpoint.validToken(effectiveToken)) {
+            keepConnected = false
+            webSocket?.cancel()
+            _connectionStatus.value = ConnectionStatus.ERROR
+            return
         }
 
         Log.d("JarvisWS", "Attempting connection to: $wsUrl")
         val request = Request.Builder().url(wsUrl)
-            .header("Authorization", "Bearer $serverToken")
+            .header("Authorization", "Bearer $effectiveToken")
             .build()
 
         webSocket?.cancel()
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                if (generation != connectionGeneration.get()) { webSocket.cancel(); return }
                 _connectionStatus.value = ConnectionStatus.CONNECTED
                 retryAttempt = 0
                 Log.d("JarvisWS", "WebSocket Connected Successfully to $wsUrl!")
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
+                if (generation != connectionGeneration.get()) return
                 try {
                     val obj = JSONObject(text)
                     val sender = obj.optString("sender", "JARVIS")
-                    Log.d("JarvisWS", "Message received: $text")
+                    Log.d("JarvisWS", "Message received")
 
                     val msgType = obj.optString("type", "RESPONSE")
                     if (msgType != "PARTIAL" && msgType != "REMINDER_ALERT") {
@@ -210,7 +219,7 @@ class JarvisWebSocketClient {
                             val aType = actionObj.optString("type", "")
                             val aQuery = actionObj.optString("query", "")
                             if (aType.isNotBlank() && aQuery.isNotBlank()) {
-                                Log.i("JarvisWS", "Action parsed from server: $aType -> $aQuery")
+                                Log.i("JarvisWS", "Phone directive received")
                                 _latestAction.value = JarvisAction(
                                     id = ts.ifBlank { System.currentTimeMillis().toString() },
                                     type = aType,
@@ -233,6 +242,7 @@ class JarvisWebSocketClient {
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                if (generation != connectionGeneration.get()) return
                 finishInterruptedReply()
                 _connectionStatus.value = ConnectionStatus.ERROR
                 Log.e("JarvisWS", "WebSocket Connection Failed to $wsUrl: ${t.message}")
@@ -241,6 +251,7 @@ class JarvisWebSocketClient {
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                if (generation != connectionGeneration.get()) return
                 finishInterruptedReply()
                 _connectionStatus.value = ConnectionStatus.DISCONNECTED
                 Log.d("JarvisWS", "WebSocket Closed: $reason ($code)")
@@ -363,6 +374,7 @@ class JarvisWebSocketClient {
     }
 
     fun disconnect() {
+        connectionGeneration.incrementAndGet()
         finishInterruptedReply()
         keepConnected = false
         reconnectJob?.cancel()

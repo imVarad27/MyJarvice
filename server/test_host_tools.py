@@ -1,5 +1,6 @@
 """Integration tests use temporary storage and stub OS/network operations."""
 import datetime
+import asyncio
 import importlib
 import os
 import sys
@@ -15,6 +16,31 @@ import model_tool_router as router
 
 
 class HostToolsTests(unittest.TestCase):
+    def test_health_api_authenticates_before_probe_and_never_returns_token(self):
+        async def request(token):
+            events = []
+            async def receive():
+                return {"type": "http.request", "body": b"", "more_body": False}
+            async def send(event):
+                events.append(event)
+            await self.host.app({"type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1",
+                "method": "GET", "scheme": "http", "path": "/api/health", "raw_path": b"/api/health",
+                "query_string": b"", "root_path": "", "headers": [(b"authorization", token.encode())],
+                "client": ("127.0.0.1", 1234), "server": ("127.0.0.1", 8000)}, receive, send)
+            return events
+        with patch.object(self.host, "JARVICE_API_TOKEN", "synthetic-secret"):
+            with patch.object(self.host, "probe_model", return_value={"runtime": "reachable", "model": "synthetic",
+                              "model_status": "installed", "loaded": False}) as probe:
+                rejected = asyncio.run(request("Bearer wrong"))
+                self.assertEqual(401, rejected[0]["status"])
+                probe.assert_not_called()
+                accepted = asyncio.run(request("Bearer synthetic-secret"))
+                self.assertEqual(200, accepted[0]["status"])
+                body = b"".join(event.get("body", b"") for event in accepted).decode()
+                self.assertNotIn("synthetic-secret", body)
+                self.assertIn('"service":"jarvis"', body)
+                probe.assert_called_once()
+
     @classmethod
     def setUpClass(cls):
         cls.folder = tempfile.TemporaryDirectory()

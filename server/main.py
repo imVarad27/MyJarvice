@@ -28,6 +28,7 @@ import model_tool_router
 import agent_loop
 from action_ledger import EmailApprovalLedger
 from action_audit import ActionAuditLog
+from connection_health import probe_model
 
 
 
@@ -640,6 +641,13 @@ def api_open_file(payload: Dict[str, Any] = Body(...), _auth: None = Depends(req
 def api_recent_audit(limit: int = Query(50, ge=1, le=100), _auth: None = Depends(require_pairing_token)):
     """Return privacy-minimised action history for a future Android activity view."""
     return {"events": action_audit.recent(limit)}
+
+
+@app.get("/api/health")
+def api_connection_health(_auth: None = Depends(require_pairing_token)):
+    """Authenticated, read-only readiness check; never generates or loads a model."""
+    return {"service": "jarvis", "health_version": 1, "server_version": app.version,
+            **probe_model(DEFAULT_MODEL, OLLAMA_URL)}
 
 
 CONNECTED_WEBSOCKETS: List[WebSocket] = []

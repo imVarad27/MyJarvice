@@ -36,9 +36,12 @@ data class BrowseResult(
 object FileTransferManager {
     private const val TAG = "JarvisFileTransfer"
 
-    private fun getBaseUrl(serverIp: String): String {
-        val clean = serverIp.trim().removePrefix("http://").removePrefix("https://").removePrefix("ws://").removePrefix("wss://")
-        return "http://${clean.substringBefore('/')}"
+    internal fun getBaseUrl(serverIp: String): String = PcEndpoint.base(serverIp)
+        .newBuilder().encodedPath("/").build().toString().removeSuffix("/")
+
+    private fun openConnection(url: URL, token: String): HttpURLConnection {
+        require(PcEndpoint.validToken(token)) { "Enter your PC pairing token." }
+        return (url.openConnection() as HttpURLConnection).apply { instanceFollowRedirects = false }
     }
 
     /**
@@ -68,7 +71,7 @@ object FileTransferManager {
             val twoHyphens = "--"
 
             val url = URL("${getBaseUrl(serverIp)}/api/files/upload")
-            val conn = url.openConnection() as HttpURLConnection
+            val conn = openConnection(url, token)
             conn.requestMethod = "POST"
             conn.doInput = true
             conn.doOutput = true
@@ -144,7 +147,7 @@ object FileTransferManager {
 
             val qs = if (queryParams.isNotEmpty()) "?" + queryParams.joinToString("&") else ""
             val url = URL("${getBaseUrl(serverIp)}/api/files/browse$qs")
-            val conn = url.openConnection() as HttpURLConnection
+            val conn = openConnection(url, token)
             conn.requestMethod = "GET"
             conn.connectTimeout = 6000
             conn.readTimeout = 10000
@@ -210,7 +213,7 @@ object FileTransferManager {
             val fileName = remotePath.substringAfterLast("/").substringAfterLast("\\").ifBlank { "downloaded_file.bin" }
             val qs = "?path=${URLEncoder.encode(remotePath, "UTF-8")}"
             val url = URL("${getBaseUrl(serverIp)}/api/files/download$qs")
-            val conn = url.openConnection() as HttpURLConnection
+            val conn = openConnection(url, token)
             conn.requestMethod = "GET"
             conn.connectTimeout = 8000
             conn.readTimeout = 60000
@@ -271,7 +274,7 @@ object FileTransferManager {
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val url = URL("${getBaseUrl(serverIp)}/api/files/open")
-            val conn = url.openConnection() as HttpURLConnection
+            val conn = openConnection(url, token)
             conn.requestMethod = "POST"
             conn.doOutput = true
             conn.connectTimeout = 6000

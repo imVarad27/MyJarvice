@@ -25,6 +25,7 @@ Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer co
 - Today includes editable phone-native tasks with due dates, overdue state, direct completion and offline storage. Phone and PC tasks are labeled separately, and phone tasks are included in local backups.
 - Activity is a full-screen, searchable phone/PC timeline with readable outcomes and timestamps. Phone tool/action metadata works offline, stays outside backups and can be cleared separately after confirmation; prompts and tool arguments are never stored in the phone log.
 - Memory & documents now has a full-screen searchable library, saved-text previews, editable facts, confirmed removal and per-item exclusion from future phone-model tool retrieval. Excluded content stays local and remains in user-initiated backups; there is no automatic PC sharing.
+- PC connection checks are available in Settings and the chat connection dialog. Read-only diagnostics separate host pairing, Ollama reachability, model installation and loaded state, with actionable guidance. No prompts are sent and models are not started by checking.
 
 ## What a personal assistant needs next
 
@@ -33,7 +34,7 @@ Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer co
 3. **Dependable voice:** end-to-end acoustic tests, interruption handling, clear errors, and transparent Android background/lock-screen limits. UI tests alone do not establish recognition accuracy.
 4. **Permissioned integrations:** calendar and contacts, followed by messaging/email where useful. Show a preview and require confirmation for consequential actions. Do not claim integrations until connected and tested.
 5. **Personal memory follow-through:** validate inspect/edit/exclude/remove on-device, then consider explicitly reviewed PC sharing. Avoid inferred sensitive memories and hidden personalization.
-6. **Connection onboarding:** QR pairing, health diagnostics and a stable discoverable host identity; manual IP addresses belong in advanced settings.
+6. **Connection onboarding follow-through:** validate the shipped health checks on-device, then add explicitly reviewed QR pairing and a stable discoverable host identity. Diagnostics do not fix DHCP changes or establish USB forwarding themselves.
 
 Later candidates: project spaces, an Android widget, and reusable routines. Image/video generation, social feeds and elaborate animations are not priorities for Jarvis's core personal-assistant use case.
 

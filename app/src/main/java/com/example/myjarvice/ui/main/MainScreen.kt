@@ -954,7 +954,8 @@ internal fun ServerConfigDialog(
 ) {
     val scheme = MaterialTheme.colorScheme
     var tempIp by remember { mutableStateOf(if (currentIp.isBlank()) "127.0.0.1:8000" else currentIp) }
-    var tempToken by remember { mutableStateOf(if (currentToken.isBlank()) "jarvis_local_token" else currentToken) }
+    var tempToken by remember { mutableStateOf(currentToken) }
+    val validAddress = remember(tempIp) { runCatching { com.example.myjarvice.data.PcEndpoint.base(tempIp) }.isSuccess }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -962,7 +963,7 @@ internal fun ServerConfigDialog(
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(
-                    "For Wi-Fi, enter this PC's reserved local address. USB debugging uses localhost.",
+                    "Use your PC's address and its JARVICE_API_TOKEN. USB localhost needs adb reverse on the PC; this button alone does not set it up.",
                     color = scheme.onSurfaceVariant,
                     fontSize = 12.sp
                 )
@@ -978,9 +979,10 @@ internal fun ServerConfigDialog(
                 Spacer(Modifier.height(14.dp))
                 OutlinedTextField(
                     value = tempIp,
-                    onValueChange = { tempIp = it },
+                    onValueChange = { tempIp = it.take(2048) },
                     label = { Text("Server Host / IP") },
-                    supportingText = { Text("Wi-Fi example: 192.168.0.121:8000") },
+                    supportingText = { Text(if (validAddress) "Wi-Fi example: 192.168.0.121:8000" else "Enter host:port or HTTP/HTTPS/WS/WSS, without URL credentials or query.") },
+                    isError = !validAddress,
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = scheme.primary,
@@ -991,7 +993,7 @@ internal fun ServerConfigDialog(
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = tempToken,
-                    onValueChange = { tempToken = it },
+                    onValueChange = { tempToken = it.take(512) },
                     label = { Text("Pairing Token") },
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true,
@@ -1001,15 +1003,16 @@ internal fun ServerConfigDialog(
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(Modifier.height(12.dp))
+                com.example.myjarvice.ui.settings.PcDiagnosticsPanel(tempIp, tempToken)
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
-                    val effectiveToken = if (tempToken.isBlank()) "jarvis_local_token" else tempToken.trim()
-                    onConnect(tempIp.trim(), effectiveToken)
+                    onConnect(tempIp.trim(), tempToken.trim())
                 },
-                enabled = tempIp.isNotBlank()
+                enabled = validAddress && com.example.myjarvice.data.PcEndpoint.validToken(tempToken)
             ) {
                 Text("Connect", color = scheme.primary, fontWeight = FontWeight.SemiBold)
             }
