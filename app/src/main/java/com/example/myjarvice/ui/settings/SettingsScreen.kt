@@ -92,8 +92,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.myjarvice.data.SettingsStore
 import com.example.myjarvice.data.SmartMode
 import com.example.myjarvice.data.SpeechManager
-import com.example.myjarvice.data.BackupPreview
-import com.example.myjarvice.data.JarvisBackupManager
 import com.example.myjarvice.theme.ThemeMode
 import com.example.myjarvice.theme.AssistantStyle
 import com.example.myjarvice.ui.icons.IconDocument
@@ -153,8 +151,6 @@ fun SettingsScreen(
     val availableVoices by speechManager.voices.collectAsState()
     DisposableEffect(speechManager) { onDispose { speechManager.shutdown() } }
     var importingModel by remember { mutableStateOf(false) }
-    var backupBusy by remember { mutableStateOf(false) }
-    var pendingRestore by remember { mutableStateOf<Pair<Uri, BackupPreview>?>(null) }
     var backupRevision by remember { mutableIntStateOf(0) }
 
     var selectedVoiceId by remember { mutableStateOf(settingsStore.ttsVoice) }
@@ -199,34 +195,6 @@ fun SettingsScreen(
     var showPersonalityDropdown by remember { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
-    val backupManager = remember { JarvisBackupManager(context) }
-    val backupExportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/zip")
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        coroutineScope.launch {
-            backupBusy = true
-            val result = withContext(Dispatchers.IO) { runCatching { backupManager.exportTo(uri) } }
-            result.onSuccess { preview ->
-                Toast.makeText(context, "Backup created · ${preview.totalItems} items", Toast.LENGTH_LONG).show()
-            }.onFailure { error ->
-                Toast.makeText(context, "Backup failed: ${error.message}", Toast.LENGTH_LONG).show()
-            }
-            backupBusy = false
-        }
-    }
-    val backupImportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        coroutineScope.launch {
-            backupBusy = true
-            val result = withContext(Dispatchers.IO) { runCatching { backupManager.inspect(uri) } }
-            result.onSuccess { pendingRestore = uri to it }
-                .onFailure { error -> Toast.makeText(context, "Cannot open backup: ${error.message}", Toast.LENGTH_LONG).show() }
-            backupBusy = false
-        }
-    }
     val modelImportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -912,46 +880,20 @@ fun SettingsScreen(
             SettingsSection("Data & storage", initiallyExpanded = false, query = sectionQuery) {
 
                     SettingsCard {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconDocument(tint = scheme.primary, size = 20.dp)
-                            Spacer(Modifier.width(10.dp))
-                            Column {
-                                Text("Backup & restore", style = MaterialTheme.typography.titleSmall)
-                                Text("Keep your personal Jarvis data under your control",
-                                    style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-                            }
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        Text("Back up conversations, memories, imported text, saved items and preferences to a file you choose.",
-                            style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
-                        Spacer(Modifier.height(8.dp))
-                        Text("Never included: PC address or token, voice profile, wake state, and AI model files.",
-                            style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-                        Text("Backup files are not encrypted. Keep them somewhere private.",
-                            style = MaterialTheme.typography.bodySmall, color = scheme.error,
-                            modifier = Modifier.padding(top = 6.dp))
-                        if (backupBusy) {
-                            Spacer(Modifier.height(14.dp))
-                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                            Text("Preparing your data…", style = MaterialTheme.typography.labelMedium,
-                                color = scheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
-                        }
-                        Spacer(Modifier.height(14.dp))
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Button(
-                                onClick = {
-                                    val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
-                                    backupExportLauncher.launch("jarvis-backup-$date.jarvisbackup")
-                                },
-                                enabled = !backupBusy,
-                                modifier = Modifier.weight(1f).heightIn(min = 48.dp)
-                            ) { Text("Create backup") }
-                            androidx.compose.material3.OutlinedButton(
-                                onClick = { backupImportLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) },
-                                enabled = !backupBusy,
-                                modifier = Modifier.weight(1f).heightIn(min = 48.dp)
-                            ) { Text("Restore") }
-                        }
+                        BackupPanel(onRestored = {
+                            selectedVoiceId = settingsStore.ttsVoice
+                            speechRate = settingsStore.ttsSpeechRate
+                            pitch = settingsStore.ttsPitch
+                            autoSpeak = settingsStore.autoSpeakReplies
+                            userName = settingsStore.userName
+                            aiPersonality = settingsStore.aiPersonality
+                            temperature = settingsStore.temperature
+                            smartMode = settingsStore.smartMode
+                            onThemeMode(settingsStore.themeMode)
+                            onDynamicColor(settingsStore.dynamicColor)
+                            onAssistantStyle(settingsStore.assistantStyle)
+                            backupRevision++
+                        })
                     }
                     Spacer(Modifier.height(16.dp))
 
@@ -983,55 +925,6 @@ fun SettingsScreen(
         Spacer(Modifier.height(8.dp))
     }
 
-    pendingRestore?.let { (uri, preview) ->
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { if (!backupBusy) pendingRestore = null },
-            title = { Text("Merge this backup?") },
-            text = {
-                Column {
-                    Text("Created ${java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(java.util.Date(preview.createdAt))}",
-                        style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
-                    Spacer(Modifier.height(8.dp))
-                    Text("Jarvis found ${preview.totalItems} items:")
-                    Text("${preview.conversations} conversations · ${preview.memories} memories · ${preview.documents} documents")
-                    Text("${preview.tasks} tasks · ${preview.savedItems} saved items · ${preview.mediaFiles} media files")
-                    Spacer(Modifier.height(12.dp))
-                    Text("Restore adds missing items and updates older matching conversations. It does not delete newer data.",
-                        color = scheme.onSurfaceVariant)
-                    Text("Connection credentials, voiceprints and model files are never restored.",
-                        color = scheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    coroutineScope.launch {
-                        backupBusy = true
-                        val result = withContext(Dispatchers.IO) { runCatching { backupManager.restoreFrom(uri) } }
-                        result.onSuccess {
-                            selectedVoiceId = settingsStore.ttsVoice
-                            speechRate = settingsStore.ttsSpeechRate
-                            pitch = settingsStore.ttsPitch
-                            autoSpeak = settingsStore.autoSpeakReplies
-                            userName = settingsStore.userName
-                            aiPersonality = settingsStore.aiPersonality
-                            temperature = settingsStore.temperature
-                            smartMode = settingsStore.smartMode
-                            onThemeMode(settingsStore.themeMode)
-                            onDynamicColor(settingsStore.dynamicColor)
-                            onAssistantStyle(settingsStore.assistantStyle)
-                            backupRevision++
-                            Toast.makeText(context, "Backup merged successfully", Toast.LENGTH_LONG).show()
-                        }.onFailure { error ->
-                            Toast.makeText(context, "Restore failed: ${error.message}", Toast.LENGTH_LONG).show()
-                        }
-                        backupBusy = false
-                        pendingRestore = null
-                    }
-                }, enabled = !backupBusy) { Text("Merge backup") }
-            },
-            dismissButton = { TextButton(onClick = { pendingRestore = null }, enabled = !backupBusy) { Text("Cancel") } }
-        )
-    }
 }
 
 @Composable

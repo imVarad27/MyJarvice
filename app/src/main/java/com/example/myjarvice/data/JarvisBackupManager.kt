@@ -7,6 +7,7 @@ import com.example.myjarvice.theme.ThemeMode
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
 import java.util.zip.ZipEntry
@@ -30,6 +31,7 @@ internal object JarvisBackupPolicy {
     fun isSupportedVersion(version: Int): Boolean = version in 1..CURRENT_VERSION
     private val mediaEntry = Regex("media/[A-Za-z0-9._-]{1,220}")
     fun isSafeMediaEntry(name: String): Boolean = ".." !in name && mediaEntry.matches(name)
+    fun isSafeItemId(id: String): Boolean = ".." !in id && Regex("[A-Za-z0-9._-]{1,160}").matches(id)
 }
 
 /**
@@ -44,7 +46,7 @@ class JarvisBackupManager(private val context: Context) {
     private val settings = SettingsStore(context)
     private val writing = WritingProfileStore(context)
 
-    fun exportTo(uri: Uri): BackupPreview {
+    fun exportTo(uri: Uri, passphrase: CharArray? = null): BackupPreview {
         val sessions = chats.loadAllSessions()
         val entries = knowledge.entries()
         val saved = inbox.items()
@@ -76,80 +78,153 @@ class JarvisBackupManager(private val context: Context) {
         val total = manifestBytes.size.toLong() + mediaEntries.values.sumOf { it.second.length() }
         require(total <= MAX_ARCHIVE_CONTENT_BYTES) { "Backup is larger than 32 MB. Remove some saved media and try again." }
 
-        val output = context.contentResolver.openOutputStream(uri, "wt") ?: error("Cannot create this backup file.")
-        ZipOutputStream(output.buffered()).use { zip ->
+        // Build and, when requested, authenticate/encrypt before opening the destination.
+        // No unencrypted temporary archive is written to disk.
+        val buffer = ByteArrayOutputStream()
+        var writtenContent = manifestBytes.size.toLong()
+        ZipOutputStream(buffer).use { zip ->
             zip.putNextEntry(ZipEntry(MANIFEST))
             zip.write(manifestBytes)
             zip.closeEntry()
             mediaEntries.values.forEach { (name, file) ->
                 zip.putNextEntry(ZipEntry(name))
-                file.inputStream().buffered().use { it.copyTo(zip) }
+                file.inputStream().buffered().use { input ->
+                    var copied = 0L
+                    val chunk = ByteArray(8192)
+                    while (true) {
+                        val read = input.read(chunk)
+                        if (read < 0) break
+                        copied += read
+                        writtenContent += read
+                        require(copied <= MAX_MEDIA_BYTES) { "A saved media item grew beyond 12 MB." }
+                        require(writtenContent <= MAX_ARCHIVE_CONTENT_BYTES) { "Backup grew beyond the 32 MB safety limit." }
+                        zip.write(chunk, 0, read)
+                        require(buffer.size() <= BackupProtection.MAX_ZIP_BYTES) { "Backup exceeds its file size limit." }
+                    }
+                }
                 zip.closeEntry()
             }
         }
+        val zipBytes = buffer.toByteArray()
+        try {
+            require(zipBytes.size <= BackupProtection.MAX_ZIP_BYTES) { "Backup exceeds its file size limit." }
+            val fileBytes = if (passphrase == null) zipBytes else BackupProtection.encrypt(zipBytes, passphrase)
+            try {
+                val output = context.contentResolver.openOutputStream(uri, "wt") ?: error("Cannot create this backup file.")
+                output.buffered().use { it.write(fileBytes) }
+            } finally { if (fileBytes !== zipBytes) fileBytes.fill(0) }
+        } finally { zipBytes.fill(0); manifestBytes.fill(0) }
         return preview(manifest, mediaEntries.size)
     }
 
-    fun inspect(uri: Uri): BackupPreview = readArchive(uri).let { archive ->
-        decodeSessions(archive.manifest.getJSONArray("conversations"))
-        decodeKnowledge(archive.manifest.getJSONArray("knowledge"))
-        decodeSavedItems(archive.manifest.getJSONArray("savedItems"), archive.media)
-        decodeTasks(archive.manifest.optJSONArray("tasks") ?: JSONArray())
-        preview(archive.manifest, archive.media.size)
+    fun requiresPassphrase(uri: Uri): Boolean {
+        val source = context.contentResolver.openInputStream(uri) ?: error("Cannot read this backup file.")
+        return source.use(BackupProtection::requiresPassphrase)
     }
 
-    fun restoreFrom(uri: Uri): BackupPreview {
-        val archive = readArchive(uri)
-        val root = archive.manifest
-        val restoredChats = decodeSessions(root.getJSONArray("conversations"))
-        val restoredKnowledge = decodeKnowledge(root.getJSONArray("knowledge"))
-        val restoredSaved = decodeSavedItems(root.getJSONArray("savedItems"), archive.media)
-        val restoredTasks = decodeTasks(root.optJSONArray("tasks") ?: JSONArray())
+    /** The reviewed snapshot, not a second read of a potentially changed document, is merged. */
+    class PreparedBackup internal constructor(
+        val preview: BackupPreview,
+        internal val chats: List<ChatSession>,
+        internal val knowledge: List<KnowledgeEntry>,
+        internal val saved: Pair<List<RememberItem>, Map<String, Pair<String, ByteArray>>>,
+        internal val tasks: List<LocalTask>,
+        internal val settings: JSONObject?,
+        internal val writing: WritingProfile?
+    ) {
+        private var available = true
+        private var restoring = false
+        @Synchronized internal fun claim() {
+            check(available) { "Review this backup again before restoring." }
+            available = false
+            restoring = true
+        }
+        @Synchronized fun discard() {
+            if (!restoring) { available = false; saved.second.values.forEach { it.second.fill(0) } }
+        }
+        @Synchronized internal fun finish() {
+            restoring = false
+            discard()
+        }
+    }
 
-        chats.mergeSessions(restoredChats)
-        knowledge.mergeEntries(restoredKnowledge)
-        inbox.mergeItems(restoredSaved.first, restoredSaved.second)
-        tasks.mergeTasks(restoredTasks)
-        applySettings(root.optJSONObject("settings"))
-        root.optJSONObject("writingProfile")?.let { writing.save(decodeWritingProfile(it)) }
-        return preview(root, archive.media.size)
+    fun prepareRestore(uri: Uri, passphrase: CharArray? = null): PreparedBackup {
+        val archive = readArchive(uri, passphrase)
+        val root = archive.manifest
+        return try {
+            PreparedBackup(preview(root, archive.media.size),
+                decodeSessions(root.getJSONArray("conversations")),
+                decodeKnowledge(root.getJSONArray("knowledge")),
+                decodeSavedItems(root.getJSONArray("savedItems"), archive.media),
+                decodeTasks(root.optJSONArray("tasks") ?: JSONArray()),
+                root.optJSONObject("settings"),
+                root.optJSONObject("writingProfile")?.let(::decodeWritingProfile))
+        } catch (error: Exception) {
+            archive.media.values.forEach { it.fill(0) }
+            throw error
+        }
+    }
+
+    fun inspect(uri: Uri): BackupPreview = prepareRestore(uri).let { prepared ->
+        try { prepared.preview } finally { prepared.discard() }
+    }
+
+    fun restoreFrom(uri: Uri): BackupPreview = restorePrepared(prepareRestore(uri))
+
+    fun restorePrepared(prepared: PreparedBackup): BackupPreview {
+        prepared.claim()
+        return try {
+            chats.mergeSessions(prepared.chats)
+            knowledge.mergeEntries(prepared.knowledge)
+            inbox.mergeItems(prepared.saved.first, prepared.saved.second)
+            tasks.mergeTasks(prepared.tasks)
+            applySettings(prepared.settings)
+            prepared.writing?.let(writing::save)
+            prepared.preview
+        } finally { prepared.finish() }
     }
 
     private data class Archive(val manifest: JSONObject, val media: Map<String, ByteArray>)
 
-    private fun readArchive(uri: Uri): Archive {
+    private fun readArchive(uri: Uri, passphrase: CharArray?): Archive {
         val source = context.contentResolver.openInputStream(uri) ?: error("Cannot read this backup file.")
+        val zipBytes = source.use { BackupProtection.open(it, passphrase) }
         var manifest: JSONObject? = null
         val files = linkedMapOf<String, ByteArray>()
         var total = 0L
         var count = 0
         val seenNames = mutableSetOf<String>()
-        ZipInputStream(source.buffered()).use { zip ->
-            while (true) {
-                val entry = zip.nextEntry ?: break
-                if (entry.isDirectory) continue
-                count++
-                require(count <= MAX_ZIP_ENTRIES) { "Backup contains too many files." }
-                require(seenNames.add(entry.name)) { "Backup contains a duplicate file entry." }
-                val limit = if (entry.name == MANIFEST) MAX_MANIFEST_BYTES else MAX_MEDIA_BYTES.toInt()
-                val bytes = zip.readBounded(limit)
-                total += bytes.size
-                require(total <= MAX_ARCHIVE_CONTENT_BYTES) { "Backup expands beyond the 32 MB safety limit." }
-                when {
-                    entry.name == MANIFEST -> manifest = JSONObject(bytes.toString(Charsets.UTF_8))
-                    JarvisBackupPolicy.isSafeMediaEntry(entry.name) -> files[entry.name] = bytes
+        try {
+            ZipInputStream(ByteArrayInputStream(zipBytes)).use { zip ->
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    count++
+                    require(count <= MAX_ZIP_ENTRIES) { "Backup contains too many files." }
+                    require(seenNames.add(entry.name)) { "Backup contains a duplicate file entry." }
+                    if (entry.isDirectory) continue
+                    val limit = if (entry.name == MANIFEST) MAX_MANIFEST_BYTES else MAX_MEDIA_BYTES.toInt()
+                    val bytes = zip.readBounded(limit)
+                    total += bytes.size
+                    require(total <= MAX_ARCHIVE_CONTENT_BYTES) { "Backup expands beyond the 32 MB safety limit." }
+                    when {
+                        entry.name == MANIFEST -> manifest = JSONObject(bytes.toString(Charsets.UTF_8))
+                        JarvisBackupPolicy.isSafeMediaEntry(entry.name) -> files[entry.name] = bytes
+                    }
+                    zip.closeEntry()
                 }
-                zip.closeEntry()
             }
-        }
-        val root = manifest ?: error("This is not a Jarvis backup: manifest is missing.")
-        require(root.optString("format") == FORMAT && JarvisBackupPolicy.isSupportedVersion(root.optInt("version"))) {
-            "This backup version is not supported."
-        }
-        root.getJSONArray("conversations")
-        root.getJSONArray("knowledge")
-        root.getJSONArray("savedItems")
-        return Archive(root, files)
+            val root = manifest ?: error("This is not a Jarvis backup: manifest is missing.")
+            require(root.optString("format") == FORMAT && JarvisBackupPolicy.isSupportedVersion(root.optInt("version"))) {
+                "This backup version is not supported."
+            }
+            root.getJSONArray("conversations")
+            root.getJSONArray("knowledge")
+            root.getJSONArray("savedItems")
+            return Archive(root, files)
+        } catch (error: Exception) {
+            files.values.forEach { it.fill(0) }
+            throw error
+        } finally { zipBytes.fill(0) }
     }
 
     private fun encodeSessions(sessions: List<ChatSession>) = JSONArray().also { array ->
@@ -218,7 +293,8 @@ class JarvisBackupManager(private val context: Context) {
         val media = linkedMapOf<String, Pair<String, ByteArray>>()
         val items = List(array.length()) { index ->
             val obj = array.getJSONObject(index)
-            val id = obj.getString("id").take(160)
+            val id = obj.getString("id")
+            require(JarvisBackupPolicy.isSafeItemId(id)) { "A saved item ID in this backup is invalid." }
             val mediaName = obj.optString("mediaEntry")
             if (mediaName.isNotBlank()) mediaFiles[mediaName]?.let { bytes -> media[id] = mediaName.substringAfterLast('.', "bin") to bytes }
             val kind = runCatching { RememberKind.valueOf(obj.getString("kind")) }.getOrDefault(RememberKind.TEXT)

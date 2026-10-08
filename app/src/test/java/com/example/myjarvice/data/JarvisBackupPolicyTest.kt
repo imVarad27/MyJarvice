@@ -25,4 +25,11 @@ class JarvisBackupPolicyTest {
         assertFalse(JarvisBackupPolicy.isSafeMediaEntry("media/../../settings.xml"))
         assertFalse(JarvisBackupPolicy.isSafeMediaEntry("manifest.json"))
     }
+
+    @Test fun savedMediaIdsCannotEscapePrivateStorage() {
+        assertTrue(JarvisBackupPolicy.isSafeItemId("abc-123_4"))
+        listOf("../settings", "a/b", "a\\b", "..", "", "a".repeat(161)).forEach {
+            assertFalse(JarvisBackupPolicy.isSafeItemId(it))
+        }
+    }
 }

@@ -21,7 +21,7 @@ Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer co
 - Replies have a wider reading column, selectable basic bold/code/headings/bullets, and no animated avatar. Streaming hides premature action buttons and redundant thinking indicators.
 - Settings start as compact categories with explanatory subtitles. Voice respects the app theme and uses readable status and transcription text.
 - Appearance offers Pixel-inspired or original Jarvis accents. Verified “Hey Jarvis” opens a compact assistant popup on an unlocked phone, with typing, voice, route selection, dismiss and expand controls. Preview is explicitly manual and unverified; it does not bypass voice protection.
-- Data & storage can create and merge a local backup of conversations, explicit memories/documents, saved inbox media, and safe preferences. Credentials, voiceprints, wake state, and model files are excluded; restore is reviewed and non-destructive.
+- Data & storage can create and merge a local backup of conversations, explicit memories/documents, tasks, saved inbox media, and safe preferences. Optional passphrase protection defaults on on Android 8+; older unprotected backups remain readable. Credentials, voiceprints, wake state, Activity and model files are excluded. Restore requires approval of a validated snapshot; the passphrase is never saved.
 - Today includes editable phone-native tasks with due dates, overdue state, direct completion and offline storage. Phone and PC tasks are labeled separately, and phone tasks are included in local backups.
 - Activity is a full-screen, searchable phone/PC timeline with readable outcomes and timestamps. Phone tool/action metadata works offline, stays outside backups and can be cleared separately after confirmation; prompts and tool arguments are never stored in the phone log.
 - Memory & documents now has a full-screen searchable library, saved-text previews, editable facts, confirmed removal and per-item exclusion from future phone-model tool retrieval. Excluded content stays local and remains in user-initiated backups; there is no automatic PC sharing.
@@ -29,7 +29,7 @@ Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer co
 
 ## What a personal assistant needs next
 
-1. **Data safety follow-through:** run a real create/restore drill on an unlocked test device, then consider optional passphrase encryption and backup reminders. Never run uninstalling instrumentation on a personal phone.
+1. **Data safety follow-through:** run a real protected and legacy create/restore drill on an unlocked test device and benchmark password derivation/maximum-size archives, then consider opt-in backup reminders. Passphrase protection is implemented, not yet device-validated. Never run uninstalling instrumentation on a personal phone.
 2. **Today follow-through:** add optional task notifications and recurring tasks only after the basic local workflow is tested on-device. Keep phone and PC storage visibly distinct.
 3. **Dependable voice:** end-to-end acoustic tests, interruption handling, clear errors, and transparent Android background/lock-screen limits. UI tests alone do not establish recognition accuracy.
 4. **Permissioned integrations:** calendar and contacts, followed by messaging/email where useful. Show a preview and require confirmation for consequential actions. Do not claim integrations until connected and tested.
