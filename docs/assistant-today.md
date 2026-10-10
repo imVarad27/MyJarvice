@@ -15,6 +15,10 @@ screen should open without waiting for a model or a connected PC.
 - Capture a note or link from Today. Saving is local and does not invoke a model.
 - Optionally connect the Android calendar with read-only permission. Today's event
   instances are queried on the phone; tapping an event opens the system calendar.
+- **Plan my week** opens the next seven local days, conflict markers and selected-
+  duration opening suggestions. It is read-only calendar arithmetic, not a model
+  prompt, event creator, notification scheduler or complete availability guarantee.
+  See [Private week planner](calendar-week-planner.md) for limits and verification.
 - The writing helper prepares a chat prompt with recipient, intent and tone.
   The user reviews the prompt before requesting generation. It never sends an
   email or a message itself.

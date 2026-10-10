@@ -90,6 +90,7 @@ internal fun AssistantHome(
     var revision by remember { mutableIntStateOf(0) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var showCapture by rememberSaveable { mutableStateOf(false) }
+    var showWeekPlanner by rememberSaveable { mutableStateOf(false) }
     var showTasks by rememberSaveable { mutableStateOf(false) }
     var showTaskEditor by rememberSaveable { mutableStateOf(false) }
     var editingTask by remember { mutableStateOf<LocalTask?>(null) }
@@ -138,6 +139,7 @@ internal fun AssistantHome(
         showCapture = false
         revision++
     })
+    if (showWeekPlanner) CalendarWeekDialog(onDismiss = { showWeekPlanner = false; revision++ })
     if (showTasks) TaskListSheet(
         agenda = TaskAgenda.from(tasks, now),
         now = now,
@@ -178,6 +180,7 @@ internal fun AssistantHome(
         taskAgenda = TaskAgenda.from(tasks, now),
         calendarGranted = calendarGranted, calendarEvents = calendarEvents,
         calendarLoading = calendarLoading, calendarError = calendarError,
+        onOpenWeekPlanner = { showWeekPlanner = true },
         onRequestCalendar = { calendarPermission.launch(Manifest.permission.READ_CALENDAR) },
         onOpenCalendarEvent = { event ->
             val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, event.eventId)
@@ -213,6 +216,7 @@ internal fun TodayHomeContent(
     calendarError: String? = null,
     onRequestCalendar: () -> Unit = {},
     onOpenCalendarEvent: (CalendarAgendaItem) -> Unit = {},
+    onOpenWeekPlanner: () -> Unit = {},
     sessions: List<ChatSession> = emptyList(),
     onOpenSaved: (String?) -> Unit = {},
     onOpenSession: (ChatSession) -> Unit = {},
@@ -356,6 +360,11 @@ internal fun TodayHomeContent(
                             if (calendarEvents.size > 5) Text("${calendarEvents.size - 5} more events in your calendar",
                                 style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                         }
+                    }
+                    OutlinedButton(onClick = onOpenWeekPlanner, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Icon(Icons.Rounded.CalendarMonth, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Plan my week")
                     }
                 }
             }

@@ -26,13 +26,14 @@ Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer co
 - Activity is a full-screen, searchable phone/PC timeline with readable outcomes and timestamps. Phone tool/action metadata works offline, stays outside backups and can be cleared separately after confirmation; prompts and tool arguments are never stored in the phone log.
 - Memory & documents now has a full-screen searchable library, saved-text previews, editable facts, confirmed removal and per-item exclusion from future phone-model tool retrieval. Excluded content stays local and remains in user-initiated backups; there is no automatic PC sharing.
 - PC connection checks are available in Settings and the chat connection dialog. Read-only diagnostics separate host pairing, Ollama reachability, model installation and loaded state, with actionable guidance. No prompts are sent and models are not started by checking.
+- Today → Your calendar → Plan my week adds a private seven-day agenda, busy-event conflict markers and 30/60/90-minute opening suggestions. It reads Android calendar instances with consent, stays outside model prompts/backups, and never reserves or edits events. Incomplete provider data disables suggestions; real provider/device behavior still needs verification.
 
 ## What a personal assistant needs next
 
 1. **Data safety follow-through:** run a real protected and legacy create/restore drill on an unlocked test device and benchmark password derivation/maximum-size archives, then consider opt-in backup reminders. Passphrase protection is implemented, not yet device-validated. Never run uninstalling instrumentation on a personal phone.
 2. **Today follow-through:** add optional task notifications and recurring tasks only after the basic local workflow is tested on-device. Keep phone and PC storage visibly distinct.
 3. **Dependable voice:** end-to-end acoustic tests, interruption handling, clear errors, and transparent Android background/lock-screen limits. UI tests alone do not establish recognition accuracy.
-4. **Permissioned integrations:** calendar and contacts, followed by messaging/email where useful. Show a preview and require confirmation for consequential actions. Do not claim integrations until connected and tested.
+4. **Permissioned integrations:** validate today's calendar and the read-only week planner against the actual provider; next consider contacts, followed by messaging/email where useful. Show a preview and require confirmation for consequential actions. Do not claim live integrations until connected and tested.
 5. **Personal memory follow-through:** validate inspect/edit/exclude/remove on-device, then consider explicitly reviewed PC sharing. Avoid inferred sensitive memories and hidden personalization.
 6. **Connection onboarding follow-through:** validate the shipped health checks on-device, then add explicitly reviewed QR pairing and a stable discoverable host identity. Diagnostics do not fix DHCP changes or establish USB forwarding themselves.
 
