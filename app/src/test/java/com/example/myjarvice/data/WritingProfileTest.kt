@@ -36,7 +36,7 @@ class WritingProfileTest {
     }
 
     @Test fun `largest allowed draft fits existing chat limit without truncation`() {
-        val prompt = WritingDraftPrompt.build("r".repeat(WritingDraftPrompt.MAX_RECIPIENT),
+        val prompt = WritingDraftPrompt.build("\"".repeat(WritingDraftPrompt.MAX_RECIPIENT),
             "m".repeat(WritingDraftPrompt.MAX_INTENT), DraftTone.PROFESSIONAL,
             profile.copy(signOff = "\"".repeat(WritingProfile.MAX_SIGN_OFF), avoidPhrases = "\"".repeat(WritingProfile.MAX_AVOID)))
         assertTrue("Prompt length ${prompt.length}", prompt.length <= 4000)

@@ -20,6 +20,8 @@ screen should open without waiting for a model or a connected PC.
   prompt, event creator, notification scheduler or complete availability guarantee.
   See [Private week planner](calendar-week-planner.md) for limits and verification.
 - The writing helper prepares a chat prompt with recipient, intent and tone.
+  An explicit contact picker can fill the recipient name without importing contacts;
+  the name can be edited or cleared and manual typing remains available.
   The user reviews the prompt before requesting generation. It never sends an
   email or a message itself.
 - The attachment/tools sheet supports search and a "Works without PC" filter.

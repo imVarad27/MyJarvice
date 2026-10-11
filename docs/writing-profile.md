@@ -16,6 +16,12 @@ storage, but selecting the profile includes them in that draft's prompt: sending
 it in PC mode sends that text to the paired host. Both settings and the draft
 helper explain this. Other chat requests do not automatically include this profile.
 
+The optional recipient can now be filled from an explicit Android contact picker.
+Only the chosen display name is queried; it remains editable and clearable. No
+phone number or email address is read, no contact is remembered, and cancellation
+preserves the current draft. See [Contact-aware drafts](contact-drafts.md) for
+permission boundaries, routing disclosure and device-test limitations.
+
 The pure WritingDraftPrompt builder checks input bounds against the existing
 4,000-character composer limit. Tests cover omission, per-draft overrides, literal
 string quoting, and maximum size. Quoting free-text preferences is a formatting

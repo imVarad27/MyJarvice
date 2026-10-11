@@ -38,9 +38,9 @@ class MainScreenTest {
 
     @Test fun draftHelperPreparesTextOnlyAfterTheUserProvidesAnIntent() {
         var prepared: String? = null
-        compose.setContent { MaterialTheme { WritingDraftSheetContent(WritingProfile(), {}, {}, { prepared = it }) } }
+        compose.setContent { MaterialTheme { WritingDraftSheetContent(WritingProfile(), {}, {}, { prepared = it }, "", {}, {}) } }
         compose.onNodeWithText("Prepare in chat").assertIsNotEnabled()
-        compose.onNodeWithText("What do you want to say?").performTextInput("Ask to reschedule our meeting")
+        compose.onNodeWithText("What do you want to say?").performScrollTo().performTextInput("Ask to reschedule our meeting")
         compose.onNodeWithText("Professional").performScrollTo().performClick()
         compose.onNodeWithText("Prepare in chat").performScrollTo().performClick()
         compose.runOnIdle {
@@ -53,9 +53,9 @@ class MainScreenTest {
     @Test fun writingProfileCanBeOmittedFromOneDraft() {
         var prepared: String? = null
         compose.setContent { MaterialTheme {
-            WritingDraftSheetContent(WritingProfile(enabled = true, signOff = "Synthetic signature"), {}, {}, { prepared = it })
+            WritingDraftSheetContent(WritingProfile(enabled = true, signOff = "Synthetic signature"), {}, {}, { prepared = it }, "", {}, {})
         } }
-        compose.onNodeWithText("What do you want to say?").performTextInput("Say hello")
+        compose.onNodeWithText("What do you want to say?").performScrollTo().performTextInput("Say hello")
         compose.onNodeWithContentDescription("Use my writing profile").performScrollTo().performClick()
         compose.onNodeWithText("Prepare in chat").performScrollTo().performClick()
         compose.runOnIdle {
@@ -68,7 +68,7 @@ class MainScreenTest {
     @Test fun toneFeedbackRequiresExplicitRememberTap() {
         var remembered: WritingProfile? = null
         compose.setContent { MaterialTheme {
-            WritingDraftSheetContent(WritingProfile(), { remembered = it }, {}, {})
+            WritingDraftSheetContent(WritingProfile(), { remembered = it }, {}, {}, "", {}, {})
         } }
         compose.onNodeWithText("Warm").performScrollTo().performClick()
         compose.runOnIdle { assertNull(remembered) }
