@@ -42,7 +42,7 @@ object ActionTimeline {
         "device.flashlight" to "Flashlight", "device.set_alarm" to "Prepare phone alarm",
         "device.set_timer" to "Prepare phone timer", "device.invalid" to "Phone action validation",
         "device.device_status" to "Phone status", "device.add_local_task" to "Add phone task",
-        "device.show_local_tasks" to "Read phone tasks"
+        "device.show_local_tasks" to "Read phone tasks", "reply.share" to "Share reply"
     )
     private val outcomes = setOf("completed", "prepared", "failed", "blocked", "rejected", "no_data",
         "awaiting_approval", "approved", "discarded", "paused", "cancelled", "sent", "started", "outcome_unknown")

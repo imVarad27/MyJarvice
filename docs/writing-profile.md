@@ -22,6 +22,10 @@ phone number or email address is read, no contact is remembered, and cancellatio
 preserves the current draft. See [Contact-aware drafts](contact-drafts.md) for
 permission boundaries, routing disclosure and device-test limitations.
 
+After generation, eligible completed replies offer [Review & share](reviewed-reply-sharing.md):
+edit a local copy, approve the exact text, then choose an Android share destination.
+It neither updates writing preferences from edits nor sends a message automatically.
+
 The pure WritingDraftPrompt builder checks input bounds against the existing
 4,000-character composer limit. Tests cover omission, per-draft overrides, literal
 string quoting, and maximum size. Quoting free-text preferences is a formatting

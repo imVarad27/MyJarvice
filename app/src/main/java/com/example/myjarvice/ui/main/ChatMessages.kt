@@ -15,6 +15,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.*
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.myjarvice.data.JarvisMessage
+import com.example.myjarvice.data.ReplyShareApproval
 import com.example.myjarvice.ui.JarvisArcReactor
 import com.example.myjarvice.ui.icons.*
 import kotlinx.coroutines.delay
@@ -45,6 +48,8 @@ internal fun ChatFeed(
     processingLabel: String = ""
 ) {
     val listState = rememberLazyListState()
+    var replyToReview by remember { mutableStateOf<String?>(null) }
+    replyToReview?.let { text -> ReviewReplyDialog(text, onDismiss = { replyToReview = null }) }
     val streaming = chatHistory.lastOrNull()?.type == "PARTIAL"
     val showThinking = isThinking && !streaming
 
@@ -69,7 +74,8 @@ internal fun ChatFeed(
                 JarvisMessageBubble(
                     msg = msg,
                     onCopy = { onCopy(msg.text) },
-                    onSpeak = { onSpeak(msg.text) }
+                    onSpeak = { onSpeak(msg.text) },
+                    onReview = { replyToReview = msg.text }
                 )
             }
         }
@@ -128,7 +134,8 @@ private fun UserMessageBubble(msg: JarvisMessage) {
 private fun JarvisMessageBubble(
     msg: JarvisMessage,
     onCopy: () -> Unit,
-    onSpeak: () -> Unit
+    onSpeak: () -> Unit,
+    onReview: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
     val context = LocalContext.current
@@ -346,6 +353,12 @@ private fun JarvisMessageBubble(
                         fontSize = 11.sp
                     )
                 }
+            }
+            if (ReplyShareApproval.canReview(msg.sender, msg.type, msg.text)) TextButton(onClick = onReview) {
+                Icon(Icons.Rounded.Share,
+                    contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Review & share")
             }
         }
     }

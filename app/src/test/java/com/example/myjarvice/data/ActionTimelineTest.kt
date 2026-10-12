@@ -7,6 +7,15 @@ import java.io.ByteArrayInputStream
 class ActionTimelineTest {
     private val time = 1_791_158_400_000L
 
+    @Test fun replyShareAuditIsMetadataOnlyAndNeverClaimsDelivery() {
+        val event = ActionTimeline.localEvent(1, time, "reply.share", "started")
+        assertEquals("reply.share", event.actionType)
+        assertEquals("phone", event.source)
+        assertEquals("Share reply · Started · completion not confirmed", event.summary)
+        assertEquals(event, ActionTimeline.decode(ActionTimeline.encode(listOf(event))).single())
+        assertFalse(event.summary.contains("sent", ignoreCase = true))
+    }
+
     @Test fun journalPersistsOnlyStaticMetadataAndKeepsLatest500() {
         var persisted: String? = null
         val journal = PhoneActivityJournal({ persisted }, { persisted = it }, { time })
