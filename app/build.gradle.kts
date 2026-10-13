@@ -1,8 +1,21 @@
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
 }
+
+val jarvisVersion = Properties().apply {
+    rootProject.layout.projectDirectory.file("version.properties").asFile.inputStream().use { load(it) }
+}
+val jarvisVersionName = jarvisVersion.getProperty("versionName") ?: error("Missing versionName")
+require(Regex("(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)").matches(jarvisVersionName)) {
+    "versionName must be a stable MAJOR.MINOR.PATCH version without leading zeros."
+}
+val jarvisVersionCode = jarvisVersion.getProperty("versionCode")?.toIntOrNull()
+    ?: error("versionCode must be an integer")
+require(jarvisVersionCode in 1..2_100_000_000) { "versionCode is outside Android's supported release range." }
 
 android {
     namespace = "com.example.myjarvice"
@@ -11,8 +24,8 @@ android {
         applicationId = "com.example.myjarvice"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = jarvisVersionCode
+        versionName = jarvisVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -29,7 +42,7 @@ android {
     buildFeatures {
       compose = true
       aidl = false
-      buildConfig = false
+      buildConfig = true
       shaders = false
     }
 

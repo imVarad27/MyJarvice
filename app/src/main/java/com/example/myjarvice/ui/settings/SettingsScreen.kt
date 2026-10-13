@@ -113,7 +113,7 @@ private val settingsDescriptions = mapOf(
     "AI & personal knowledge" to "Phone model, memory and documents",
     "PC connection" to "Pair your computer · Wi-Fi and host address",
     "Data & storage" to "Backup, saved items and conversation history",
-    "About Jarvis" to "App information"
+    "About Jarvis" to "App version, build number, release notes and what's new"
 )
 
 private fun matchesSettingsSearch(title: String, query: String): Boolean =
@@ -899,14 +899,16 @@ fun SettingsScreen(
 
             }
             SettingsSection("About Jarvis", initiallyExpanded = false, query = sectionQuery) {
-
-
+                var showReleaseNotes by rememberSaveable { mutableStateOf(false) }
+                if (showReleaseNotes) ReleaseNotesDialog(onDismiss = { showReleaseNotes = false })
                 SettingsCard {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconSparkles(tint = scheme.primary, size = 20.dp)
                         Spacer(Modifier.width(10.dp))
                         Column {
-                            Text("JARVIS 1.0", color = scheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Jarvis ${installedAppVersion.versionName}", color = scheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Build ${installedAppVersion.versionCode} · ${installedAppVersion.buildLabel}",
+                                color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                             Text("Your personal assistant, on phone and PC", color = scheme.onSurfaceVariant, fontSize = 12.sp)
                         }
                     }
@@ -917,6 +919,9 @@ fun SettingsScreen(
                         fontSize = 13.sp,
                         lineHeight = 16.sp
                     )
+                    Spacer(Modifier.height(12.dp))
+                    androidx.compose.material3.OutlinedButton(onClick = { showReleaseNotes = true },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("What's new") }
                 }
 
 
