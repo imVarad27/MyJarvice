@@ -9,7 +9,9 @@ data class CalendarPlanDay(
     val window: LocalDayWindow,
     val events: List<CalendarAgendaItem>,
     val conflicts: Set<CalendarAgendaItem>,
-    val openings: List<CalendarOpening>
+    val openings: List<CalendarOpening>,
+    // Whole remaining gaps, not reservations. Kept only in the visible planner's transient state.
+    val freeWindows: List<CalendarOpening> = emptyList()
 )
 
 /** Deterministic calendar arithmetic, not AI inference. No event text is persisted or sent anywhere. */
@@ -17,6 +19,12 @@ internal object CalendarWeekPlanner {
     const val MAX_EVENTS = 500
     val durations = listOf(30, 60, 90)
     private const val MINUTE_MS = 60_000L
+
+    fun isComplete(snapshot: CalendarSnapshot, zone: TimeZone): Boolean =
+        !snapshot.incomplete && snapshot.events.size <= MAX_EVENTS && snapshot.events.all {
+            val range = interval(it, zone)
+            range.endsAt > range.startsAt
+        }
 
     fun days(now: Long, zone: TimeZone = TimeZone.getDefault()): List<LocalDayWindow> {
         val start = Calendar.getInstance(zone).apply {
@@ -48,7 +56,7 @@ internal object CalendarWeekPlanner {
         require(durationMinutes in durations) { "Choose 30, 60 or 90 minutes." }
         val events = snapshot.events.distinctBy { Triple(it.eventId, it.startsAt, it.endsAt) }.take(MAX_EVENTS)
         val intervals = events.associateWith { interval(it, zone) }
-        val incomplete = snapshot.incomplete || snapshot.events.size > MAX_EVENTS || intervals.values.any { it.endsAt <= it.startsAt }
+        val incomplete = !isComplete(snapshot, zone)
         return days(now, zone).map { day ->
             val daily = events.filter {
                 val range = intervals.getValue(it)
@@ -71,7 +79,7 @@ internal object CalendarWeekPlanner {
             }.timeInMillis
             val start = maxOf(hour(9), now)
             val end = hour(18)
-            val openings = mutableListOf<CalendarOpening>()
+            val freeWindows = mutableListOf<CalendarOpening>()
             if (!incomplete && start < end) {
                 val blocked = busy.map { intervals.getValue(it) }.sortedBy { it.startsAt }
                 var cursor = start
@@ -83,7 +91,7 @@ internal object CalendarWeekPlanner {
                     if (needsRounding) local.add(Calendar.MINUTE, 15 - minute % 15)
                     local.set(Calendar.SECOND, 0); local.set(Calendar.MILLISECOND, 0)
                     val rounded = local.timeInMillis
-                    if (rounded + durationMinutes * MINUTE_MS <= until) openings += CalendarOpening(rounded, rounded + durationMinutes * MINUTE_MS)
+                    if (rounded < until) freeWindows += CalendarOpening(rounded, until)
                 }
                 blocked.forEach { range ->
                     if (range.endsAt > cursor && range.startsAt < end) {
@@ -93,7 +101,9 @@ internal object CalendarWeekPlanner {
                 }
                 if (cursor < end) offer(end)
             }
-            CalendarPlanDay(day, daily, conflicts, openings.take(3))
+            val openings = freeWindows.filter { it.endsAt - it.startsAt >= durationMinutes * MINUTE_MS }
+                .take(3).map { CalendarOpening(it.startsAt, it.startsAt + durationMinutes * MINUTE_MS) }
+            CalendarPlanDay(day, daily, conflicts, openings, freeWindows)
         }
     }
 }

@@ -1,5 +1,16 @@
 # Jarvis changes
 
+## 1.2.0 — 2026-10-14 — Android build 3
+
+- New **Time Rehearsal** in the private week planner: compare a hypothetical
+  30/60/90-minute commitment with preparation/recovery buffers and a same-start
+  50% overrun. Shows sampled candidates and an overrun-safe filter without booking.
+- The week planner now retains whole free gaps transiently for rehearsal, while
+  preserving its existing duration suggestions and read-only permission boundary.
+- No AI prompts, cloud calls, task changes, calendar writes, notifications or new
+  permissions. Incomplete data disables rehearsals. Real-provider/UI checks are
+  still needed; this release does not claim globally unique functionality.
+
 ## 1.1.0 — 2026-10-13 — Android build 2
 
 - New offline **What's new** screen in Settings → About Jarvis, with feature

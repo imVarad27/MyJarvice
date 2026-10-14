@@ -29,7 +29,7 @@ class ReleaseNotesDialogTest {
         assertEquals(0, copies)
         rule.onNodeWithText("Copy app version").performClick()
         assertEquals(1, copies)
-        rule.onNodeWithText("Review before sharing").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText(JarvisReleases.latest.highlights[1].title).performScrollTo().assertIsDisplayed()
         rule.onNodeWithContentDescription("Close release notes").performClick()
         assertEquals(1, closed)
     }
@@ -41,7 +41,7 @@ class ReleaseNotesDialogTest {
         rule.onNodeWithText("Jarvis 9.8.7").assertIsDisplayed()
         rule.onNodeWithText("Build 1234 · Release build").assertIsDisplayed()
         rule.onNodeWithText("In this update").assertDoesNotExist()
-        rule.onNodeWithText("Review before sharing").assertDoesNotExist()
+        rule.onNodeWithText(JarvisReleases.latest.highlights[1].title).assertDoesNotExist()
         rule.onNodeWithText("Release notes aren't available for this build. The installed version above is still accurate.")
             .performScrollTo().assertIsDisplayed()
     }
@@ -53,6 +53,6 @@ class ReleaseNotesDialogTest {
             }
         } }
         rule.onNodeWithText("Copy app version").performScrollTo().assertIsDisplayed()
-        rule.onNodeWithText("Protect your local backup").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText(JarvisReleases.latest.highlights.last().title).performScrollTo().assertIsDisplayed()
     }
 }

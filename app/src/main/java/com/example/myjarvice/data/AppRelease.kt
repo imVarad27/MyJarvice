@@ -12,16 +12,12 @@ internal data class ReleaseHighlight(val title: String, val description: String,
 internal data class AppRelease(val version: String, val date: String, val highlights: List<ReleaseHighlight>)
 
 internal object JarvisReleases {
-    val latest = AppRelease("1.1.0", "2026-10-13", listOf(
-        ReleaseHighlight("Know what's installed", "The real app version, build number and recent changes are now visible without a PC or network.",
-            "Settings → About Jarvis → What's new"),
-        ReleaseHighlight("Review before sharing", "Edit a completed reply, preview the exact text and approve opening Android's share sheet. Jarvis never chooses a recipient or presses Send.",
-            "Completed chat reply → Review & share"),
-        ReleaseHighlight("Find the right words", "Choose a contact name, edit it and prepare a draft request in your writing style. No address-book import or automatic sending.",
-            "Today → Draft"),
-        ReleaseHighlight("Make room in your week", "Read your next seven calendar days, spot overlapping busy events and inspect possible openings. Nothing is booked or edited.",
-            "Today → Your calendar → Plan my week"),
-        ReleaseHighlight("Protect your local backup", "Create a passphrase-protected backup and review a validated snapshot before merging it. Model files, credentials and voiceprints stay out.",
-            "Settings → Data & storage")
+    val latest = AppRelease("1.2.0", "2026-10-14", listOf(
+        ReleaseHighlight("Rehearse before saying yes", "Try a 30-, 60- or 90-minute commitment against your visible calendar, with preparation and recovery buffers. Nothing is booked or sent to a model.",
+            "Today → Your calendar → Plan my week → Time Rehearsal"),
+        ReleaseHighlight("Inspect the margin", "A same-start stress test shows which sampled slots also fit a 50% overrun. Filter to overrun-safe options; this is an explicit assumption, not a prediction or exhaustive availability check.",
+            "Time Rehearsal → Rehearse a commitment"),
+        ReleaseHighlight("Private by construction", "Rehearsals use read-only calendar data on the phone. Incomplete data disables results. Scenarios disappear when you leave; no events, reminders or tasks are changed.",
+            "Time Rehearsal → Preparation and recovery")
     ))
 }

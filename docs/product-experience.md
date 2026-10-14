@@ -30,6 +30,7 @@ Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer co
 - Today → Draft adds an explicit Android contact picker for the recipient name, with editing, clearing and manual fallback. Only the selected display name is queried; no address-book import, number lookup, automatic generation or sending. The name enters the editable chat request only after Prepare; PC routing disclosure is shown. Real-device picker behavior still needs verification.
 - Completed text replies offer Review & share in chat and the popup: edit a local copy, review an exact-text snapshot and approve opening Android's share sheet. No recipient, attachment or conversation is appended, and no Send button is automated. Activity stores metadata only and marks the handoff as unconfirmed; actual receiving-app/device behavior remains unverified.
 - Settings → About Jarvis now shows the generated APK semantic version, Android build number and development/release type, with an offline What's new catalog and an explicit copy-version action. Central version properties, tests and the changelog keep future delivered updates identifiable. There is no automatic update download or telemetry.
+- The private week planner offers **Time Rehearsal**: try a selected commitment length with preparation/recovery buffers, compare a same-start 50% overrun and filter sampled candidates. It is local what-if arithmetic, not an AI forecast or booking. Incomplete data disables results; see [Time Rehearsal](time-rehearsal.md).
 
 ## What a personal assistant needs next
 

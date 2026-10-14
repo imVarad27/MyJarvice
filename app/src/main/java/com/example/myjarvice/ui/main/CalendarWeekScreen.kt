@@ -36,6 +36,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.DateFormat
 import java.util.Date
+import java.util.TimeZone
 
 /** Visible, read-only planning. No WRITE_CALENDAR permission, model call, event cache or background job. */
 @Composable
@@ -49,7 +50,9 @@ internal fun CalendarWeekDialog(onDismiss: () -> Unit) {
     var snapshot by remember { mutableStateOf<CalendarSnapshot?>(null) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var duration by rememberSaveable { mutableIntStateOf(60) }
+    var buffer by rememberSaveable { mutableIntStateOf(10) }
     var days by remember { mutableStateOf(emptyList<CalendarPlanDay>()) }
+    var rehearsal by remember { mutableStateOf<TimeRehearsalResult?>(null) }
     var planning by remember { mutableStateOf(false) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { revision++ }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -61,7 +64,7 @@ internal fun CalendarWeekDialog(onDismiss: () -> Unit) {
     fun hasPermission() = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
     LaunchedEffect(revision) {
         val attempt = revision
-        busy = true; error = null; snapshot = null; days = emptyList()
+        busy = true; error = null; snapshot = null; days = emptyList(); rehearsal = null
         granted = hasPermission()
         try {
             if (granted) {
@@ -76,17 +79,24 @@ internal fun CalendarWeekDialog(onDismiss: () -> Unit) {
             error = if (granted) "Calendar could not be read. Refresh or check your calendar app." else null
         } finally { if (attempt == revision) busy = false }
     }
-    LaunchedEffect(snapshot, duration, now) {
+    LaunchedEffect(snapshot, duration, buffer, now) {
         val source = snapshot
         val minutes = duration
+        val margin = buffer
         val checkedAt = now
-        days = emptyList(); planning = true
+        planning = true
         try {
-            source?.let { data -> days = withContext(Dispatchers.Default) { CalendarWeekPlanner.plan(data, checkedAt, minutes) } }
-        } finally { if (source === snapshot && minutes == duration && checkedAt == now) planning = false }
+            source?.let { data ->
+                val result = withContext(Dispatchers.Default) {
+                    val zone = TimeZone.getDefault()
+                    CalendarWeekPlanner.plan(data, checkedAt, minutes, zone) to TimeRehearsal.evaluate(data, checkedAt, minutes, margin, zone)
+                }
+                days = result.first; rehearsal = result.second
+            }
+        } finally { if (source === snapshot && minutes == duration && margin == buffer && checkedAt == now) planning = false }
     }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        CalendarWeekScreen(days, granted, busy || planning, snapshot != null, snapshot?.incomplete == true, error,
+        CalendarWeekScreen(days, granted, busy, snapshot != null, snapshot?.incomplete == true, error,
             now, duration, onDismiss, onRefresh = { revision++ },
             onRequestAccess = { permission.launch(Manifest.permission.READ_CALENDAR) },
             onOpenPermissions = {
@@ -100,7 +110,7 @@ internal fun CalendarWeekDialog(onDismiss: () -> Unit) {
                     putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, event.startsAt)
                     putExtra(CalendarContract.EXTRA_EVENT_END_TIME, event.endsAt)
                 }) }.onFailure { Toast.makeText(context, "No calendar app could open this event.", Toast.LENGTH_LONG).show() }
-            })
+            }, rehearsal = rehearsal, buffer = buffer, onBuffer = { buffer = it }, calculating = planning)
     }
 }
 
@@ -110,15 +120,17 @@ internal fun CalendarWeekScreen(
     days: List<CalendarPlanDay>, granted: Boolean, busy: Boolean, readable: Boolean, incomplete: Boolean,
     error: String?, refreshedAt: Long, duration: Int,
     onDismiss: () -> Unit, onRefresh: () -> Unit, onRequestAccess: () -> Unit, onOpenPermissions: () -> Unit,
-    onDuration: (Int) -> Unit, onOpenEvent: (CalendarAgendaItem) -> Unit
+    onDuration: (Int) -> Unit, onOpenEvent: (CalendarAgendaItem) -> Unit,
+    rehearsal: TimeRehearsalResult? = null, buffer: Int = 10, onBuffer: (Int) -> Unit = {}, calculating: Boolean = false
 ) {
     var expandedDays by remember { mutableStateOf(emptySet<Long>()) }
+    var rehearsalExpanded by remember { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
     val time = DateFormat.getTimeInstance(DateFormat.SHORT)
     Scaffold(topBar = {
         TopAppBar(title = { Text("Plan my week", maxLines = 1, overflow = TextOverflow.Ellipsis) },
             navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Close week planner") } },
-            actions = { IconButton(onClick = onRefresh, enabled = !busy) { Icon(Icons.Rounded.Refresh, "Refresh week planner") } })
+            actions = { IconButton(onClick = onRefresh, enabled = !busy && !calculating) { Icon(Icons.Rounded.Refresh, "Refresh week planner") } })
     }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp),
             contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -128,6 +140,7 @@ internal fun CalendarWeekScreen(
                     color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
             }
             if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Reading your week…") }
+            if (calculating && !busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Recalculating openings…") }
             if (!granted && !busy) item {
                 OutlinedCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -144,7 +157,7 @@ internal fun CalendarWeekScreen(
                     Text("Find an opening", style = MaterialTheme.typography.titleMedium)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         CalendarWeekPlanner.durations.forEach { minutes ->
-                            FilterChip(selected = duration == minutes, onClick = { onDuration(minutes) }, label = { Text("$minutes min") })
+                            FilterChip(selected = duration == minutes, onClick = { onDuration(minutes) }, enabled = !calculating, label = { Text("$minutes min") })
                         }
                     }
                     Text("Suggestions use 9 am–6 pm, local time. Busy/tentative events block time; events marked free do not. All-day busy events block the day.",
@@ -158,6 +171,12 @@ internal fun CalendarWeekScreen(
                     Text("Calendar data is incomplete or exceeds the safety limit. Openings are hidden to avoid suggesting occupied time.",
                         color = colors.error, style = MaterialTheme.typography.bodyMedium)
                 }
+                rehearsal?.let { result -> item(key = "rehearsal") {
+                    val shown = if (calculating) result.copy(durationMinutes = duration, bufferMinutes = buffer,
+                        overrunMinutes = duration * 3 / 2, options = emptyList()) else result
+                    TimeRehearsalCard(shown, buffer, rehearsalExpanded,
+                        onExpanded = { rehearsalExpanded = it }, onBuffer = onBuffer, calculating = calculating)
+                } }
                 days.forEach { day ->
                     val dayId = day.window.startsAt
                     item(key = "day:$dayId") {
@@ -197,9 +216,10 @@ internal fun CalendarWeekScreen(
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Icon(Icons.Rounded.Schedule, null, tint = colors.primary)
                                 Text("Suggested openings", style = MaterialTheme.typography.titleSmall)
-                                if (day.openings.isEmpty()) Text(if (incomplete) "Unavailable with incomplete calendar data."
+                                if (calculating) Text("Recalculating openings…", style = MaterialTheme.typography.bodySmall)
+                                else if (day.openings.isEmpty()) Text(if (incomplete) "Unavailable with incomplete calendar data."
                                     else "No $duration-minute opening found in the remaining daytime window.", style = MaterialTheme.typography.bodySmall)
-                                day.openings.forEach { opening -> Text("${time.format(Date(opening.startsAt))} – ${time.format(Date(opening.endsAt))}",
+                                if (!calculating) day.openings.forEach { opening -> Text("${time.format(Date(opening.startsAt))} – ${time.format(Date(opening.endsAt))}",
                                     style = MaterialTheme.typography.bodyMedium) }
                             }
                         }
