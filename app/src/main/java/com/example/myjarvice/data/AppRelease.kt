@@ -12,12 +12,12 @@ internal data class ReleaseHighlight(val title: String, val description: String,
 internal data class AppRelease(val version: String, val date: String, val highlights: List<ReleaseHighlight>)
 
 internal object JarvisReleases {
-    val latest = AppRelease("1.2.0", "2026-10-14", listOf(
-        ReleaseHighlight("Rehearse before saying yes", "Try a 30-, 60- or 90-minute commitment against your visible calendar, with preparation and recovery buffers. Nothing is booked or sent to a model.",
-            "Today → Your calendar → Plan my week → Time Rehearsal"),
-        ReleaseHighlight("Inspect the margin", "A same-start stress test shows which sampled slots also fit a 50% overrun. Filter to overrun-safe options; this is an explicit assumption, not a prediction or exhaustive availability check.",
-            "Time Rehearsal → Rehearse a commitment"),
-        ReleaseHighlight("Private by construction", "Rehearsals use read-only calendar data on the phone. Incomplete data disables results. Scenarios disappear when you leave; no events, reminders or tasks are changed.",
-            "Time Rehearsal → Preparation and recovery")
+    val latest = AppRelease("1.3.0", "2026-10-21", listOf(
+        ReleaseHighlight("Private routines", "Create reusable checklists for repeatable moments. Running a routine first shows every step, then adds private phone tasks only after you approve. Routines never send, open, or complete anything automatically.",
+            "Today → Your tasks → Routines"),
+        ReleaseHighlight("Your routines stay yours", "Routines work offline and are included in your local backup and restore preview. They are separate from PC tasks and never enter a model prompt.",
+            "Today; Settings → Data & storage"),
+        ReleaseHighlight("A calmer workspace", "Warm light and neutral dark surfaces, quieter message bubbles and a clearer composer keep the conversation first. Pixel, Jarvis, AMOLED and dynamic-color choices remain available.",
+            "Chat; Settings → Appearance")
     ))
 }

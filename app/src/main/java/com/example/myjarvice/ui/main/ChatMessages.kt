@@ -93,15 +93,15 @@ private fun UserMessageBubble(msg: JarvisMessage) {
     val scheme = MaterialTheme.colorScheme
     var expandedPhoto by remember { mutableStateOf(false) }
 
-    Row(
+    BoxWithConstraints(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.End
+        contentAlignment = Alignment.CenterEnd
     ) {
         Column(
             modifier = Modifier
-                .widthIn(max = 290.dp)
+                .widthIn(max = minOf(maxWidth * 0.86f, 520.dp))
                 .clip(RoundedCornerShape(18.dp))
-                .background(scheme.primaryContainer)
+                .background(scheme.surfaceContainerHigh)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             val bitmap = remember(msg.image) {
@@ -123,7 +123,7 @@ private fun UserMessageBubble(msg: JarvisMessage) {
             }
             Text(
                 msg.text,
-                color = scheme.onPrimaryContainer,
+                color = scheme.onSurface,
                 style = MaterialTheme.typography.bodyLarge
             )
         }
@@ -131,6 +131,7 @@ private fun UserMessageBubble(msg: JarvisMessage) {
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun JarvisMessageBubble(
     msg: JarvisMessage,
     onCopy: () -> Unit,
@@ -150,16 +151,13 @@ private fun JarvisMessageBubble(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             // Header
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     "Jarvis",
                     color = scheme.onSurface,
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.labelLarge
                 )
-                Surface(shape = RoundedCornerShape(50), color = scheme.surfaceContainerHighest) {
+                Box {
                     Text(
                         when {
                         msg.type == "ERROR" -> "Couldn't finish"
@@ -173,22 +171,15 @@ private fun JarvisMessageBubble(
                         },
                         color = scheme.onSurfaceVariant,
                         style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(vertical = 2.dp)
                     )
                 }
             }
 
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(10.dp))
 
             // Body text
-            SelectionContainer {
-                Text(
-                    remember(answer) { formatReplyText(answer) },
-                    color = if (msg.type == "ERROR") scheme.error else scheme.onSurface,
-                    fontSize = 16.sp,
-                    lineHeight = 25.sp
-                )
-            }
+            ReplyBody(answer, error = msg.type == "ERROR", allowCopy = msg.type != "PARTIAL")
             if (sources.isNotBlank()) {
                 TextButton(onClick = { showSources = !showSources }) {
                     Text(if (showSources) "Hide sources" else "View sources")
@@ -315,8 +306,7 @@ private fun JarvisMessageBubble(
             Spacer(Modifier.height(8.dp))
 
             // Action Toolbar (Copy, Speak, Timestamp)
-            if (msg.type != "PARTIAL") Row(
-                verticalAlignment = Alignment.CenterVertically,
+            if (msg.type != "PARTIAL") androidx.compose.foundation.layout.FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Row(

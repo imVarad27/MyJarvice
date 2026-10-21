@@ -340,9 +340,15 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             listeningJob?.cancel()
             preparingMic.value = false
             speechManager.stopListening()
-        } else if (!isSpeaking.value) {
+        } else if (!isSpeaking.value && !_isThinking.value) {
             beginListening()
         }
+    }
+
+    /** Explicit retry from voice UI. Never changes owner verification or starts a second capture. */
+    fun retryVoiceListening() {
+        if (_voiceModeActive.value && !_micMuted.value && !isListening.value &&
+            !isSpeaking.value && !_isThinking.value && !settings.assistantPaused) beginListening()
     }
 
     /** Editing is explicit user input; release dictation without closing the popup. */

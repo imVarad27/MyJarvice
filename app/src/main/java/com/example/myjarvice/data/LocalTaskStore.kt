@@ -77,6 +77,20 @@ class LocalTaskStore(context: Context) {
         task
     }
 
+    /** Writes an explicitly approved routine run in one local transaction. */
+    fun addTasks(titles: List<String>): List<LocalTask> = synchronized(lock) {
+        val cleanTitles = titles.map { it.trim() }
+        require(cleanTitles.isNotEmpty() && cleanTitles.size <= 25) { "Choose 1–25 routine steps to add." }
+        require(cleanTitles.all { it.isNotEmpty() && it.length <= 180 }) { "Each task title must contain 1–180 characters." }
+        val all = tasks().toMutableList()
+        require(all.size + cleanTitles.size <= 1_000) { "Task list is full. Remove completed tasks first." }
+        val createdAt = System.currentTimeMillis()
+        val created = cleanTitles.map { title -> LocalTask(UUID.randomUUID().toString(), title, createdAt = createdAt) }
+        all += created
+        persist(all)
+        created
+    }
+
     fun setCompleted(id: String, completed: Boolean, at: Long = System.currentTimeMillis()) = synchronized(lock) {
         persist(tasks().map { if (it.id == id) it.copy(completedAt = if (completed) at else null) else it })
     }

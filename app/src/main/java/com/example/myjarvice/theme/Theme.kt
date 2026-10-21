@@ -15,7 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 // Neutral surfaces keep content calm; indigo/cyan accents identify actions and state.
-private val DarkColors = darkColorScheme(
+internal val DarkColors = darkColorScheme(
     primary = Color(0xFFBBC3FF),
     onPrimary = Color(0xFF202B78),
     primaryContainer = Color(0xFF343F91),
@@ -28,19 +28,19 @@ private val DarkColors = darkColorScheme(
     onTertiary = Color(0xFF00363B),
     tertiaryContainer = Color(0xFF164E54),
     onTertiaryContainer = Color(0xFFB6F0F5),
-    surfaceContainerLowest = Color(0xFF07090D),
-    surfaceContainerLow = Color(0xFF11141B),
-    surfaceContainer = Color(0xFF171A22),
-    surfaceContainerHigh = Color(0xFF1D212B),
-    surfaceContainerHighest = Color(0xFF252A36),
-    background = Color(0xFF0B0D12),
-    onBackground = Color(0xFFE4E5EC),
-    surface = Color(0xFF0B0D12),
-    onSurface = Color(0xFFE4E5EC),
-    surfaceVariant = Color(0xFF252A36),
-    onSurfaceVariant = Color(0xFFC4C6D0),
-    outline = Color(0xFF8E909B),
-    outlineVariant = Color(0xFF3E424D),
+    surfaceContainerLowest = Color(0xFF111111),
+    surfaceContainerLow = Color(0xFF202020),
+    surfaceContainer = Color(0xFF262626),
+    surfaceContainerHigh = Color(0xFF2D2D2D),
+    surfaceContainerHighest = Color(0xFF363636),
+    background = Color(0xFF171717),
+    onBackground = Color(0xFFF0EEEA),
+    surface = Color(0xFF171717),
+    onSurface = Color(0xFFF0EEEA),
+    surfaceVariant = Color(0xFF363636),
+    onSurfaceVariant = Color(0xFFCAC7C2),
+    outline = Color(0xFF95928D),
+    outlineVariant = Color(0xFF484642),
     surfaceTint = Color(0xFFBBC3FF),
     inverseSurface = Color(0xFFE4E5EC),
     inverseOnSurface = Color(0xFF2B2E36),
@@ -48,17 +48,17 @@ private val DarkColors = darkColorScheme(
 )
 
 // Keep true black while retaining the same readable accents and containers.
-private val AmoledColors = DarkColors.copy(
+internal val AmoledColors = DarkColors.copy(
     background = Color.Black,
     surface = Color.Black,
     surfaceContainerLowest = Color.Black,
-    surfaceContainerLow = Color(0xFF090B10),
-    surfaceContainer = Color(0xFF10131A),
-    surfaceContainerHigh = Color(0xFF171B24),
-    surfaceContainerHighest = Color(0xFF202530)
+    surfaceContainerLow = Color(0xFF101010),
+    surfaceContainer = Color(0xFF191919),
+    surfaceContainerHigh = Color(0xFF232323),
+    surfaceContainerHighest = Color(0xFF2E2E2E)
 )
 
-private val LightColors = lightColorScheme(
+internal val LightColors = lightColorScheme(
     primary = Color(0xFF4E5FC7),
     onPrimary = Color.White,
     primaryContainer = Color(0xFFE1E5FF),
@@ -72,18 +72,18 @@ private val LightColors = lightColorScheme(
     tertiaryContainer = Color(0xFFA7F0F5),
     onTertiaryContainer = Color(0xFF004F55),
     surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFF4F5FA),
-    surfaceContainer = Color(0xFFEFF0F6),
-    surfaceContainerHigh = Color(0xFFE9EAF0),
-    surfaceContainerHighest = Color(0xFFE2E3EA),
-    background = Color(0xFFFAF9FE),
-    onBackground = Color(0xFF1B1B20),
-    surface = Color(0xFFFAF9FE),
-    onSurface = Color(0xFF1B1B20),
-    surfaceVariant = Color(0xFFE2E3EA),
-    onSurfaceVariant = Color(0xFF45464F),
-    outline = Color(0xFF767680),
-    outlineVariant = Color(0xFFC6C6D0),
+    surfaceContainerLow = Color(0xFFF5F4F0),
+    surfaceContainer = Color(0xFFEFEEE9),
+    surfaceContainerHigh = Color(0xFFE9E8E2),
+    surfaceContainerHighest = Color(0xFFE2E0D9),
+    background = Color(0xFFFEFDFB),
+    onBackground = Color(0xFF242321),
+    surface = Color(0xFFFEFDFB),
+    onSurface = Color(0xFF242321),
+    surfaceVariant = Color(0xFFE2E0D9),
+    onSurfaceVariant = Color(0xFF595752),
+    outline = Color(0xFF7B7871),
+    outlineVariant = Color(0xFFD5D2CA),
     surfaceTint = Color(0xFF4E5FC7),
     inverseSurface = Color(0xFF303036),
     inverseOnSurface = Color(0xFFF2F0F7),

@@ -51,6 +51,8 @@ import com.example.myjarvice.data.RememberInboxStore
 import com.example.myjarvice.data.RememberItem
 import com.example.myjarvice.data.LocalTask
 import com.example.myjarvice.data.LocalTaskStore
+import com.example.myjarvice.data.LocalRoutine
+import com.example.myjarvice.data.LocalRoutineStore
 import com.example.myjarvice.data.LocalDayWindow
 import com.example.myjarvice.data.TaskAgenda
 import com.example.myjarvice.data.TodayBrief
@@ -77,9 +79,11 @@ internal fun AssistantHome(
     val context = LocalContext.current
     val calendarRepository = remember { CalendarAgendaRepository(context.applicationContext) }
     val taskStore = remember { LocalTaskStore(context.applicationContext) }
+    val routineStore = remember { LocalRoutineStore(context.applicationContext) }
     val scope = rememberCoroutineScope()
     var entries by remember { mutableStateOf<List<RememberItem>>(emptyList()) }
     var tasks by remember { mutableStateOf<List<LocalTask>>(emptyList()) }
+    var routines by remember { mutableStateOf<List<LocalRoutine>>(emptyList()) }
     var calendarEvents by remember { mutableStateOf<List<CalendarAgendaItem>>(emptyList()) }
     var calendarGranted by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED)
@@ -92,8 +96,12 @@ internal fun AssistantHome(
     var showCapture by rememberSaveable { mutableStateOf(false) }
     var showWeekPlanner by rememberSaveable { mutableStateOf(false) }
     var showTasks by rememberSaveable { mutableStateOf(false) }
+    var showRoutines by rememberSaveable { mutableStateOf(false) }
     var showTaskEditor by rememberSaveable { mutableStateOf(false) }
+    var showRoutineEditor by rememberSaveable { mutableStateOf(false) }
     var editingTask by remember { mutableStateOf<LocalTask?>(null) }
+    var editingRoutine by remember { mutableStateOf<LocalRoutine?>(null) }
+    var routineToRun by remember { mutableStateOf<LocalRoutine?>(null) }
     val calendarPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         calendarGranted = granted
         calendarError = if (granted) null else "Calendar access wasn't granted. Today still works with saved reminders."
@@ -110,6 +118,7 @@ internal fun AssistantHome(
     LaunchedEffect(revision, refreshKey) {
         entries = withContext(Dispatchers.IO) { store.items() }
         tasks = withContext(Dispatchers.IO) { taskStore.tasks() }
+        routines = withContext(Dispatchers.IO) { routineStore.routines() }
         now = System.currentTimeMillis()
         loaded = true
         calendarGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
@@ -145,6 +154,7 @@ internal fun AssistantHome(
         now = now,
         onAdd = { editingTask = null; showTaskEditor = true },
         onEdit = { editingTask = it; showTaskEditor = true },
+        onOpenRoutines = { showTasks = false; showRoutines = true },
         onToggle = { task, complete -> scope.launch {
             try {
                 withContext(Dispatchers.IO) { taskStore.setCompleted(task.id, complete) }
@@ -154,6 +164,44 @@ internal fun AssistantHome(
         } },
         onDismiss = { showTasks = false }
     )
+    if (showRoutines) RoutineLibrarySheet(
+        routines = routines,
+        onCreate = { editingRoutine = null; showRoutineEditor = true },
+        onEdit = { editingRoutine = it; showRoutineEditor = true },
+        onDelete = { routine -> scope.launch {
+            try {
+                withContext(Dispatchers.IO) { routineStore.delete(routine.id) }
+                revision++
+            } catch (error: kotlinx.coroutines.CancellationException) { throw error
+            } catch (_: Exception) { Toast.makeText(context, "Couldn't delete this routine.", Toast.LENGTH_LONG).show() }
+        } },
+        onRun = { routineToRun = it },
+        onDismiss = { showRoutines = false }
+    )
+    if (showRoutineEditor) RoutineEditorDialog(
+        routine = editingRoutine,
+        onDismiss = { showRoutineEditor = false },
+        onSave = { title, steps -> scope.launch {
+            try {
+                withContext(Dispatchers.IO) { routineStore.saveRoutine(editingRoutine?.id, title, steps) }
+                showRoutineEditor = false
+                revision++
+            } catch (error: kotlinx.coroutines.CancellationException) { throw error
+            } catch (error: Exception) { Toast.makeText(context, error.message ?: "Couldn't save this routine.", Toast.LENGTH_LONG).show() }
+        } }
+    )
+    routineToRun?.let { routine -> RoutineRunDialog(routine, onDismiss = { routineToRun = null }, onConfirm = {
+        scope.launch {
+            try {
+                val added = withContext(Dispatchers.IO) { taskStore.addTasks(routine.steps) }
+                routineToRun = null
+                showRoutines = false
+                revision++
+                Toast.makeText(context, "Added ${added.size} tasks from ${routine.title}.", Toast.LENGTH_LONG).show()
+            } catch (error: kotlinx.coroutines.CancellationException) { throw error
+            } catch (error: Exception) { Toast.makeText(context, error.message ?: "Couldn't add routine tasks.", Toast.LENGTH_LONG).show() }
+        }
+    }) }
     if (showTaskEditor) TaskEditorDialog(
         task = editingTask,
         now = now,
@@ -192,6 +240,7 @@ internal fun AssistantHome(
         sessions = sessions.take(2), onOpenSaved = onOpenSaved, onOpenSession = onOpenSession,
         onCapture = { showCapture = true }, onOpenTools = onOpenTools, onDraft = onDraft,
         onOpenTasks = { showTasks = true },
+        onOpenRoutines = { showRoutines = true },
         onAddTask = { editingTask = null; showTaskEditor = true },
         onEditTask = { editingTask = it; showTaskEditor = true },
         onToggleTask = { task, complete -> scope.launch {
@@ -224,6 +273,7 @@ internal fun TodayHomeContent(
     onOpenTools: () -> Unit = {},
     onDraft: () -> Unit = {},
     onOpenTasks: () -> Unit = {},
+    onOpenRoutines: () -> Unit = {},
     onAddTask: () -> Unit = {},
     onEditTask: (LocalTask) -> Unit = {},
     onToggleTask: (LocalTask, Boolean) -> Unit = { _, _ -> }
@@ -296,6 +346,7 @@ internal fun TodayHomeContent(
                         Spacer(Modifier.width(8.dp))
                         Text("Add task")
                     }
+                    TextButton(onClick = onOpenRoutines, modifier = Modifier.align(Alignment.End)) { Text("Routines") }
                 }
             }
         }
@@ -484,6 +535,7 @@ private fun TaskListSheet(
     now: Long,
     onAdd: () -> Unit,
     onEdit: (LocalTask) -> Unit,
+    onOpenRoutines: () -> Unit,
     onToggle: (LocalTask, Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -498,6 +550,7 @@ private fun TaskListSheet(
                 Spacer(Modifier.width(8.dp))
                 Text("Add a task")
             }
+            TextButton(onClick = onOpenRoutines, modifier = Modifier.align(Alignment.End)) { Text("Routines") }
             if (agenda.open.isEmpty()) {
                 Text("Nothing open right now.", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 24.dp))

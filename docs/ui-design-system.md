@@ -13,12 +13,13 @@ Jarvis uses Material 3 as the interaction baseline and adds a restrained assista
 
 ## Tokens
 
-- Spacing uses a 4 dp base scale. Screen gutters are 20 dp; compact controls use 8–12 dp; cards use 16–20 dp.
+- Spacing uses a 4 dp base scale. Screen gutters are 20 dp; compact controls use 8–12 dp; cards use 16–20 dp. Answer body text uses 16/26 sp for reading rhythm.
 - Shape roles: controls 14 dp, cards 18–24 dp, hero/popup surfaces 28–32 dp, status and icon containers are circular.
 - The Pixel style uses indigo actions, neutral surfaces, and cyan status accents.
 - The Jarvis style uses cyan actions and amber tertiary accents while keeping the same neutral surfaces.
 - AMOLED changes only background/container luminance; it does not change hierarchy or interaction behavior.
 - Typography uses the Android system family for performance and language coverage. Weight and spacing—not multiple typefaces—create hierarchy.
+- Default light surfaces are warm neutral; dark surfaces are neutral charcoal, not blue-tinted. Keep brand accents for actions/status rather than filling every chat bubble. User bubbles use `surfaceContainerHigh`; code uses `surfaceContainerLow`. The composer primary action uses the high-contrast `onSurface`/`surface` pair.
 
 ## Component rules
 
@@ -27,14 +28,17 @@ Jarvis uses Material 3 as the interaction baseline and adds a restrained assista
 - Use `JarvisBrandMark`, `JarvisPageHeader`, and `JarvisIconBadge` for shared brand and navigation treatment.
 - Prefer `Surface`, Material buttons, and Material text fields so pressed, focused, disabled, and accessibility states remain consistent.
 - Keep the chat composer and model selector reachable at the bottom; model routing must remain visible before sending.
+- Sidebar content/search scroll as one list, with Settings pinned outside it. Destructive history actions live behind a menu and retain confirmation. Model selector labels truncate inside their own width, not across microphone/send controls.
+- Code fences render as inert, selectable, horizontally scrollable blocks with a language label and explicit copy action. Partial replies disable that action; normal reply sharing/copy uses original text.
 
 ## Screen hierarchy
 
-- **Today:** compact greeting, three glanceable metrics, four quick actions, then tasks, reminders, calendar, recent work.
+- **Home:** a quiet centered welcome and the bottom composer; no dashboard, metrics or suggestion tiles.
+- **Today:** an explicit sidebar destination for tasks, reminders, calendar and recent work, not the default empty chat.
 - **Chat:** compact app bar, readable conversation column, attachment preview, one consolidated composer.
 - **Saved:** search and filters, scannable cards with type icons, full-screen detail.
 - **Settings:** search first, current assistant state second, collapsible categories with recognizable icons.
-- **Voice:** status and transcript are central; info/share/voice controls are quiet; mute and close remain large.
+- **Voice:** visible status and route, compact expandable transcript, responsive indicator and labeled microphone/end controls. Session info, share and voice settings live in one options menu; no decorative infinite orb animation.
 - **Popup:** one compact assistant surface with the same model selector and composer semantics as full chat.
 
 ## Figma mapping

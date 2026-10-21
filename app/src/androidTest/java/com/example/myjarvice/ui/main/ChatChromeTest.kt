@@ -31,14 +31,33 @@ class ChatChromeTest {
         compose.onNodeWithContentDescription("Add attachment or tool").assertIsNotEnabled()
     }
 
-    @Test fun toolbarHasAccessibleInboxAndHistory() {
-        var inboxOpened = 0
+    @Test fun toolbarKeepsHistoryAndNewChatButMovesInboxOffHome() {
+        var historyOpened = 0
+        var newChat = 0
         compose.setContent { MyJarvisTheme {
-            ChatTopBar(ConnectionStatus.DISCONNECTED, {}, {}, {}, { inboxOpened++ })
+            ChatTopBar(ConnectionStatus.DISCONNECTED, { historyOpened++ }, {}, { newChat++ })
         } }
-        compose.onNodeWithContentDescription("Open saved inbox").performClick()
-        compose.onNodeWithContentDescription("Open conversation history").assertHasClickAction()
-        compose.runOnIdle { assertEquals(1, inboxOpened) }
+        compose.onNodeWithContentDescription("Open saved inbox").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Open conversation history").performClick()
+        compose.onNodeWithContentDescription("New conversation").performClick()
+        compose.runOnIdle { assertEquals(1, historyOpened); assertEquals(1, newChat) }
+    }
+
+    @Test fun emptyHomeContainsNoDashboardOrSuggestionActions() {
+        compose.setContent { MyJarvisTheme { EmptyChatHome() } }
+        compose.onNodeWithText("What can I help with?").assertIsDisplayed()
+        compose.onNodeWithText("Today").assertDoesNotExist()
+        compose.onNodeWithText("Plan my week").assertDoesNotExist()
+        compose.onAllNodes(hasClickAction()).assertCountEquals(0)
+    }
+
+    @Test fun removedHomeOptionsRemainReachableInTheSidebar() {
+        var today = 0
+        var saved = 0
+        compose.setContent { MyJarvisTheme { DrawerAssistantLinks({ today++ }, { saved++ }) } }
+        compose.onNodeWithText("Today").performClick()
+        compose.onNodeWithText("Saved items").performClick()
+        compose.runOnIdle { assertEquals(1, today); assertEquals(1, saved) }
     }
 
     @Test fun toolsExposePhotoAndDocumentChoices() {

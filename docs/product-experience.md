@@ -14,15 +14,16 @@ These are interaction references, not pixel-for-pixel copies or claims that Jarv
 Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer competing labels. Chat remains the primary surface, not an overloaded dashboard.
 
 - Choose Auto, Phone model, or PC model directly inside either composer (or from the chat header). The picker explains privacy, readiness and connection requirements.
-- The empty chat offers planning, explanation, writing and local-memory prompts. The planning shortcut uses real saved tasks/reminders only when the PC route is available.
+- The empty chat is a simple welcome with no prompt tiles or dashboard. Planning and other shortcuts remain behind the composer attachment/tools entry and the sidebar Today destination.
 - The composer has one attachment entry, dictation, and a primary send/voice action. It no longer reserves an empty supporting-text row.
 - The tool sheet groups attachments, personal-assistant shortcuts and PC tools. PC-dependent shortcuts are disabled without the appropriate connection/mode.
 - Conversation search matches titles and message text locally. Saved items retain their existing search and reminder controls.
 - Replies have a wider reading column, selectable basic bold/code/headings/bullets, and no animated avatar. Streaming hides premature action buttons and redundant thinking indicators.
 - Settings start as compact categories with explanatory subtitles. Voice respects the app theme and uses readable status and transcription text.
 - Appearance offers Pixel-inspired or original Jarvis accents. Verified “Hey Jarvis” opens a compact assistant popup on an unlocked phone, with typing, voice, route selection, dismiss and expand controls. Preview is explicitly manual and unverified; it does not bypass voice protection.
-- Data & storage can create and merge a local backup of conversations, explicit memories/documents, tasks, saved inbox media, and safe preferences. Optional passphrase protection defaults on on Android 8+; older unprotected backups remain readable. Credentials, voiceprints, wake state, Activity and model files are excluded. Restore requires approval of a validated snapshot; the passphrase is never saved.
+- Data & storage can create and merge a local backup of conversations, explicit memories/documents, tasks, routines, saved inbox media, and safe preferences. Optional passphrase protection defaults on on Android 8+; older unprotected backups remain readable. Credentials, voiceprints, wake state, Activity and model files are excluded. Restore requires approval of a validated snapshot; the passphrase is never saved.
 - Today includes editable phone-native tasks with due dates, overdue state, direct completion and offline storage. Phone and PC tasks are labeled separately, and phone tasks are included in local backups.
+- Today → Your tasks → **Routines** provides user-authored reusable checklists. Every run exposes all steps and needs a distinct Add tasks confirmation before its steps enter the phone task list. Routines do not call a model, create calendar events, send data, trigger apps or run in the background; they are private local data included in reviewed backup/restore.
 - Activity is a full-screen, searchable phone/PC timeline with readable outcomes and timestamps. Phone tool/action metadata works offline, stays outside backups and can be cleared separately after confirmation; prompts and tool arguments are never stored in the phone log.
 - Memory & documents now has a full-screen searchable library, saved-text previews, editable facts, confirmed removal and per-item exclusion from future phone-model tool retrieval. Excluded content stays local and remains in user-initiated backups; there is no automatic PC sharing.
 - PC connection checks are available in Settings and the chat connection dialog. Read-only diagnostics separate host pairing, Ollama reachability, model installation and loaded state, with actionable guidance. No prompts are sent and models are not started by checking.
@@ -31,6 +32,8 @@ Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer co
 - Completed text replies offer Review & share in chat and the popup: edit a local copy, review an exact-text snapshot and approve opening Android's share sheet. No recipient, attachment or conversation is appended, and no Send button is automated. Activity stores metadata only and marks the handoff as unconfirmed; actual receiving-app/device behavior remains unverified.
 - Settings → About Jarvis now shows the generated APK semantic version, Android build number and development/release type, with an offline What's new catalog and an explicit copy-version action. Central version properties, tests and the changelog keep future delivered updates identifiable. There is no automatic update download or telemetry.
 - The private week planner offers **Time Rehearsal**: try a selected commitment length with preparation/recovery buffers, compare a same-start 50% overrun and filter sampled candidates. It is local what-if arithmetic, not an AI forecast or booking. Incomplete data disables results; see [Time Rehearsal](time-rehearsal.md).
+- New-chat home is now a quiet welcome and composer with no dashboard tiles. Today (tasks, calendar, rehearsal, capture and drafts) and Saved items are explicit sidebar destinations, so no features/data are removed and blank home no longer queries the calendar/inbox/task dashboard. Voice uses a responsive themed indicator, grouped options, visible route picker, expandable captions and labeled Listen/Mute/Unmute/End controls. See [Chat-first UI](chat-first-ui.md).
+- The conversation workspace now uses neutral surfaces, proportional user bubbles, 16/26 sp answer text and inert fenced-code panels with explicit copy. The sidebar/search scroll without losing Settings; history clearing keeps its confirmation. The composer uses restrained focus/primary-action treatment and a width-aware model selector; shortcut icons describe each tool. See [Workspace UI refactor](workspace-ui-refactor.md).
 
 ## What a personal assistant needs next
 
@@ -41,7 +44,7 @@ Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer co
 5. **Personal memory follow-through:** validate inspect/edit/exclude/remove on-device, then consider explicitly reviewed PC sharing. Avoid inferred sensitive memories and hidden personalization.
 6. **Connection onboarding follow-through:** validate the shipped health checks on-device, then add explicitly reviewed QR pairing and a stable discoverable host identity. Diagnostics do not fix DHCP changes or establish USB forwarding themselves.
 
-Later candidates: project spaces, an Android widget, and reusable routines. Image/video generation, social feeds and elaborate animations are not priorities for Jarvis's core personal-assistant use case.
+Later candidates: project spaces and an Android widget. Image/video generation, social feeds and elaborate animations are not priorities for Jarvis's core personal-assistant use case.
 
 ## Verification
 

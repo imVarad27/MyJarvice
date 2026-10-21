@@ -1,5 +1,22 @@
 # Jarvis repository guidance
 
+## Small-context code navigation
+
+- For structural questions (dependencies, callers, related symbols), prefer the
+  local Graphify index: `graphify query "QUESTION" --budget 1000`. Use precise
+  symbols or `--seed "SYMBOL"` rather than loading the full graph/report.
+  For call relationships add `--context call`. Budgets are approximate; narrow
+  truncated queries instead of automatically raising the limit. Never dump
+  `graph.json` (even a head read can print the whole minified file).
+- The graph is a navigation hint, not source truth or a safety proof. Use `rg`
+  for text/file searches and read only relevant source ranges before editing.
+- Refresh after source changes or when coverage is uncertain:
+  `graphify extract . --code-only --no-cluster --max-workers 2`.
+  Use the source allowlist in `.graphifyignore`; never enable semantic/cloud
+  extraction, scan personal data, install hooks or register a global graph here.
+- If Graphify is absent, stale, ambiguous or misses a symbol, fall back to scoped
+  `rg` searches. See `docs/graphify.md` for setup and limitations.
+
 ## Preserve user data
 
 - Do not uninstall or clear Jarvis on a personal phone, and do not run

@@ -54,6 +54,7 @@ class ProtectedBackupDeviceTest {
         val media = byteArrayOf(1, 2, 3, 4)
         RememberInboxStore(source).addVoice("Synthetic voice note", media)
         LocalTaskStore(source).saveTask(title = "Synthetic source task")
+        LocalRoutineStore(source).saveRoutine(title = "Synthetic routine", steps = listOf("Synthetic first step", "Synthetic next step"))
         ChatHistoryStore(source).saveSession(ChatSession("synthetic-chat", "Synthetic", 1, 2,
             listOf(JarvisMessage("USER", "Synthetic message", "MESSAGE", "now"))))
         SettingsStore(source).apply { userName = "Source"; serverToken = "NEVER_EXPORT_THIS_TOKEN" }
@@ -81,6 +82,7 @@ class ProtectedBackupDeviceTest {
         assertTrue(LocalKnowledgeStore(target).entries().isEmpty())
         val snapshot = manager.prepareRestore(uri, password)
         assertEquals(1, snapshot.preview.memories)
+        assertEquals(1, snapshot.preview.routines)
         assertEquals("Target", SettingsStore(target).userName)
         // Change the external document after review. Only the original snapshot is approved.
         sourceKnowledge.remember("Unexpected replacement memory")
@@ -90,6 +92,7 @@ class ProtectedBackupDeviceTest {
         assertEquals("Source", SettingsStore(target).userName)
         assertEquals("RETAIN_TARGET_TOKEN", SettingsStore(target).serverToken)
         assertEquals(2, LocalTaskStore(target).tasks().size)
+        assertEquals("Synthetic routine", LocalRoutineStore(target).routines().single().title)
         assertEquals(1, LocalKnowledgeStore(target).entries().size)
         assertFalse(LocalKnowledgeStore(target).entries().single().enabled)
         val restoredMedia = RememberInboxStore(target).items().single().mediaPath!!

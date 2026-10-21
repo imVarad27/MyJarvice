@@ -124,7 +124,7 @@ fun BackupPanel(onRestored: () -> Unit) {
                         style = MaterialTheme.typography.labelMedium)
                     Text("Jarvis found ${preview.totalItems} items:")
                     Text("${preview.conversations} conversations · ${preview.memories} memories · ${preview.documents} documents")
-                    Text("${preview.tasks} tasks · ${preview.savedItems} saved items · ${preview.mediaFiles} media files")
+                    Text("${preview.tasks} tasks · ${preview.routines} routines · ${preview.savedItems} saved items · ${preview.mediaFiles} media files")
                     Text("Adds missing items and updates older matching conversations. Does not delete newer data. Preferences and your writing profile may change.")
                     Text("PC credentials, voiceprints, wake state and model files are never restored.", style = MaterialTheme.typography.bodySmall)
                 }
@@ -157,7 +157,7 @@ internal fun BackupCard(busy: Boolean, error: String?, supportsProtection: Boole
             Text("Backup & restore", style = MaterialTheme.typography.titleMedium)
         }
         Text("Keep your personal Jarvis data under your control", style = MaterialTheme.typography.bodySmall)
-        Text("Back up conversations, memories, documents, tasks, saved items and preferences to a file you choose.",
+        Text("Back up conversations, memories, documents, tasks, routines, saved items and preferences to a file you choose.",
             style = MaterialTheme.typography.bodyMedium)
         Text(if (supportsProtection) "Passphrase protection is recommended. Jarvis never saves your passphrase or uploads the archive."
             else "Protected backups require Android 8 or newer. Unprotected files contain readable personal data.",

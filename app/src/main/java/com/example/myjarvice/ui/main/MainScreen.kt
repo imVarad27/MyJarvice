@@ -3,7 +3,6 @@ package com.example.myjarvice.ui.main
 import android.app.Application
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.example.myjarvice.ui.inbox.RememberInboxScreen
@@ -32,8 +31,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -47,24 +44,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Description
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -101,7 +89,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import com.example.myjarvice.data.ChatSession
 import com.example.myjarvice.data.ConnectionStatus
 import com.example.myjarvice.data.ActionAuditEvent
 import com.example.myjarvice.data.ActionAuditManager
@@ -218,6 +205,7 @@ fun MainScreen(
     var showRememberInbox by rememberSaveable { mutableStateOf(false) }
     var selectedInboxId by rememberSaveable { mutableStateOf<String?>(null) }
     var showDraftComposer by rememberSaveable { mutableStateOf(false) }
+    var showToday by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(inboxRequest) { if (inboxRequest > 0) showRememberInbox = true }
     val rememberInbox = remember { RememberInboxStore(context.applicationContext) }
     var pendingChatDeletion by remember { mutableStateOf<String?>(null) }
@@ -382,6 +370,18 @@ fun MainScreen(
         )
     }
 
+    if (showToday) {
+        AssistantTodayDialog(onDismiss = { showToday = false }) {
+            AssistantHome(store = rememberInbox, sessions = savedSessions, refreshKey = showRememberInbox,
+                onOpenSaved = { id -> showToday = false; selectedInboxId = id; showRememberInbox = true },
+                onOpenSession = { session ->
+                    if (!isThinking) { showToday = false; viewModel.loadSession(session) }
+                    else Toast.makeText(context, "Wait for the current reply first.", Toast.LENGTH_SHORT).show()
+                },
+                onOpenTools = { showToday = false; showToolsMenu = true },
+                onDraft = { showToday = false; showDraftComposer = true })
+        }
+    }
     if (showRememberInbox) {
         RememberInboxScreen(
             store = rememberInbox,
@@ -525,6 +525,9 @@ fun MainScreen(
                     onClearAllHistory = {
                         if (!isThinking) pendingChatDeletion = "all"
                     },
+                    canChangeConversation = !isThinking,
+                    onOpenToday = { coroutineScope.launch { drawerState.close() }; showToday = true },
+                    onOpenInbox = { coroutineScope.launch { drawerState.close() }; selectedInboxId = null; showRememberInbox = true },
                     onOpenSettings = {
                         coroutineScope.launch { drawerState.close() }
                         onOpenSettings()
@@ -547,8 +550,7 @@ fun MainScreen(
                         onNewChat = {
                             if (!isThinking) { viewModel.startNewChat(); textInput = ""; attachedPhoto = null; attachedFileName = null; attachedFileContent = null }
                             else Toast.makeText(context, "Wait for this reply before starting a new conversation.", Toast.LENGTH_SHORT).show()
-                        },
-                        onOpenInbox = { selectedInboxId = null; showRememberInbox = true }
+                        }
                     )
                 }
             ) { innerPadding ->
@@ -575,13 +577,7 @@ fun MainScreen(
                         contentAlignment = Alignment.TopCenter
                     ) {
                         if (chatHistory.isEmpty()) {
-                            AssistantHome(
-                                store = rememberInbox, sessions = savedSessions, refreshKey = showRememberInbox,
-                                onOpenSaved = { id -> selectedInboxId = id; showRememberInbox = true },
-                                onOpenSession = { session -> if (!isThinking) viewModel.loadSession(session) },
-                                onOpenTools = { showToolsMenu = true },
-                                onDraft = { showDraftComposer = true }
-                            )
+                            EmptyChatHome()
                         } else {
                             ChatFeed(
                                 chatHistory = chatHistory,
@@ -763,183 +759,16 @@ fun MainScreen(
                     onClose = { viewModel.exitVoiceMode() },
                     onInfo = { showVoiceInfo = true },
                     onShare = { shareTranscript(context, viewModel.buildTranscript()) },
-                    onChangeVoice = { showVoicePicker = true }
+                    onChangeVoice = { showVoicePicker = true },
+                    onRetryListening = { viewModel.retryVoiceListening() },
+                    routeLabel = responseModeTopStatus(smartMode, connectionStatus),
+                    onChooseModel = { showResponseModes = true }
                 )
             }
         }
     }
 }
 
-/**
- * Top App Bar (JARVIS 1.0)
- */
-
-/**
- * Sidebar Navigation Drawer (Chat History)
- */
-@Composable
-private fun HistoryDrawerContent(
-    savedSessions: List<ChatSession>,
-    onNewChat: () -> Unit,
-    onSelectSession: (ChatSession) -> Unit,
-    onDeleteSession: (String) -> Unit,
-    onClearAllHistory: () -> Unit,
-    onOpenSettings: () -> Unit
-) {
-    val scheme = MaterialTheme.colorScheme
-    var historyQuery by rememberSaveable { mutableStateOf("") }
-    val filteredSessions = remember(savedSessions, historyQuery) {
-        savedSessions.filter { session ->
-            historyQuery.isBlank() || session.title.contains(historyQuery.trim(), ignoreCase = true) ||
-                session.messages.any { it.text.contains(historyQuery.trim(), ignoreCase = true) }
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        // "+ New chat" Button
-        Button(
-            onClick = onNewChat,
-            colors = ButtonDefaults.buttonColors(containerColor = scheme.surfaceVariant),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, scheme.outline.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Start,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                androidx.compose.material3.Icon(Icons.Rounded.Add, contentDescription = null,
-                    tint = scheme.onSurface, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    "New chat",
-                    color = scheme.onSurface,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
-
-        Spacer(Modifier.height(18.dp))
-        OutlinedTextField(value = historyQuery, onValueChange = { historyQuery = it },
-            placeholder = { Text("Search conversations", style = MaterialTheme.typography.bodyMedium) }, singleLine = true,
-            shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth(),
-            leadingIcon = { androidx.compose.material3.Icon(Icons.Rounded.Search, contentDescription = null) },
-            trailingIcon = if (historyQuery.isNotEmpty()) ({
-                ChatIconButton("Clear conversation search", { historyQuery = "" }) {
-                    androidx.compose.material3.Icon(Icons.Rounded.Close, contentDescription = null)
-                }
-            }) else null)
-
-        Text(
-            if (historyQuery.isBlank()) "Recent conversations" else "${filteredSessions.size} results",
-            color = scheme.onSurfaceVariant,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-
-        if (filteredSessions.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    if (historyQuery.isBlank()) "Your conversations will appear here" else "No conversations match your search",
-                    color = scheme.onSurfaceVariant,
-                    fontSize = 13.sp
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                items(filteredSessions, key = { it.id }) { session ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable { onSelectSession(session) }
-                            .padding(horizontal = 10.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            androidx.compose.material3.Icon(Icons.Rounded.ChatBubbleOutline, contentDescription = null,
-                                tint = scheme.onSurfaceVariant, modifier = Modifier.size(17.dp))
-                            Spacer(Modifier.width(10.dp))
-                            Text(
-                                session.title,
-                                color = scheme.onSurface,
-                                fontSize = 13.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { onDeleteSession(session.id) },
-                            modifier = Modifier.size(48.dp).semantics { contentDescription = "Delete conversation ${session.title}" }
-                        ) {
-                            androidx.compose.material3.Icon(Icons.Rounded.DeleteOutline, contentDescription = null,
-                                tint = scheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-                        }
-                    }
-                }
-            }
-        }
-
-        HorizontalDivider(color = scheme.outline.copy(alpha = 0.25f), thickness = 1.dp)
-        Spacer(Modifier.height(10.dp))
-
-        // Bottom Actions: Settings & Clear History
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .clickable { onOpenSettings() }
-                    .heightIn(min = 48.dp)
-                    .padding(horizontal = 10.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            androidx.compose.material3.Icon(Icons.Rounded.Settings, contentDescription = null,
-                tint = scheme.onSurfaceVariant, modifier = Modifier.size(19.dp))
-            Spacer(Modifier.width(12.dp))
-            Text("Settings", color = scheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-        }
-
-        if (savedSessions.isNotEmpty()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable { onClearAllHistory() }
-                    .heightIn(min = 48.dp)
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                androidx.compose.material3.Icon(Icons.Rounded.DeleteOutline, contentDescription = null,
-                    tint = scheme.error, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(12.dp))
-                Text("Clear conversations", color = scheme.error, fontSize = 13.sp)
-            }
-        }
-    }
-}
 
 
 /**

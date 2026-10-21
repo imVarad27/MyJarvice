@@ -9,12 +9,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 
 /** Lightweight readable formatting. Text remains selectable and never becomes executable UI. */
-internal fun formatReplyText(text: String): AnnotatedString = buildAnnotatedString {
+internal fun formatReplyText(text: String, interpretFences: Boolean = true): AnnotatedString = buildAnnotatedString {
     var code = false
     val inline = Regex("\\*\\*(.+?)\\*\\*|`([^`]+)`|\\*([^*\\n]+)\\*|_([^_\\n]+)_")
     text.lines().forEachIndexed { index, line ->
         if (index > 0) append('\n')
-        if (line.trimStart().startsWith("```")) {
+        if (interpretFences && line.trimStart().startsWith("```")) {
             code = !code
         } else if (code) {
             withStyle(SpanStyle(fontFamily = FontFamily.Monospace)) { append(line) }

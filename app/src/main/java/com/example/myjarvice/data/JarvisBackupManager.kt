@@ -21,9 +21,10 @@ data class BackupPreview(
     val documents: Int,
     val savedItems: Int,
     val mediaFiles: Int,
-    val tasks: Int = 0
+    val tasks: Int = 0,
+    val routines: Int = 0
 ) {
-    val totalItems: Int get() = conversations + memories + documents + savedItems + tasks
+    val totalItems: Int get() = conversations + memories + documents + savedItems + tasks + routines
 }
 
 internal object JarvisBackupPolicy {
@@ -43,6 +44,7 @@ class JarvisBackupManager(private val context: Context) {
     private val knowledge = LocalKnowledgeStore(context)
     private val inbox = RememberInboxStore(context)
     private val tasks = LocalTaskStore(context)
+    private val routines = LocalRoutineStore(context)
     private val settings = SettingsStore(context)
     private val writing = WritingProfileStore(context)
 
@@ -71,6 +73,7 @@ class JarvisBackupManager(private val context: Context) {
             .put("knowledge", encodeKnowledge(entries))
             .put("savedItems", encodeSavedItems(saved, mediaEntries.mapValues { it.value.first }))
             .put("tasks", encodeTasks(tasks.tasks()))
+            .put("routines", encodeRoutines(routines.routines()))
             .put("settings", encodeSettings())
             .put("writingProfile", encodeWritingProfile(writing.load()))
         val manifestBytes = manifest.toString().toByteArray(Charsets.UTF_8)
@@ -129,6 +132,7 @@ class JarvisBackupManager(private val context: Context) {
         internal val knowledge: List<KnowledgeEntry>,
         internal val saved: Pair<List<RememberItem>, Map<String, Pair<String, ByteArray>>>,
         internal val tasks: List<LocalTask>,
+        internal val routines: List<LocalRoutine>,
         internal val settings: JSONObject?,
         internal val writing: WritingProfile?
     ) {
@@ -157,6 +161,7 @@ class JarvisBackupManager(private val context: Context) {
                 decodeKnowledge(root.getJSONArray("knowledge")),
                 decodeSavedItems(root.getJSONArray("savedItems"), archive.media),
                 decodeTasks(root.optJSONArray("tasks") ?: JSONArray()),
+                decodeRoutines(root.optJSONArray("routines") ?: JSONArray()),
                 root.optJSONObject("settings"),
                 root.optJSONObject("writingProfile")?.let(::decodeWritingProfile))
         } catch (error: Exception) {
@@ -178,6 +183,7 @@ class JarvisBackupManager(private val context: Context) {
             knowledge.mergeEntries(prepared.knowledge)
             inbox.mergeItems(prepared.saved.first, prepared.saved.second)
             tasks.mergeTasks(prepared.tasks)
+            routines.mergeRoutines(prepared.routines)
             applySettings(prepared.settings)
             prepared.writing?.let(writing::save)
             prepared.preview
@@ -343,6 +349,26 @@ class JarvisBackupManager(private val context: Context) {
         } }
     }
 
+    private fun encodeRoutines(items: List<LocalRoutine>) = JSONArray().also { array ->
+        items.take(RoutinePlan.MAX_ROUTINES).forEach { routine -> array.put(JSONObject().put("id", routine.id)
+            .put("title", routine.title).put("steps", JSONArray(routine.steps))
+            .put("createdAt", routine.createdAt).put("updatedAt", routine.updatedAt)) }
+    }
+
+    private fun decodeRoutines(array: JSONArray): List<LocalRoutine> {
+        require(array.length() <= RoutinePlan.MAX_ROUTINES) { "Backup contains too many routines." }
+        return List(array.length()) { index ->
+            val value = array.getJSONObject(index)
+            val title = value.getString("title").trim()
+            val steps = RoutinePlan.normalizedSteps(value.optJSONArray("steps")?.let { source ->
+                List(source.length()) { step -> source.optString(step) }
+            } ?: emptyList())
+            require(value.getString("id").length <= 160) { "A routine in this backup is invalid." }
+            RoutinePlan.validate(title, steps)
+            LocalRoutine(value.getString("id"), title, steps, value.optLong("createdAt"), value.optLong("updatedAt"))
+        }
+    }
+
     private fun applySettings(value: JSONObject?) {
         if (value == null) return
         runCatching { settings.themeMode = ThemeMode.valueOf(value.optString("theme")) }
@@ -384,7 +410,8 @@ class JarvisBackupManager(private val context: Context) {
             documents = knowledge.length() - memories,
             savedItems = root.getJSONArray("savedItems").length(),
             mediaFiles = mediaCount,
-            tasks = root.optJSONArray("tasks")?.length() ?: 0
+            tasks = root.optJSONArray("tasks")?.length() ?: 0,
+            routines = root.optJSONArray("routines")?.length() ?: 0
         )
     }
 

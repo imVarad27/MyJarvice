@@ -5,25 +5,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.ArrowDropDown
-import androidx.compose.material.icons.rounded.ArrowUpward
-import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.BookmarkBorder
-import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.Computer
-import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.Menu
-import androidx.compose.material.icons.rounded.Mic
-import androidx.compose.material.icons.rounded.PhoneAndroid
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material.icons.automirrored.rounded.Article
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.myjarvice.data.ConnectionStatus
@@ -42,11 +33,10 @@ internal fun ChatTopBar(
     onOpenDrawer: () -> Unit,
     onStatusClick: () -> Unit,
     onNewChat: () -> Unit,
-    onOpenInbox: () -> Unit,
     mode: SmartMode = SmartMode.AUTO
 ) {
     val colors = MaterialTheme.colorScheme
-    Surface(color = colors.background.copy(alpha = 0.96f), tonalElevation = 1.dp) {
+    Surface(color = colors.background) {
         Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             ChatIconButton("Open conversation history", onOpenDrawer) {
                 Icon(Icons.Rounded.Menu, contentDescription = null, tint = colors.onSurfaceVariant)
@@ -65,13 +55,19 @@ internal fun ChatTopBar(
                     }
                 }
             }
-            ChatIconButton("Open saved inbox", onOpenInbox) {
-                Icon(Icons.Rounded.BookmarkBorder, contentDescription = null, tint = colors.onSurfaceVariant)
-            }
             ChatIconButton("New conversation", onNewChat) {
                 Icon(Icons.Rounded.Edit, contentDescription = null, tint = colors.onSurfaceVariant)
             }
         }
+    }
+}
+
+/** An intentionally quiet home. Tools stay in the composer and sidebar, not suggestion tiles. */
+@Composable
+internal fun EmptyChatHome(modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+        Text("What can I help with?", style = MaterialTheme.typography.headlineLarge,
+            color = MaterialTheme.colorScheme.onSurface, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
 
@@ -101,13 +97,15 @@ internal fun ChatComposer(
     assistantPaused: Boolean = false
 ) {
     val colors = MaterialTheme.colorScheme
+    var inputFocused by remember { mutableStateOf(false) }
     Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(30.dp), color = colors.surfaceContainerLow,
-        border = androidx.compose.foundation.BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.7f)), shadowElevation = 8.dp) {
+        shape = RoundedCornerShape(24.dp), color = colors.surfaceContainerLow,
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (inputFocused) colors.outline else colors.outlineVariant)) {
         Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
             TextField(value = textInput, onValueChange = onTextChange,
                 placeholder = { Text(if (canSendAttachment) "Ask about this attachment" else "Message Jarvis") },
-                modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Message input" },
+                modifier = Modifier.fillMaxWidth().onFocusChanged { inputFocused = it.isFocused }
+                    .semantics { contentDescription = "Message input" },
                 maxLines = 4,
                 textStyle = MaterialTheme.typography.bodyLarge,
                 supportingText = if (textInput.length >= 3600) ({ Text("${textInput.length}/4,000 characters") }) else null,
@@ -129,11 +127,13 @@ internal fun ChatComposer(
                 }
                 if (textInput.isNotBlank() || canSendAttachment) {
                     FilledIconButton(onClick = onSend, enabled = !isThinking && !assistantPaused,
+                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.onSurface, contentColor = colors.surface),
                         modifier = Modifier.size(48.dp).semantics { contentDescription = "Send message" }) {
                         Icon(Icons.Rounded.ArrowUpward, contentDescription = null)
                     }
                 } else {
                     FilledIconButton(onClick = onVoiceMode, enabled = !isThinking && !assistantPaused,
+                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.onSurface, contentColor = colors.surface),
                         modifier = Modifier.size(48.dp).semantics { contentDescription = "Start voice conversation" }) {
                         Icon(Icons.Rounded.GraphicEq, contentDescription = null)
                     }
@@ -203,7 +203,7 @@ private fun ShortcutBrowser(shortcuts: List<Shortcut>, pcConnected: Boolean, pau
                 entries.forEach { shortcut ->
                     item(key = shortcut.title) {
                         ToolRow(shortcut.title, shortcut.subtitle + if (shortcut.needsPc && !pcConnected) " · PC unavailable" else "",
-                            shortcut.run, enabled = !paused && (!shortcut.needsPc || pcConnected))
+                            shortcut.run, enabled = !paused && (!shortcut.needsPc || pcConnected), icon = shortcutIcon(shortcut.title))
                     }
                 }
             }
@@ -216,12 +216,11 @@ internal fun ComposerModelSelector(mode: SmartMode, onClick: () -> Unit, modifie
     enabled: Boolean = true) {
     val colors = MaterialTheme.colorScheme
     Surface(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(50),
-        color = colors.surfaceContainerHighest,
-        border = androidx.compose.foundation.BorderStroke(1.dp, colors.outlineVariant),
-        modifier = modifier.padding(horizontal = 4.dp, vertical = 5.dp).heightIn(min = 40.dp)
+        color = androidx.compose.ui.graphics.Color.Transparent,
+        modifier = modifier.padding(horizontal = 4.dp).heightIn(min = 48.dp)
             .semantics { contentDescription = "Choose response mode. Current: ${responseModeTitle(mode)}" }) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
             Icon(imageVector = when (mode) {
                 SmartMode.AUTO -> Icons.Rounded.AutoAwesome
                 SmartMode.FAST_ON_DEVICE -> Icons.Rounded.PhoneAndroid
@@ -233,7 +232,7 @@ internal fun ComposerModelSelector(mode: SmartMode, onClick: () -> Unit, modifie
             }, modifier = Modifier.size(17.dp))
             Text(responseModeCompactLabel(mode), style = MaterialTheme.typography.labelLarge,
                 color = colors.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = 8.dp))
+                modifier = Modifier.weight(1f, fill = false).padding(start = 8.dp))
             Icon(Icons.Rounded.ArrowDropDown, contentDescription = null, tint = colors.onSurfaceVariant,
                 modifier = Modifier.padding(start = 2.dp).size(18.dp))
         }
@@ -241,14 +240,15 @@ internal fun ComposerModelSelector(mode: SmartMode, onClick: () -> Unit, modifie
 }
 
 @Composable
-private fun ToolRow(title: String, subtitle: String, onClick: () -> Unit, enabled: Boolean = true) {
+private fun ToolRow(title: String, subtitle: String, onClick: () -> Unit, enabled: Boolean = true,
+    icon: ImageVector = Icons.Rounded.Search) {
     val colors = MaterialTheme.colorScheme
     Surface(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(16.dp),
         color = colors.surfaceContainer,
         contentColor = if (enabled) colors.onSurface else colors.onSurface.copy(alpha = 0.38f),
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Row(Modifier.padding(vertical = 14.dp, horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.Search, contentDescription = null, tint = if (enabled) colors.primary else colors.outline,
+            Icon(icon, contentDescription = null, tint = if (enabled) colors.onSurfaceVariant else colors.outline,
                 modifier = Modifier.size(20.dp))
             Column(Modifier.weight(1f).padding(start = 14.dp)) {
             Text(title, style = MaterialTheme.typography.titleSmall)
@@ -260,4 +260,26 @@ private fun ToolRow(title: String, subtitle: String, onClick: () -> Unit, enable
                 modifier = Modifier.size(18.dp))
         }
     }
+}
+
+/** Presentation only: no change to shortcuts, prompts, availability or tool authorization. */
+private fun shortcutIcon(title: String): ImageVector = when (title) {
+    "Take a photo" -> Icons.Rounded.PhotoCamera
+    "Choose a photo" -> Icons.Rounded.Image
+    "Attach text document" -> Icons.Rounded.AttachFile
+    "Phone status" -> Icons.Rounded.PhoneAndroid
+    "Flashlight" -> Icons.Rounded.FlashlightOn
+    "Set a timer" -> Icons.Rounded.Timer
+    "Saved memories" -> Icons.Rounded.Lightbulb
+    "Add a phone task", "PC tasks", "My phone tasks" -> Icons.Rounded.Checklist
+    "Plan my day", "Active reminders" -> Icons.Rounded.CalendarMonth
+    "Daily briefing" -> Icons.AutoMirrored.Rounded.Article
+    "Web search", "Search PC documents" -> Icons.Rounded.Search
+    "Weather" -> Icons.Rounded.Cloud
+    "Activity" -> Icons.Rounded.History
+    "Send a file to PC" -> Icons.Rounded.UploadFile
+    "Browse PC files" -> Icons.Rounded.FolderOpen
+    "PC screenshot" -> Icons.Rounded.Screenshot
+    "Lock PC" -> Icons.Rounded.Lock
+    else -> Icons.Rounded.Computer
 }

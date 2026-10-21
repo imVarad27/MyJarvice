@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.sp
 import com.example.myjarvice.data.ConnectionStatus
 import com.example.myjarvice.data.VoiceOption
 
-/** Session details behind voice mode's ⓘ button. */
+/** Session details behind voice mode's options menu. */
 @Composable
 fun VoiceInfoDialog(
     serverIp: String,
@@ -82,7 +82,7 @@ private fun InfoRow(label: String, value: String) {
     }
 }
 
-/** Voice picker behind the sliders button. Selecting applies immediately and persists. */
+/** Voice picker behind the options menu. Selecting applies immediately and persists. */
 @Composable
 fun VoicePickerDialog(
     voices: List<VoiceOption>,

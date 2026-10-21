@@ -35,3 +35,7 @@ server/.env
 
 # Vosk offline model (large; fetched separately)
 app/src/main/assets/model-en-us/
+
+# Local code graph and extraction caches (never ship/publish repository-derived content)
+/graphify-out/
+/.graphify_cache/

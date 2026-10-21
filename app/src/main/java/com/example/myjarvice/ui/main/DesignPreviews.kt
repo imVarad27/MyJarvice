@@ -25,12 +25,9 @@ private fun BlankChatPreview(theme: ThemeMode) {
     MyJarvisTheme(themeMode = theme) {
         Surface {
             Column(Modifier.fillMaxSize()) {
-                ChatTopBar(ConnectionStatus.DISCONNECTED, {}, {}, {}, {})
+                ChatTopBar(ConnectionStatus.DISCONNECTED, {}, {}, {})
                 Box(Modifier.weight(1f)) {
-                    TodayHomeContent(
-                        brief = com.example.myjarvice.data.TodayBrief.from(emptyList(), System.currentTimeMillis()),
-                        now = System.currentTimeMillis()
-                    )
+                    EmptyChatHome()
                 }
                 ChatComposer("", {}, false, false, false, false, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})
             }
