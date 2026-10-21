@@ -1,0 +1,27 @@
+# Strict source-only allowlist. No models, credentials, runtime data, assets or build products.
+/*
+!/app/
+!/server/
+!/build.gradle.kts
+!/settings.gradle.kts
+/app/*
+!/app/build.gradle.kts
+!/app/src/
+/app/src/*
+!/app/src/main/
+!/app/src/test/
+!/app/src/androidTest/
+/app/src/main/*
+!/app/src/main/java/
+/app/src/test/*
+!/app/src/test/java/
+/app/src/androidTest/*
+!/app/src/androidTest/java/
+/server/*
+!/server/*.py
+**/__pycache__/
+**/.env*
+**/*.db
+**/*.pem
+**/*.key
+**/graphify-out/
