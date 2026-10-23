@@ -33,7 +33,7 @@ def compile_briefing_context(user_name: Optional[str] = None) -> Dict[str, Any]:
             weather_info = w_res.evidence_text.strip()
             weather_sources = w_res.sources
     except Exception as e:
-        logger.warning("Weather fetch in briefing failed: %e", e)
+        logger.warning("Weather fetch in briefing failed: %s", e)
 
     # 3. Host Workstation Hardware Telemetry
     pc_status = "Host PC telemetry nominal."

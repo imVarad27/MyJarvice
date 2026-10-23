@@ -39,8 +39,15 @@ from connection_health import probe_model
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("MyJarvisServer")
 
+MAIN_LOOP: Optional[asyncio.AbstractEventLoop] = None
+
 @asynccontextmanager
 async def host_lifespan(app):
+    global MAIN_LOOP
+    try:
+        MAIN_LOOP = asyncio.get_running_loop()
+    except Exception:
+        pass
     initialise_host_services()
     try:
         yield
@@ -651,7 +658,6 @@ def api_connection_health(_auth: None = Depends(require_pairing_token)):
 
 
 CONNECTED_WEBSOCKETS: List[WebSocket] = []
-MAIN_LOOP: Optional[asyncio.AbstractEventLoop] = None
 
 
 @app.websocket("/ws/jarvis")
@@ -737,10 +743,13 @@ async def websocket_jarvis_endpoint(websocket: WebSocket):
                 reply_id = uuid_lib.uuid4().hex
                 loop = asyncio.get_running_loop()
                 def emit_text(text):
-                    future = asyncio.run_coroutine_threadsafe(websocket.send_text(json.dumps({
-                        "sender": "JARVIS", "type": "PARTIAL", "text": text, "reply_id": reply_id,
-                    })), loop)
-                    future.result(timeout=10)
+                    try:
+                        future = asyncio.run_coroutine_threadsafe(websocket.send_text(json.dumps({
+                            "sender": "JARVIS", "type": "PARTIAL", "text": text, "reply_id": reply_id,
+                        })), loop)
+                        future.result(timeout=10)
+                    except Exception:
+                        pass
                 streaming = msg.get("stream_response") is True
                 try:
                     ai_response, action, pending_email, image_payload, web_sources = await asyncio.to_thread(
@@ -797,6 +806,18 @@ async def websocket_jarvis_endpoint(websocket: WebSocket):
 
 
 # Start background reminder alert watcher
+async def _safe_send_alert(ws: WebSocket, payload: str) -> None:
+    try:
+        await ws.send_text(payload)
+    except Exception as exc:
+        logger.debug("Failed delivering alert to client: %s", exc)
+        if ws in CONNECTED_WEBSOCKETS:
+            try:
+                CONNECTED_WEBSOCKETS.remove(ws)
+            except ValueError:
+                pass
+
+
 def _on_reminder_alert(item: Dict[str, Any]):
     logger.info("🚨 Alert due: %s", item)
     alert_text = f"Sir, scheduled reminder alert: '{item['task']}'."
@@ -812,7 +833,7 @@ def _on_reminder_alert(item: Dict[str, Any]):
     if MAIN_LOOP and not MAIN_LOOP.is_closed():
         for ws in list(CONNECTED_WEBSOCKETS):
             try:
-                asyncio.run_coroutine_threadsafe(ws.send_text(payload), MAIN_LOOP)
+                asyncio.run_coroutine_threadsafe(_safe_send_alert(ws, payload), MAIN_LOOP)
             except Exception:
                 pass
 

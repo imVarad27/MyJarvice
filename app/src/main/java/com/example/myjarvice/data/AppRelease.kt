@@ -12,12 +12,21 @@ internal data class ReleaseHighlight(val title: String, val description: String,
 internal data class AppRelease(val version: String, val date: String, val highlights: List<ReleaseHighlight>)
 
 internal object JarvisReleases {
-    val latest = AppRelease("1.3.0", "2026-10-21", listOf(
-        ReleaseHighlight("Private routines", "Create reusable checklists for repeatable moments. Running a routine first shows every step, then adds private phone tasks only after you approve. Routines never send, open, or complete anything automatically.",
-            "Today → Your tasks → Routines"),
-        ReleaseHighlight("Your routines stay yours", "Routines work offline and are included in your local backup and restore preview. They are separate from PC tasks and never enter a model prompt.",
-            "Today; Settings → Data & storage"),
-        ReleaseHighlight("A calmer workspace", "Warm light and neutral dark surfaces, quieter message bubbles and a clearer composer keep the conversation first. Pixel, Jarvis, AMOLED and dynamic-color choices remain available.",
-            "Chat; Settings → Appearance")
+    val latest = AppRelease("1.3.1", "2026-10-23", listOf(
+        ReleaseHighlight(
+            "Resilient live connection",
+            "Safe background alert dispatching and automatic cleanup of disconnected sockets. Prevents server thread pool exhaustion when network connections drop unexpectedly.",
+            "Host connection; Alerts"
+        ),
+        ReleaseHighlight(
+            "Stream error recovery",
+            "Resilient token emission catches sudden client drops during active model response generation without interrupting host inference threads.",
+            "Chat; Host connection"
+        ),
+        ReleaseHighlight(
+            "Routine briefing stability",
+            "Fixed log formatting and error reporting during routine morning briefing weather retrieval.",
+            "Routine briefing; Today"
+        )
     ))
 }

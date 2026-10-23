@@ -1,5 +1,15 @@
 # Jarvis changes
 
+## 1.3.1 — 2026-10-23 — Android build 7
+
+- Fixed background reminder alert delivery over WebSocket: wrapped sends in safe
+  error handling and automatically evicted closed or dropped client sockets to prevent
+  event loop and thread pool stalls.
+- Hardened token streaming for chat generation: safely handled disconnected clients
+  during partial response streaming without crashing background model inference threads.
+- Corrected logger format specifier in routine morning briefing weather queries.
+- Initialized host server main event loop on startup across host lifespan contexts.
+
 ## 1.3.0 — 2026-10-21 — Android build 6
 
 - Added private, offline **Routines** under Today → Your tasks. A routine is a
