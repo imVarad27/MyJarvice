@@ -97,11 +97,15 @@ internal fun AssistantHome(
     var showWeekPlanner by rememberSaveable { mutableStateOf(false) }
     var showTasks by rememberSaveable { mutableStateOf(false) }
     var showRoutines by rememberSaveable { mutableStateOf(false) }
+    var showFocusSetup by rememberSaveable { mutableStateOf(false) }
     var showTaskEditor by rememberSaveable { mutableStateOf(false) }
     var showRoutineEditor by rememberSaveable { mutableStateOf(false) }
     var editingTask by remember { mutableStateOf<LocalTask?>(null) }
     var editingRoutine by remember { mutableStateOf<LocalRoutine?>(null) }
     var routineToRun by remember { mutableStateOf<LocalRoutine?>(null) }
+    var focusTask by remember { mutableStateOf<LocalTask?>(null) }
+    var focusMinutes by rememberSaveable { mutableIntStateOf(25) }
+    var focusStartedAt by rememberSaveable { mutableLongStateOf(0L) }
     val calendarPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         calendarGranted = granted
         calendarError = if (granted) null else "Calendar access wasn't granted. Today still works with saved reminders."
@@ -155,6 +159,7 @@ internal fun AssistantHome(
         onAdd = { editingTask = null; showTaskEditor = true },
         onEdit = { editingTask = it; showTaskEditor = true },
         onOpenRoutines = { showTasks = false; showRoutines = true },
+        onOpenFocus = { showTasks = false; showFocusSetup = true },
         onToggle = { task, complete -> scope.launch {
             try {
                 withContext(Dispatchers.IO) { taskStore.setCompleted(task.id, complete) }
@@ -164,6 +169,24 @@ internal fun AssistantHome(
         } },
         onDismiss = { showTasks = false }
     )
+    if (showFocusSetup) FocusSetupSheet(TaskAgenda.from(tasks, now).open, onStart = { task, minutes ->
+        focusTask = task
+        focusMinutes = minutes
+        focusStartedAt = System.currentTimeMillis()
+        showFocusSetup = false
+    }, onDismiss = { showFocusSetup = false })
+    focusTask?.let { task -> FocusSessionDialog(
+        task = task, durationMinutes = focusMinutes, startedAt = focusStartedAt,
+        onDismiss = { focusTask = null },
+        onMarkComplete = { scope.launch {
+            try {
+                withContext(Dispatchers.IO) { taskStore.setCompleted(task.id, true) }
+                focusTask = null
+                revision++
+            } catch (error: kotlinx.coroutines.CancellationException) { throw error
+            } catch (_: Exception) { Toast.makeText(context, "Couldn't complete this task.", Toast.LENGTH_LONG).show() }
+        } }
+    ) }
     if (showRoutines) RoutineLibrarySheet(
         routines = routines,
         onCreate = { editingRoutine = null; showRoutineEditor = true },
@@ -241,6 +264,7 @@ internal fun AssistantHome(
         onCapture = { showCapture = true }, onOpenTools = onOpenTools, onDraft = onDraft,
         onOpenTasks = { showTasks = true },
         onOpenRoutines = { showRoutines = true },
+        onOpenFocus = { showFocusSetup = true },
         onAddTask = { editingTask = null; showTaskEditor = true },
         onEditTask = { editingTask = it; showTaskEditor = true },
         onToggleTask = { task, complete -> scope.launch {
@@ -274,6 +298,7 @@ internal fun TodayHomeContent(
     onDraft: () -> Unit = {},
     onOpenTasks: () -> Unit = {},
     onOpenRoutines: () -> Unit = {},
+    onOpenFocus: () -> Unit = {},
     onAddTask: () -> Unit = {},
     onEditTask: (LocalTask) -> Unit = {},
     onToggleTask: (LocalTask, Boolean) -> Unit = { _, _ -> }
@@ -346,7 +371,10 @@ internal fun TodayHomeContent(
                         Spacer(Modifier.width(8.dp))
                         Text("Add task")
                     }
-                    TextButton(onClick = onOpenRoutines, modifier = Modifier.align(Alignment.End)) { Text("Routines") }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = onOpenFocus, enabled = taskAgenda.open.isNotEmpty()) { Text("Focus") }
+                        TextButton(onClick = onOpenRoutines) { Text("Routines") }
+                    }
                 }
             }
         }
@@ -536,6 +564,7 @@ private fun TaskListSheet(
     onAdd: () -> Unit,
     onEdit: (LocalTask) -> Unit,
     onOpenRoutines: () -> Unit,
+    onOpenFocus: () -> Unit,
     onToggle: (LocalTask, Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -550,7 +579,10 @@ private fun TaskListSheet(
                 Spacer(Modifier.width(8.dp))
                 Text("Add a task")
             }
-            TextButton(onClick = onOpenRoutines, modifier = Modifier.align(Alignment.End)) { Text("Routines") }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                if (agenda.open.isNotEmpty()) TextButton(onClick = onOpenFocus) { Text("Focus") }
+                TextButton(onClick = onOpenRoutines) { Text("Routines") }
+            }
             if (agenda.open.isEmpty()) {
                 Text("Nothing open right now.", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 24.dp))

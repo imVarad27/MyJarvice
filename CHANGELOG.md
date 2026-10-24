@@ -1,5 +1,16 @@
 # Jarvis changes
 
+## 1.4.0 — 2026-10-24 — Android build 8
+
+- Added an offline **Focus session** at Today → Your tasks → Focus. Pick one
+  existing phone task and a 25/45/60 minute duration; the timer supports explicit
+  pause, resume, end, and (only after time expires) task completion.
+- Focus is deliberately foreground-only. It does not request notification access,
+  use alarms, mute the device, block other apps, call a model, contact the PC, or
+  complete a task automatically. Closing the session leaves the task unchanged.
+- Added deterministic timer logic and synthetic UI tests. The Android UI tests are
+  compile-only in this delivery; they do not access a personal device's task data.
+
 ## 1.3.1 — 2026-10-23 — Android build 7
 
 - Fixed background reminder alert delivery over WebSocket: wrapped sends in safe

@@ -12,7 +12,17 @@ internal data class ReleaseHighlight(val title: String, val description: String,
 internal data class AppRelease(val version: String, val date: String, val highlights: List<ReleaseHighlight>)
 
 internal object JarvisReleases {
-    val latest = AppRelease("1.3.1", "2026-10-23", listOf(
+    val latest = AppRelease("1.4.0", "2026-10-24", listOf(
+        ReleaseHighlight(
+            "Focus, without the pressure",
+            "Choose one private phone task and run a 25, 45 or 60 minute on-screen focus timer. Pausing, ending and marking a task complete always remain explicit choices.",
+            "Today → Your tasks → Focus"
+        ),
+        ReleaseHighlight(
+            "No hidden phone control",
+            "Focus sessions are foreground-only. They do not mute the phone, block apps, send notifications, contact a model or the paired PC, or complete a task on their own.",
+            "Today → Your tasks → Focus"
+        ),
         ReleaseHighlight(
             "Resilient live connection",
             "Safe background alert dispatching and automatic cleanup of disconnected sockets. Prevents server thread pool exhaustion when network connections drop unexpectedly.",

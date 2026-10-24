@@ -1,6 +1,6 @@
 # App versions and release identity
 
-`version.properties` is the APK version source. This release is **1.3.1, build 7**.
+`version.properties` is the APK version source. This release is **1.4.0, build 8**.
 The previous rolling build had versionName `1.0`, versionCode 1. No saved-data format
 change or account/model reset is introduced by the versioning work.
 

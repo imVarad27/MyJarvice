@@ -17,6 +17,11 @@ screen should open without waiting for a model or a connected PC.
   those items to the phone task list in one write. It does not run apps, create
   calendar entries, complete anything, send data, invoke a model, or contact the
   paired PC. Routines are included in the user-initiated local backup.
+- Today → Your tasks → **Focus** starts a foreground-only 25, 45 or 60 minute
+  on-screen timer for one already-open phone task. The user explicitly chooses the
+  task, starts, pauses/resumes or ends the timer, and can mark the task complete
+  only after the timer ends. It makes no notification, alarm, model, PC, app-control
+  or task mutation request until that final user tap.
 - Tap a reminder or saved card to open that specific inbox item. The existing
   inbox provides reminder scheduling, rescheduling and deletion.
 - Capture a note or link from Today. Saving is local and does not invoke a model.
@@ -45,6 +50,8 @@ read-only calendar events. It does not claim access to notifications or PC task 
 Phone tasks are stored separately from the PC task database. A task due date is an
 organizing date, not an alarm or notification.
 Routines are stored separately from both task lists and do not infer work from chat.
+Focus session state is intentionally ephemeral: leaving the session keeps its task
+open and does not promise a background timer or a notification.
 Calendar text is not added to model prompts. Delivered reminders are cleared by the existing
 reminder receiver and therefore are not a completed-task history. The brief
 refreshes on foreground entry, on closing the inbox, after capture, and each minute
