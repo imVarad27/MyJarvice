@@ -23,6 +23,7 @@ import com.example.myjarvice.wake.WakeEvents
 fun MainNavigation(
     startOnChat: Boolean,
     inboxRequest: Long = 0L,
+    tasksRequest: Long = 0L,
     themeMode: ThemeMode,
     dynamicColor: Boolean,
     assistantStyle: AssistantStyle,
@@ -47,8 +48,8 @@ fun MainNavigation(
         if (granted) backStack.add(VoiceMatchEnrollment)
         else Toast.makeText(context, "Allow microphone access to set up your voice.", Toast.LENGTH_LONG).show()
     }
-    LaunchedEffect(inboxRequest) {
-        if (inboxRequest > 0) { backStack.clear(); backStack.add(Main) }
+    LaunchedEffect(inboxRequest, tasksRequest) {
+        if (inboxRequest > 0 || tasksRequest > 0) { backStack.clear(); backStack.add(Main) }
     }
 
     NavDisplay(
@@ -64,6 +65,7 @@ fun MainNavigation(
             entry<Main> {
                 MainScreen(
                     inboxRequest = inboxRequest,
+                    tasksRequest = tasksRequest,
                     onOpenSettings = { backStack.add(Settings) },
                     modifier = Modifier.systemBarsPadding()
                 )

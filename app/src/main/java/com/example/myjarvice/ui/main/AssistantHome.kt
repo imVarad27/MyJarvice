@@ -1,9 +1,12 @@
 package com.example.myjarvice.ui.main
 
 import android.Manifest
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import android.content.ContentUris
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.provider.CalendarContract
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -71,6 +74,7 @@ internal fun AssistantHome(
     store: RememberInboxStore,
     sessions: List<ChatSession>,
     refreshKey: Boolean,
+    tasksRequest: Long = 0L,
     onOpenSaved: (String?) -> Unit,
     onOpenSession: (ChatSession) -> Unit,
     onOpenTools: () -> Unit,
@@ -110,6 +114,14 @@ internal fun AssistantHome(
         calendarGranted = granted
         calendarError = if (granted) null else "Calendar access wasn't granted. Today still works with saved reminders."
         if (granted) revision++
+    }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) {
+            Toast.makeText(context, "Notifications are disabled. Enable them in system settings to receive task reminders.", Toast.LENGTH_LONG).show()
+        }
+    }
+    LaunchedEffect(tasksRequest) {
+        if (tasksRequest > 0) showTasks = true
     }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
@@ -228,10 +240,15 @@ internal fun AssistantHome(
     if (showTaskEditor) TaskEditorDialog(
         task = editingTask,
         now = now,
+        onRequestNotificationPermission = {
+            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        },
         onDismiss = { showTaskEditor = false },
-        onSave = { title, notes, dueAt -> scope.launch {
+        onSave = { title, notes, dueAt, reminderAt -> scope.launch {
             try {
-                withContext(Dispatchers.IO) { taskStore.saveTask(editingTask?.id, title, notes, dueAt) }
+                withContext(Dispatchers.IO) { taskStore.saveTask(editingTask?.id, title, notes, dueAt, reminderAt) }
                 showTaskEditor = false
                 revision++
             } catch (error: kotlinx.coroutines.CancellationException) { throw error
@@ -544,9 +561,17 @@ private fun HomeTaskRow(task: LocalTask, now: Long, onToggle: (Boolean) -> Unit,
                 modifier = Modifier.semantics { contentDescription = if (task.completed) "Reopen task: ${task.title}" else "Complete task: ${task.title}" })
             Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
                 Text(task.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                taskDueLabel(task, now)?.let { label ->
+                val due = taskDueLabel(task, now)
+                val reminder = taskReminderLabel(task, now)
+                val subtitle = when {
+                    due != null && reminder != null -> "$due · $reminder"
+                    due != null -> due
+                    reminder != null -> reminder
+                    else -> null
+                }
+                subtitle?.let { label ->
                     Text(label, style = MaterialTheme.typography.bodySmall,
-                        color = if (label.startsWith("Overdue")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                        color = if (due?.startsWith("Overdue") == true) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             IconButton(onClick = onEdit, modifier = Modifier.semantics { contentDescription = "Edit task: ${task.title}" }) {
@@ -611,17 +636,32 @@ private fun TaskListSheet(
 private fun TaskEditorDialog(
     task: LocalTask?,
     now: Long,
+    onRequestNotificationPermission: () -> Unit,
     onDismiss: () -> Unit,
-    onSave: (String, String, Long?) -> Unit,
+    onSave: (String, String, Long?, Long?) -> Unit,
     onDelete: (() -> Unit)?
 ) {
+    val context = LocalContext.current
     var title by rememberSaveable(task?.id) { mutableStateOf(task?.title.orEmpty()) }
     var notes by rememberSaveable(task?.id) { mutableStateOf(task?.notes.orEmpty()) }
     var dueAt by rememberSaveable(task?.id) { mutableStateOf(task?.dueAt) }
+    var reminderAt by rememberSaveable(task?.id) { mutableStateOf(task?.reminderAt) }
     var showDatePicker by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     val today = LocalDayWindow.containing(now)
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = dueAt)
+
+    val inOneHour = remember(now) { now + 3_600_000L }
+    val tomorrowMorning = remember(now) {
+        Calendar.getInstance().apply {
+            timeInMillis = now
+            add(Calendar.DAY_OF_YEAR, 1)
+            set(Calendar.HOUR_OF_DAY, 9)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -642,6 +682,43 @@ private fun TaskEditorDialog(
                     FilterChip(selected = dueAt != null && dueAt != today.startsAt && dueAt != today.endsAtExclusive,
                         onClick = { showDatePicker = true }, label = { Text(dueAt?.let(::formatTaskDate) ?: "Pick date") })
                 }
+                Text("Reminder", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = reminderAt == null, onClick = { reminderAt = null }, label = { Text("No reminder") })
+                    FilterChip(selected = reminderAt == inOneHour, onClick = {
+                        onRequestNotificationPermission()
+                        reminderAt = inOneHour
+                    }, label = { Text("In 1 hour") })
+                    FilterChip(selected = reminderAt == tomorrowMorning, onClick = {
+                        onRequestNotificationPermission()
+                        reminderAt = tomorrowMorning
+                    }, label = { Text("Tomorrow 9 AM") })
+                    FilterChip(selected = reminderAt != null && reminderAt != inOneHour && reminderAt != tomorrowMorning,
+                        onClick = {
+                            onRequestNotificationPermission()
+                            val pickCal = Calendar.getInstance().apply { timeInMillis = reminderAt ?: (now + 3_600_000L) }
+                            DatePickerDialog(context, { _, year, month, day ->
+                                TimePickerDialog(context, { _, hour, minute ->
+                                    val chosen = Calendar.getInstance().apply {
+                                        set(year, month, day, hour, minute, 0)
+                                        set(Calendar.MILLISECOND, 0)
+                                    }
+                                    if (chosen.timeInMillis > System.currentTimeMillis()) {
+                                        reminderAt = chosen.timeInMillis
+                                    } else {
+                                        Toast.makeText(context, "Choose a reminder time in the future.", Toast.LENGTH_SHORT).show()
+                                    }
+                                }, pickCal.get(Calendar.HOUR_OF_DAY), pickCal.get(Calendar.MINUTE), android.text.format.DateFormat.is24HourFormat(context)).show()
+                            }, pickCal.get(Calendar.YEAR), pickCal.get(Calendar.MONTH), pickCal.get(Calendar.DAY_OF_MONTH)).apply {
+                                datePicker.minDate = System.currentTimeMillis()
+                                show()
+                            }
+                        }, label = { Text(reminderAt?.let(::formatReminderDateTime) ?: "Pick date & time") })
+                }
+                reminderAt?.let {
+                    Text("Reminder set for ${formatReminderDateTime(it)}", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 6.dp))
+                }
                 if (onDelete != null) {
                     TextButton(onClick = { confirmDelete = true }, modifier = Modifier.padding(top = 12.dp)) {
                         Text("Delete task", color = MaterialTheme.colorScheme.error)
@@ -649,7 +726,7 @@ private fun TaskEditorDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(title, notes, dueAt) }, enabled = title.isNotBlank()) { Text("Save") } },
+        confirmButton = { TextButton(onClick = { onSave(title, notes, dueAt, reminderAt) }, enabled = title.isNotBlank()) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
     if (showDatePicker) DatePickerDialog(
@@ -668,6 +745,21 @@ private fun TaskEditorDialog(
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Keep task") } }
     )
 }
+
+internal fun taskReminderLabel(task: LocalTask, now: Long): String? {
+    if (task.completed) return null
+    val reminder = task.reminderAt ?: return null
+    val today = LocalDayWindow.containing(now)
+    val timeStr = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(reminder))
+    return when {
+        reminder < now -> "Reminder missed"
+        reminder < today.endsAtExclusive -> "Remind today at $timeStr"
+        reminder < LocalDayWindow.containing(today.endsAtExclusive).endsAtExclusive -> "Remind tomorrow at $timeStr"
+        else -> "Remind ${formatTaskDate(reminder)} at $timeStr"
+    }
+}
+
+private fun formatReminderDateTime(time: Long): String = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(time))
 
 private fun taskDueLabel(task: LocalTask, now: Long): String? {
     if (task.completed) return "Completed"

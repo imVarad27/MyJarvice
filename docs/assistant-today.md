@@ -8,9 +8,9 @@ screen should open without waiting for a model or a connected PC.
 - New conversations now open a minimal chat home. Sidebar → Today provides local
   saved reminders, the next scheduled item, two recent conversations and three
   recently saved items without loading that dashboard on every blank chat.
-- Today includes phone-native tasks with optional due dates, overdue/today
-  grouping, direct completion, editing, deletion, and a completed-items view.
-  Tasks are local and work without a model or PC connection.
+- Today includes phone-native tasks with optional due dates, optional local
+  reminders/notifications, overdue/today grouping, direct completion, editing, deletion,
+  and a completed-items view. Tasks are local and work without a model or PC connection.
 - Today → Your tasks → **Routines** keeps reusable private checklists such as a
   morning reset or meeting preparation. Creating or editing a routine is local.
   Tapping Run shows every step; only the explicit **Add tasks** confirmation adds
@@ -47,8 +47,9 @@ screen should open without waiting for a model or a connected PC.
 
 Today reflects the phone's saved inbox and, after explicit permission, today's
 read-only calendar events. It does not claim access to notifications or PC task data.
-Phone tasks are stored separately from the PC task database. A task due date is an
-organizing date, not an alarm or notification.
+Phone tasks are stored separately from the PC task database. Task reminders use local
+alarm scheduling, request explicit notification permission (Android 13+), and clear upon
+completion or cancellation without contacting the PC or a model.
 Routines are stored separately from both task lists and do not infer work from chat.
 Focus session state is intentionally ephemeral: leaving the session keeps its task
 open and does not promise a background timer or a notification.

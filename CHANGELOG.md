@@ -1,5 +1,16 @@
 # Jarvis changes
 
+## 1.5.0 — 2026-10-25 — Android build 9
+
+- Added optional local task reminders in Today → Your tasks. Reminders can be set
+  from the task editor (with presets for 1 hour, tomorrow morning, or custom date/time)
+  and can be cleared at any time.
+- Reminders are strictly local and offline: scheduled via AlarmManager, requesting
+  explicit notification permission (Android 13+), and restoring across device reboots
+  and user-initiated backups. Completing or deleting a task automatically cancels any
+  pending reminder alarm.
+- Tapping a task reminder notification deep-links directly into Today with the task list open.
+
 ## 1.4.0 — 2026-10-24 — Android build 8
 
 - Added an offline **Focus session** at Today → Your tasks → Focus. Pick one

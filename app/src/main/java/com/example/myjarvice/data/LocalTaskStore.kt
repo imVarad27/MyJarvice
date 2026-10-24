@@ -1,6 +1,10 @@
 package com.example.myjarvice.data
 
+import android.app.AlarmManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.os.Build
 import android.util.AtomicFile
 import org.json.JSONArray
 import org.json.JSONObject
@@ -13,7 +17,8 @@ data class LocalTask(
     val notes: String = "",
     val createdAt: Long,
     val dueAt: Long? = null,
-    val completedAt: Long? = null
+    val completedAt: Long? = null,
+    val reminderAt: Long? = null
 ) {
     val completed: Boolean get() = completedAt != null
 }
@@ -40,7 +45,7 @@ data class TaskAgenda(
 }
 
 /** Explicit phone-only tasks. Nothing is inferred from chats or sent to a model. */
-class LocalTaskStore(context: Context) {
+class LocalTaskStore(private val context: Context) {
     private val file = AtomicFile(File(context.filesDir, "local-tasks.json"))
 
     fun tasks(): List<LocalTask> = synchronized(lock) {
@@ -54,27 +59,62 @@ class LocalTaskStore(context: Context) {
                     notes = obj.optString("notes"),
                     createdAt = obj.getLong("createdAt"),
                     dueAt = obj.optLong("dueAt", -1).takeIf { it > 0 },
-                    completedAt = obj.optLong("completedAt", -1).takeIf { it > 0 }
+                    completedAt = obj.optLong("completedAt", -1).takeIf { it > 0 },
+                    reminderAt = obj.optLong("reminderAt", -1).takeIf { it > 0 }
                 )
             } }
         }.getOrDefault(emptyList())
     }
 
-    fun saveTask(id: String? = null, title: String, notes: String = "", dueAt: Long? = null): LocalTask = synchronized(lock) {
+    fun saveTask(
+        id: String? = null,
+        title: String,
+        notes: String = "",
+        dueAt: Long? = null,
+        reminderAt: Long? = null
+    ): LocalTask = synchronized(lock) {
         val cleanTitle = title.trim()
         val cleanNotes = notes.trim()
         require(cleanTitle.isNotEmpty() && cleanTitle.length <= 180) { "Use a task title of 1–180 characters." }
         require(cleanNotes.length <= 2_000) { "Task notes can contain up to 2,000 characters." }
+        require(reminderAt == null || reminderAt > System.currentTimeMillis()) { "Choose a reminder time in the future." }
         val all = tasks().toMutableList()
         val existing = id?.let { taskId -> all.firstOrNull { it.id == taskId } }
         val task = if (existing == null) {
             require(all.size < 1_000) { "Task list is full. Remove completed tasks first." }
-            LocalTask(UUID.randomUUID().toString(), cleanTitle, cleanNotes, System.currentTimeMillis(), dueAt)
-        } else existing.copy(title = cleanTitle, notes = cleanNotes, dueAt = dueAt)
+            LocalTask(
+                id = UUID.randomUUID().toString(),
+                title = cleanTitle,
+                notes = cleanNotes,
+                createdAt = System.currentTimeMillis(),
+                dueAt = dueAt,
+                reminderAt = reminderAt
+            )
+        } else existing.copy(title = cleanTitle, notes = cleanNotes, dueAt = dueAt, reminderAt = reminderAt)
+
+        if (existing?.reminderAt != null && existing.reminderAt != reminderAt) {
+            cancelReminder(existing)
+        }
+        if (task.reminderAt != null && !task.completed) {
+            scheduleReminder(task, task.reminderAt)
+        }
+
         val index = all.indexOfFirst { it.id == task.id }
         if (index >= 0) all[index] = task else all += task
         persist(all)
         task
+    }
+
+    fun setReminder(id: String, at: Long?) = synchronized(lock) {
+        require(at == null || at > System.currentTimeMillis()) { "Choose a reminder time in the future." }
+        val all = tasks().toMutableList()
+        val existing = all.firstOrNull { it.id == id } ?: return@synchronized
+        if (existing.reminderAt != null) cancelReminder(existing)
+        val updated = existing.copy(reminderAt = at)
+        if (at != null && !updated.completed) scheduleReminder(updated, at)
+        val index = all.indexOfFirst { it.id == id }
+        if (index >= 0) all[index] = updated
+        persist(all)
     }
 
     /** Writes an explicitly approved routine run in one local transaction. */
@@ -92,10 +132,30 @@ class LocalTaskStore(context: Context) {
     }
 
     fun setCompleted(id: String, completed: Boolean, at: Long = System.currentTimeMillis()) = synchronized(lock) {
-        persist(tasks().map { if (it.id == id) it.copy(completedAt = if (completed) at else null) else it })
+        val all = tasks().map {
+            if (it.id == id) {
+                if (completed && it.reminderAt != null) {
+                    cancelReminder(it)
+                }
+                it.copy(completedAt = if (completed) at else null)
+            } else it
+        }
+        persist(all)
     }
 
-    fun delete(id: String) = synchronized(lock) { persist(tasks().filterNot { it.id == id }) }
+    fun delete(id: String) = synchronized(lock) {
+        tasks().firstOrNull { it.id == id }?.let { cancelReminder(it) }
+        persist(tasks().filterNot { it.id == id })
+    }
+
+    fun restoreReminders() = synchronized(lock) {
+        val now = System.currentTimeMillis()
+        tasks().forEach { task ->
+            if (!task.completed && task.reminderAt != null && task.reminderAt > now) {
+                scheduleReminder(task, task.reminderAt)
+            }
+        }
+    }
 
     fun mergeTasks(incoming: List<LocalTask>): Int = synchronized(lock) {
         val current = tasks().toMutableList()
@@ -107,6 +167,9 @@ class LocalTaskStore(context: Context) {
             ) return@forEach
             current += task
             existing += task.id
+            if (task.reminderAt != null && task.reminderAt > System.currentTimeMillis() && !task.completed) {
+                scheduleReminder(task, task.reminderAt)
+            }
             added++
         }
         persist(current)
@@ -115,9 +178,14 @@ class LocalTaskStore(context: Context) {
 
     private fun persist(tasks: List<LocalTask>) {
         val array = JSONArray()
-        tasks.forEach { task -> array.put(JSONObject().put("id", task.id).put("title", task.title)
-            .put("notes", task.notes).put("createdAt", task.createdAt)
-            .put("dueAt", task.dueAt ?: -1).put("completedAt", task.completedAt ?: -1)) }
+        tasks.forEach { task ->
+            array.put(
+                JSONObject().put("id", task.id).put("title", task.title)
+                    .put("notes", task.notes).put("createdAt", task.createdAt)
+                    .put("dueAt", task.dueAt ?: -1).put("completedAt", task.completedAt ?: -1)
+                    .put("reminderAt", task.reminderAt ?: -1)
+            )
+        }
         val output = file.startWrite()
         try {
             output.write(array.toString().toByteArray(Charsets.UTF_8))
@@ -127,6 +195,31 @@ class LocalTaskStore(context: Context) {
             throw error
         }
     }
+
+    private fun scheduleReminder(task: LocalTask, at: Long) {
+        val alarm = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        val intent = reminderIntent(task)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, intent)
+        } else {
+            alarm.set(AlarmManager.RTC_WAKEUP, at, intent)
+        }
+    }
+
+    private fun cancelReminder(task: LocalTask) {
+        val alarm = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        alarm.cancel(reminderIntent(task))
+    }
+
+    private fun reminderIntent(task: LocalTask): PendingIntent = PendingIntent.getBroadcast(
+        context,
+        task.id.hashCode(),
+        Intent(context, TaskReminderReceiver::class.java).apply {
+            putExtra(TaskReminderReceiver.EXTRA_TASK_ID, task.id)
+            putExtra(TaskReminderReceiver.EXTRA_TITLE, task.title)
+        },
+        PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+    )
 
     companion object { private val lock = Any() }
 }

@@ -12,7 +12,17 @@ internal data class ReleaseHighlight(val title: String, val description: String,
 internal data class AppRelease(val version: String, val date: String, val highlights: List<ReleaseHighlight>)
 
 internal object JarvisReleases {
-    val latest = AppRelease("1.4.0", "2026-10-24", listOf(
+    val latest = AppRelease("1.5.0", "2026-10-25", listOf(
+        ReleaseHighlight(
+            "Private task reminders",
+            "Schedule optional notifications for private phone tasks. Reminders are managed directly in the task editor with clear presets, custom date/time, and explicit cancellation.",
+            "Today → Your tasks"
+        ),
+        ReleaseHighlight(
+            "Explicit permission and privacy",
+            "Task reminders stay local and offline. They require explicit notification permission, make no model or network calls, and are restored across device reboots and local backups.",
+            "Today → Your tasks; Backup"
+        ),
         ReleaseHighlight(
             "Focus, without the pressure",
             "Choose one private phone task and run a 25, 45 or 60 minute on-screen focus timer. Pausing, ending and marking a task complete always remain explicit choices.",
@@ -22,21 +32,6 @@ internal object JarvisReleases {
             "No hidden phone control",
             "Focus sessions are foreground-only. They do not mute the phone, block apps, send notifications, contact a model or the paired PC, or complete a task on their own.",
             "Today → Your tasks → Focus"
-        ),
-        ReleaseHighlight(
-            "Resilient live connection",
-            "Safe background alert dispatching and automatic cleanup of disconnected sockets. Prevents server thread pool exhaustion when network connections drop unexpectedly.",
-            "Host connection; Alerts"
-        ),
-        ReleaseHighlight(
-            "Stream error recovery",
-            "Resilient token emission catches sudden client drops during active model response generation without interrupting host inference threads.",
-            "Chat; Host connection"
-        ),
-        ReleaseHighlight(
-            "Routine briefing stability",
-            "Fixed log formatting and error reporting during routine morning briefing weather retrieval.",
-            "Routine briefing; Today"
         )
     ))
 }

@@ -41,6 +41,7 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private var inboxRequest by mutableStateOf(0L)
+    private var tasksRequest by mutableStateOf(0L)
     private var wakeStartJob: Job? = null
 
     private val permissionLauncher =
@@ -52,6 +53,7 @@ class MainActivity : ComponentActivity() {
         val launchedByWake = intent?.getBooleanExtra(EXTRA_START_VOICE, false) == true
         if (launchedByWake) requestCorePermissions()
         if (intent?.getBooleanExtra(EXTRA_OPEN_INBOX, false) == true) inboxRequest = System.nanoTime()
+        if (intent?.getBooleanExtra(EXTRA_OPEN_TASKS, false) == true) tasksRequest = System.nanoTime()
         if (launchedByWake) WakeEvents.voiceTrigger.value = true
         intent?.getStringExtra(EXTRA_OPEN_SESSION)?.let { WakeEvents.openSessionId.value = it }
 
@@ -96,6 +98,7 @@ class MainActivity : ComponentActivity() {
                     MainNavigation(
                         startOnChat = true,
                         inboxRequest = inboxRequest,
+                        tasksRequest = tasksRequest,
                         themeMode = themeMode,
                         dynamicColor = dynamicColor,
                         assistantStyle = assistantStyle,
@@ -129,6 +132,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (intent.getBooleanExtra(EXTRA_OPEN_INBOX, false)) inboxRequest = System.nanoTime()
+        if (intent.getBooleanExtra(EXTRA_OPEN_TASKS, false)) tasksRequest = System.nanoTime()
         intent.getStringExtra(EXTRA_OPEN_SESSION)?.let { WakeEvents.openSessionId.value = it }
         if (intent.getBooleanExtra(EXTRA_START_VOICE, false)) {
             WakeEvents.voiceTrigger.value = true
@@ -182,6 +186,7 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_START_VOICE = "start_voice"
         const val EXTRA_OPEN_INBOX = "open_inbox"
+        const val EXTRA_OPEN_TASKS = "open_tasks"
         const val EXTRA_OPEN_SESSION = "open_session"
     }
 }

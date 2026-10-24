@@ -331,7 +331,8 @@ class JarvisBackupManager(private val context: Context) {
     private fun encodeTasks(items: List<LocalTask>) = JSONArray().also { array ->
         items.take(1_000).forEach { task -> array.put(JSONObject().put("id", task.id).put("title", task.title)
             .put("notes", task.notes).put("createdAt", task.createdAt)
-            .put("dueAt", task.dueAt ?: -1).put("completedAt", task.completedAt ?: -1)) }
+            .put("dueAt", task.dueAt ?: -1).put("completedAt", task.completedAt ?: -1)
+            .put("reminderAt", task.reminderAt ?: -1)) }
     }
 
     private fun decodeTasks(array: JSONArray): List<LocalTask> {
@@ -344,7 +345,8 @@ class JarvisBackupManager(private val context: Context) {
                 id = obj.getString("id").take(160), title = title, notes = notes,
                 createdAt = obj.optLong("createdAt"),
                 dueAt = obj.optLong("dueAt", -1).takeIf { it > 0 },
-                completedAt = obj.optLong("completedAt", -1).takeIf { it > 0 }
+                completedAt = obj.optLong("completedAt", -1).takeIf { it > 0 },
+                reminderAt = obj.optLong("reminderAt", -1).takeIf { it > 0 }
             )
         } }
     }
