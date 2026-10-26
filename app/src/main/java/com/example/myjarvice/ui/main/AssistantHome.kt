@@ -75,6 +75,7 @@ internal fun AssistantHome(
     sessions: List<ChatSession>,
     refreshKey: Boolean,
     tasksRequest: Long = 0L,
+    captureRequest: Long = 0L,
     onOpenSaved: (String?) -> Unit,
     onOpenSession: (ChatSession) -> Unit,
     onOpenTools: () -> Unit,
@@ -122,6 +123,9 @@ internal fun AssistantHome(
     }
     LaunchedEffect(tasksRequest) {
         if (tasksRequest > 0) showTasks = true
+    }
+    LaunchedEffect(captureRequest) {
+        if (captureRequest > 0) showCapture = true
     }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {

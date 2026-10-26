@@ -123,6 +123,18 @@
             android:name=".data.TaskReminderReceiver"
             android:exported="false" />
 
+        <!-- Home-screen widget for Today agenda and quick actions -->
+        <receiver
+            android:name=".widget.JarvisTodayWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_jarvis_today_info" />
+        </receiver>
+
         <!-- Gives the system camera a temporary, private destination for a photo
              taken from the chat composer. No captured image is written to shared
              storage by Jarvis. -->

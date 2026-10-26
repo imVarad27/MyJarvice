@@ -113,6 +113,7 @@ fun MainScreen(
     onOpenSettings: () -> Unit = {},
     inboxRequest: Long = 0L,
     tasksRequest: Long = 0L,
+    captureRequest: Long = 0L,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -209,6 +210,7 @@ fun MainScreen(
     var showToday by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(inboxRequest) { if (inboxRequest > 0) showRememberInbox = true }
     LaunchedEffect(tasksRequest) { if (tasksRequest > 0) showToday = true }
+    LaunchedEffect(captureRequest) { if (captureRequest > 0) showToday = true }
     val rememberInbox = remember { RememberInboxStore(context.applicationContext) }
     var pendingChatDeletion by remember { mutableStateOf<String?>(null) }
     var pendingVoiceMode by remember { mutableStateOf(false) }
@@ -376,6 +378,7 @@ fun MainScreen(
         AssistantTodayDialog(onDismiss = { showToday = false }) {
             AssistantHome(store = rememberInbox, sessions = savedSessions, refreshKey = showRememberInbox,
                 tasksRequest = tasksRequest,
+                captureRequest = captureRequest,
                 onOpenSaved = { id -> showToday = false; selectedInboxId = id; showRememberInbox = true },
                 onOpenSession = { session ->
                     if (!isThinking) { showToday = false; viewModel.loadSession(session) }

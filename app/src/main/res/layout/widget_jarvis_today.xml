@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- Header with Jarvis brand and quick actions -->
+    <LinearLayout
+        android:id="@+id/widget_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Jarvis"
+                android:textColor="#E1E3DF"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_subtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Today"
+                android:textColor="#919B96"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- Quick actions: Tasks, Capture, Voice -->
+        <ImageButton
+            android:id="@+id/widget_btn_tasks"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:background="@drawable/widget_action_bg"
+            android:contentDescription="Open tasks"
+            android:padding="6dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_widget_tasks" />
+
+        <ImageButton
+            android:id="@+id/widget_btn_capture"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/widget_action_bg"
+            android:contentDescription="Capture note"
+            android:padding="6dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_widget_note" />
+
+        <ImageButton
+            android:id="@+id/widget_btn_voice"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/widget_action_bg"
+            android:contentDescription="Voice mode"
+            android:padding="6dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_widget_mic" />
+    </LinearLayout>
+
+    <!-- Task list items -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:orientation="vertical">
+
+        <!-- Task Row 1 -->
+        <LinearLayout
+            android:id="@+id/widget_task_row_1"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:background="@drawable/widget_item_bg"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="8dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/widget_task_title_1"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#E1E3DF"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/widget_task_due_1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:textColor="#7EDAD1"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- Task Row 2 -->
+        <LinearLayout
+            android:id="@+id/widget_task_row_2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:background="@drawable/widget_item_bg"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="8dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/widget_task_title_2"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#E1E3DF"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/widget_task_due_2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:textColor="#7EDAD1"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- Task Row 3 -->
+        <LinearLayout
+            android:id="@+id/widget_task_row_3"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/widget_item_bg"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="8dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/widget_task_title_3"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#E1E3DF"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/widget_task_due_3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:textColor="#7EDAD1"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- Empty state placeholder -->
+        <TextView
+            android:id="@+id/widget_empty_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:padding="12dp"
+            android:text="All caught up · Tap + to capture a thought"
+            android:textColor="#717C77"
+            android:textSize="12sp"
+            android:visibility="visible" />
+    </LinearLayout>
+</LinearLayout>

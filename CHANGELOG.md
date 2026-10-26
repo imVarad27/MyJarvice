@@ -1,5 +1,11 @@
 # Jarvis changes
 
+## 1.6.0 — 2026-10-26 — Android build 10
+
+- Added **Today Home Screen Widget**: view open tasks and due dates at a glance on the Android home screen.
+- Added instant widget quick actions: launch hands-free voice mode, open quick note capture, or jump directly into Today.
+- Widget automatically refreshes whenever tasks are added, completed, or edited in Jarvis.
+
 ## 1.5.0 — 2026-10-25 — Android build 9
 
 - Added optional local task reminders in Today → Your tasks. Reminders can be set

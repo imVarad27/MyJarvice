@@ -190,6 +190,9 @@ class LocalTaskStore(private val context: Context) {
         try {
             output.write(array.toString().toByteArray(Charsets.UTF_8))
             file.finishWrite(output)
+            runCatching {
+                com.example.myjarvice.widget.JarvisTodayWidgetProvider.updateAllWidgets(context)
+            }
         } catch (error: Exception) {
             file.failWrite(output)
             throw error

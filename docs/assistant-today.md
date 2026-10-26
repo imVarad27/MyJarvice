@@ -22,6 +22,9 @@ screen should open without waiting for a model or a connected PC.
   task, starts, pauses/resumes or ends the timer, and can mark the task complete
   only after the timer ends. It makes no notification, alarm, model, PC, app-control
   or task mutation request until that final user tap.
+- **Today widget**: an offline Android home-screen widget presents open tasks and
+  due statuses at a glance, with direct shortcuts for voice mode, quick capture, and
+  Today navigation. It refreshes automatically upon local task mutations.
 - Tap a reminder or saved card to open that specific inbox item. The existing
   inbox provides reminder scheduling, rescheduling and deletion.
 - Capture a note or link from Today. Saving is local and does not invoke a model.

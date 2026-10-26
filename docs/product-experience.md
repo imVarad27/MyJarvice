@@ -35,6 +35,7 @@ Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer co
 - The private week planner offers **Time Rehearsal**: try a selected commitment length with preparation/recovery buffers, compare a same-start 50% overrun and filter sampled candidates. It is local what-if arithmetic, not an AI forecast or booking. Incomplete data disables results; see [Time Rehearsal](time-rehearsal.md).
 - New-chat home is now a quiet welcome and composer with no dashboard tiles. Today (tasks, calendar, rehearsal, capture and drafts) and Saved items are explicit sidebar destinations, so no features/data are removed and blank home no longer queries the calendar/inbox/task dashboard. Voice uses a responsive themed indicator, grouped options, visible route picker, expandable captions and labeled Listen/Mute/Unmute/End controls. See [Chat-first UI](chat-first-ui.md).
 - The conversation workspace now uses neutral surfaces, proportional user bubbles, 16/26 sp answer text and inert fenced-code panels with explicit copy. The sidebar/search scroll without losing Settings; history clearing keeps its confirmation. The composer uses restrained focus/primary-action treatment and a width-aware model selector; shortcut icons describe each tool. See [Workspace UI refactor](workspace-ui-refactor.md).
+- Today includes a home-screen widget showing open tasks and due dates at a glance, with one-tap shortcuts for hands-free voice, quick note capture, and Today navigation.
 
 ## What a personal assistant needs next
 
@@ -45,7 +46,7 @@ Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer co
 5. **Personal memory follow-through:** validate inspect/edit/exclude/remove on-device, then consider explicitly reviewed PC sharing. Avoid inferred sensitive memories and hidden personalization.
 6. **Connection onboarding follow-through:** validate the shipped health checks on-device, then add explicitly reviewed QR pairing and a stable discoverable host identity. Diagnostics do not fix DHCP changes or establish USB forwarding themselves.
 
-Later candidates: project spaces and an Android widget. Image/video generation, social feeds and elaborate animations are not priorities for Jarvis's core personal-assistant use case.
+Later candidates: project spaces. Image/video generation, social feeds and elaborate animations are not priorities for Jarvis's core personal-assistant use case.
 
 ## Verification
 

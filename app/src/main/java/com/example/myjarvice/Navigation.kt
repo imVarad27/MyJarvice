@@ -24,6 +24,7 @@ fun MainNavigation(
     startOnChat: Boolean,
     inboxRequest: Long = 0L,
     tasksRequest: Long = 0L,
+    captureRequest: Long = 0L,
     themeMode: ThemeMode,
     dynamicColor: Boolean,
     assistantStyle: AssistantStyle,
@@ -48,8 +49,8 @@ fun MainNavigation(
         if (granted) backStack.add(VoiceMatchEnrollment)
         else Toast.makeText(context, "Allow microphone access to set up your voice.", Toast.LENGTH_LONG).show()
     }
-    LaunchedEffect(inboxRequest, tasksRequest) {
-        if (inboxRequest > 0 || tasksRequest > 0) { backStack.clear(); backStack.add(Main) }
+    LaunchedEffect(inboxRequest, tasksRequest, captureRequest) {
+        if (inboxRequest > 0 || tasksRequest > 0 || captureRequest > 0) { backStack.clear(); backStack.add(Main) }
     }
 
     NavDisplay(
@@ -66,6 +67,7 @@ fun MainNavigation(
                 MainScreen(
                     inboxRequest = inboxRequest,
                     tasksRequest = tasksRequest,
+                    captureRequest = captureRequest,
                     onOpenSettings = { backStack.add(Settings) },
                     modifier = Modifier.systemBarsPadding()
                 )

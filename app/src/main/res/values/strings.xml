@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Jarvis</string>
+    <string name="widget_today_name">Jarvis Today</string>
+    <string name="widget_today_description">Glance at open tasks and access voice, notes, and tasks from your home screen.</string>
 </resources>

@@ -12,7 +12,17 @@ internal data class ReleaseHighlight(val title: String, val description: String,
 internal data class AppRelease(val version: String, val date: String, val highlights: List<ReleaseHighlight>)
 
 internal object JarvisReleases {
-    val latest = AppRelease("1.5.0", "2026-10-25", listOf(
+    val latest = AppRelease("1.6.0", "2026-10-26", listOf(
+        ReleaseHighlight(
+            "Today home screen widget",
+            "Glance at your top open tasks and due dates right from your Android home screen. Automatically updates as you manage tasks in Jarvis.",
+            "Android home screen"
+        ),
+        ReleaseHighlight(
+            "Instant quick actions",
+            "One-tap shortcuts on your home screen to launch hands-free voice mode, capture a quick note, or jump straight into Today.",
+            "Android home screen; Today"
+        ),
         ReleaseHighlight(
             "Private task reminders",
             "Schedule optional notifications for private phone tasks. Reminders are managed directly in the task editor with clear presets, custom date/time, and explicit cancellation.",
@@ -22,16 +32,6 @@ internal object JarvisReleases {
             "Explicit permission and privacy",
             "Task reminders stay local and offline. They require explicit notification permission, make no model or network calls, and are restored across device reboots and local backups.",
             "Today → Your tasks; Backup"
-        ),
-        ReleaseHighlight(
-            "Focus, without the pressure",
-            "Choose one private phone task and run a 25, 45 or 60 minute on-screen focus timer. Pausing, ending and marking a task complete always remain explicit choices.",
-            "Today → Your tasks → Focus"
-        ),
-        ReleaseHighlight(
-            "No hidden phone control",
-            "Focus sessions are foreground-only. They do not mute the phone, block apps, send notifications, contact a model or the paired PC, or complete a task on their own.",
-            "Today → Your tasks → Focus"
         )
     ))
 }

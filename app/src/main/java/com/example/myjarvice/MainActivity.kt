@@ -42,6 +42,7 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     private var inboxRequest by mutableStateOf(0L)
     private var tasksRequest by mutableStateOf(0L)
+    private var captureRequest by mutableStateOf(0L)
     private var wakeStartJob: Job? = null
 
     private val permissionLauncher =
@@ -54,6 +55,7 @@ class MainActivity : ComponentActivity() {
         if (launchedByWake) requestCorePermissions()
         if (intent?.getBooleanExtra(EXTRA_OPEN_INBOX, false) == true) inboxRequest = System.nanoTime()
         if (intent?.getBooleanExtra(EXTRA_OPEN_TASKS, false) == true) tasksRequest = System.nanoTime()
+        if (intent?.getBooleanExtra(EXTRA_OPEN_CAPTURE, false) == true) captureRequest = System.nanoTime()
         if (launchedByWake) WakeEvents.voiceTrigger.value = true
         intent?.getStringExtra(EXTRA_OPEN_SESSION)?.let { WakeEvents.openSessionId.value = it }
 
@@ -99,6 +101,7 @@ class MainActivity : ComponentActivity() {
                         startOnChat = true,
                         inboxRequest = inboxRequest,
                         tasksRequest = tasksRequest,
+                        captureRequest = captureRequest,
                         themeMode = themeMode,
                         dynamicColor = dynamicColor,
                         assistantStyle = assistantStyle,
@@ -133,6 +136,7 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         if (intent.getBooleanExtra(EXTRA_OPEN_INBOX, false)) inboxRequest = System.nanoTime()
         if (intent.getBooleanExtra(EXTRA_OPEN_TASKS, false)) tasksRequest = System.nanoTime()
+        if (intent.getBooleanExtra(EXTRA_OPEN_CAPTURE, false)) captureRequest = System.nanoTime()
         intent.getStringExtra(EXTRA_OPEN_SESSION)?.let { WakeEvents.openSessionId.value = it }
         if (intent.getBooleanExtra(EXTRA_START_VOICE, false)) {
             WakeEvents.voiceTrigger.value = true
@@ -187,6 +191,7 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_START_VOICE = "start_voice"
         const val EXTRA_OPEN_INBOX = "open_inbox"
         const val EXTRA_OPEN_TASKS = "open_tasks"
+        const val EXTRA_OPEN_CAPTURE = "open_capture"
         const val EXTRA_OPEN_SESSION = "open_session"
     }
 }
