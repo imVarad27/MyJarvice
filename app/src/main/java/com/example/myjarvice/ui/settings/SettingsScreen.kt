@@ -22,6 +22,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,6 +55,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -833,9 +835,34 @@ fun SettingsScreen(
 
             }
             SettingsSection("PC connection", initiallyExpanded = false, query = sectionQuery) {
-
+                var showPairingDialog by rememberSaveable { mutableStateOf(false) }
 
                 SettingsCard {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "PC link settings",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = scheme.onSurface
+                        )
+                        FilledTonalButton(
+                            onClick = { showPairingDialog = true },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text("Import setup code", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                    Text(
+                        "Paste a jarvis-pair link, JSON snippet, or .env line to auto-fill address and token.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
+
                     OutlinedTextField(
                         value = serverIp,
                         onValueChange = {
@@ -871,6 +898,20 @@ fun SettingsScreen(
                     )
                     Spacer(Modifier.height(12.dp))
                     PcDiagnosticsPanel(serverIp, serverToken)
+                }
+
+                if (showPairingDialog) {
+                    PairingImportDialog(
+                        currentHost = serverIp,
+                        onDismiss = { showPairingDialog = false },
+                        onPairingApplied = { host, token ->
+                            serverIp = host
+                            serverToken = token
+                            settingsStore.serverIp = host
+                            settingsStore.serverToken = token
+                            showPairingDialog = false
+                        }
+                    )
                 }
 
                 Spacer(Modifier.height(24.dp))

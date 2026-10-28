@@ -36,6 +36,8 @@ Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer co
 - New-chat home is now a quiet welcome and composer with no dashboard tiles. Today (tasks, calendar, rehearsal, capture and drafts) and Saved items are explicit sidebar destinations, so no features/data are removed and blank home no longer queries the calendar/inbox/task dashboard. Voice uses a responsive themed indicator, grouped options, visible route picker, expandable captions and labeled Listen/Mute/Unmute/End controls. See [Chat-first UI](chat-first-ui.md).
 - The conversation workspace now uses neutral surfaces, proportional user bubbles, 16/26 sp answer text and inert fenced-code panels with explicit copy. The sidebar/search scroll without losing Settings; history clearing keeps its confirmation. The composer uses restrained focus/primary-action treatment and a width-aware model selector; shortcut icons describe each tool. See [Workspace UI refactor](workspace-ui-refactor.md).
 - Today includes a home-screen widget showing open tasks and due dates at a glance, with one-tap shortcuts for hands-free voice, quick note capture, and Today navigation.
+- PC connection includes setup code import: paste a `jarvis-pair://v1` URL, JSON config, or `.env` snippet with live host reachability pre-testing and masked token confirmation before applying. The companion `python -m server.pair_helper` CLI utility exposes local addresses and pairing codes directly on the PC.
+- Data & storage now tracks and displays the latest backup timestamp so users can verify backup currency at a glance.
 
 ## What a personal assistant needs next
 

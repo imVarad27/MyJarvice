@@ -59,6 +59,7 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -790,6 +791,7 @@ internal fun ServerConfigDialog(
     val scheme = MaterialTheme.colorScheme
     var tempIp by remember { mutableStateOf(if (currentIp.isBlank()) "127.0.0.1:8000" else currentIp) }
     var tempToken by remember { mutableStateOf(currentToken) }
+    var showImportDialog by remember { mutableStateOf(false) }
     val validAddress = remember(tempIp) { runCatching { com.example.myjarvice.data.PcEndpoint.base(tempIp) }.isSuccess }
 
     AlertDialog(
@@ -804,11 +806,24 @@ internal fun ServerConfigDialog(
                 )
                 Spacer(Modifier.height(12.dp))
 
-                OutlinedButton(
-                    onClick = { tempIp = "127.0.0.1:8000" },
-                    shape = RoundedCornerShape(10.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Use USB connection")
+                    OutlinedButton(
+                        onClick = { tempIp = "127.0.0.1:8000" },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Use USB")
+                    }
+                    FilledTonalButton(
+                        onClick = { showImportDialog = true },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Paste code")
+                    }
                 }
 
                 Spacer(Modifier.height(14.dp))
@@ -859,6 +874,18 @@ internal fun ServerConfigDialog(
         },
         containerColor = scheme.surface
     )
+
+    if (showImportDialog) {
+        com.example.myjarvice.ui.settings.PairingImportDialog(
+            currentHost = tempIp,
+            onDismiss = { showImportDialog = false },
+            onPairingApplied = { host, token ->
+                tempIp = host
+                tempToken = token
+                showImportDialog = false
+            }
+        )
+    }
 }
 
 private fun shareTranscript(context: Context, transcript: String) {

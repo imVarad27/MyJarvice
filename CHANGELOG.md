@@ -1,6 +1,17 @@
 # Jarvis changes
 
-## 1.6.0 — 2026-10-26 — Android build 10
+## 1.7.0 — 2026-10-28 — Android build 11
+
+- Added **PC pairing setup code import**:
+  - Quickly configure PC address and token by pasting a `jarvis-pair://v1` link, JSON config, or `.env` snippet.
+  - Available in both Settings → PC connection and Chat → Connect PC dialogs.
+  - Live pre-test connection using `PcHealthClient` to verify host status before applying.
+  - Masked pairing token preview for safety.
+- Added **PC server pairing helper**:
+  - `python -m server.pair_helper` inspects local network interfaces and outputs ready-to-copy pairing links and configuration codes in the terminal.
+- Added **Backup safety status tracking**:
+  - Added `lastBackupTimestamp` in `SettingsStore`.
+  - Settings → Data & storage displays the timestamp of the most recent local backup export.
 
 - Added **Today Home Screen Widget**: view open tasks and due dates at a glance on the Android home screen.
 - Added instant widget quick actions: launch hands-free voice mode, open quick note capture, or jump directly into Today.

@@ -12,26 +12,26 @@ internal data class ReleaseHighlight(val title: String, val description: String,
 internal data class AppRelease(val version: String, val date: String, val highlights: List<ReleaseHighlight>)
 
 internal object JarvisReleases {
-    val latest = AppRelease("1.6.0", "2026-10-26", listOf(
+    val latest = AppRelease("1.7.0", "2026-10-28", listOf(
         ReleaseHighlight(
-            "Today home screen widget",
-            "Glance at your top open tasks and due dates right from your Android home screen. Automatically updates as you manage tasks in Jarvis.",
-            "Android home screen"
+            "PC pairing setup code import",
+            "Pair your phone and PC in seconds. Paste a jarvis-pair link, JSON config, or .env snippet to automatically configure your PC host address and pairing token.",
+            "Settings → PC connection; Chat → Connect PC"
         ),
         ReleaseHighlight(
-            "Instant quick actions",
-            "One-tap shortcuts on your home screen to launch hands-free voice mode, capture a quick note, or jump straight into Today.",
-            "Android home screen; Today"
+            "Live connection test before apply",
+            "Test host reachability directly inside the setup dialog before applying changes, with masked token preview for peace of mind.",
+            "Settings → PC connection"
         ),
         ReleaseHighlight(
-            "Private task reminders",
-            "Schedule optional notifications for private phone tasks. Reminders are managed directly in the task editor with clear presets, custom date/time, and explicit cancellation.",
-            "Today → Your tasks"
+            "PC terminal pairing helper",
+            "Run 'python -m server.pair_helper' on your PC to discover local network IPv4 addresses and generate one-click pairing links and setup snippets.",
+            "Jarvis PC Server"
         ),
         ReleaseHighlight(
-            "Explicit permission and privacy",
-            "Task reminders stay local and offline. They require explicit notification permission, make no model or network calls, and are restored across device reboots and local backups.",
-            "Today → Your tasks; Backup"
+            "Backup safety status",
+            "Clear confirmation of when your local Jarvis data was last backed up, helping you keep your conversations, tasks, and routines safe.",
+            "Settings → Data & storage"
         )
     ))
 }

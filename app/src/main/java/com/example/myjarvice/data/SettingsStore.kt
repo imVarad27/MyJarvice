@@ -97,6 +97,11 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_AUTO_SPEAK, true)
         set(value) { prefs.edit().putBoolean(KEY_AUTO_SPEAK, value).apply() }
 
+    /** Epoch millis of the most recent local data backup exported by the user. */
+    var lastBackupTimestamp: Long
+        get() = prefs.getLong(KEY_LAST_BACKUP_TIMESTAMP, 0L)
+        set(value) { prefs.edit().putLong(KEY_LAST_BACKUP_TIMESTAMP, value).apply() }
+
     var userName: String
         get() = prefs.getString(KEY_USER_NAME, "Sir") ?: "Sir"
         set(value) { prefs.edit().putString(KEY_USER_NAME, value.trim()).apply() }
@@ -230,5 +235,6 @@ class SettingsStore(context: Context) {
         private const val KEY_VOICE_MATCH_ENABLED = "voice_match_enabled"
         private const val KEY_VOICE_MATCH_THRESHOLD = "voice_match_threshold"
         private const val KEY_MASTER_VOICEPRINT = "master_voiceprint_vector"
+        private const val KEY_LAST_BACKUP_TIMESTAMP = "last_backup_timestamp"
     }
 }

@@ -38,6 +38,7 @@ import java.util.Locale
 fun BackupPanel(onRestored: () -> Unit) {
     val context = LocalContext.current
     val manager = remember { JarvisBackupManager(context) }
+    val settingsStore = remember { com.example.myjarvice.data.SettingsStore(context) }
     val scope = rememberCoroutineScope()
     val supportsProtection = Build.VERSION.SDK_INT >= 26
     var busy by remember { mutableStateOf(false) }
@@ -45,6 +46,7 @@ fun BackupPanel(onRestored: () -> Unit) {
     var importUri by remember { mutableStateOf<Uri?>(null) }
     var reviewed by remember { mutableStateOf<JarvisBackupManager.PreparedBackup?>(null) }
     var failure by remember { mutableStateOf<String?>(null) }
+    var lastBackupTimestamp by remember { mutableStateOf(settingsStore.lastBackupTimestamp) }
     fun dismissReview() { reviewed?.discard(); reviewed = null }
     DisposableEffect(Unit) { onDispose { reviewed?.discard() } }
 
@@ -83,12 +85,18 @@ fun BackupPanel(onRestored: () -> Unit) {
             }
         }
     }
-    BackupCard(busy, failure, supportsProtection,
+    BackupCard(
+        busy = busy,
+        error = failure,
+        supportsProtection = supportsProtection,
+        lastBackupTimestamp = lastBackupTimestamp,
         onCreate = {
             failure = null
             val date = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
             exportLauncher.launch("jarvis-backup-$date.jarvisbackup")
-        }, onRestore = { importLauncher.launch(arrayOf("*/*")) })
+        },
+        onRestore = { importLauncher.launch(arrayOf("*/*")) }
+    )
 
     exportUri?.let { uri ->
         BackupPassphraseDialog(creating = true, supportsProtection = supportsProtection, busy = busy,
@@ -99,6 +107,9 @@ fun BackupPanel(onRestored: () -> Unit) {
                 scope.launch {
                     try {
                         val preview = withContext(Dispatchers.IO) { manager.exportTo(uri, password) }
+                        val now = System.currentTimeMillis()
+                        settingsStore.lastBackupTimestamp = now
+                        lastBackupTimestamp = now
                         exportUri = null
                         Toast.makeText(context, "Backup created · ${preview.totalItems} items", Toast.LENGTH_LONG).show()
                     } catch (error: CancellationException) { throw error }
@@ -150,7 +161,14 @@ fun BackupPanel(onRestored: () -> Unit) {
 }
 
 @Composable
-internal fun BackupCard(busy: Boolean, error: String?, supportsProtection: Boolean, onCreate: () -> Unit, onRestore: () -> Unit) {
+internal fun BackupCard(
+    busy: Boolean,
+    error: String?,
+    supportsProtection: Boolean,
+    onCreate: () -> Unit,
+    onRestore: () -> Unit,
+    lastBackupTimestamp: Long = 0L
+) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(Icons.Rounded.Lock, null, tint = MaterialTheme.colorScheme.primary)
@@ -159,6 +177,22 @@ internal fun BackupCard(busy: Boolean, error: String?, supportsProtection: Boole
         Text("Keep your personal Jarvis data under your control", style = MaterialTheme.typography.bodySmall)
         Text("Back up conversations, memories, documents, tasks, routines, saved items and preferences to a file you choose.",
             style = MaterialTheme.typography.bodyMedium)
+        if (lastBackupTimestamp > 0L) {
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                shape = MaterialTheme.shapes.small
+            ) {
+                Text(
+                    text = "Last exported: " + java.text.DateFormat.getDateTimeInstance(
+                        java.text.DateFormat.MEDIUM,
+                        java.text.DateFormat.SHORT
+                    ).format(Date(lastBackupTimestamp)),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+        }
         Text(if (supportsProtection) "Passphrase protection is recommended. Jarvis never saves your passphrase or uploads the archive."
             else "Protected backups require Android 8 or newer. Unprotected files contain readable personal data.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
