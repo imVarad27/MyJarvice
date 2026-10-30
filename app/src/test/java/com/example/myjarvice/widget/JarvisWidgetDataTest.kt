@@ -29,6 +29,12 @@ class JarvisWidgetDataTest {
 
         val tomorrow = LocalTask("4", "Tomorrow task", createdAt = now, dueAt = day.endsAtExclusive + 3600_000L)
         assertEquals("Tomorrow", JarvisTodayWidgetProvider.formatWidgetDue(tomorrow, now))
+
+        val recurringToday = LocalTask("5", "Daily task", createdAt = now, dueAt = day.startsAt + 3600_000L, recurrence = com.example.myjarvice.data.TaskRecurrence.DAILY)
+        assertEquals("Today · \u21bb", JarvisTodayWidgetProvider.formatWidgetDue(recurringToday, now))
+
+        val recurringNoDue = LocalTask("6", "Habit task", createdAt = now, recurrence = com.example.myjarvice.data.TaskRecurrence.WEEKLY)
+        assertEquals("\u21bb Weekly", JarvisTodayWidgetProvider.formatWidgetDue(recurringNoDue, now))
     }
 
     @Test

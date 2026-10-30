@@ -12,26 +12,26 @@ internal data class ReleaseHighlight(val title: String, val description: String,
 internal data class AppRelease(val version: String, val date: String, val highlights: List<ReleaseHighlight>)
 
 internal object JarvisReleases {
-    val latest = AppRelease("1.7.0", "2026-10-28", listOf(
+    val latest = AppRelease("1.8.0", "2026-10-30", listOf(
         ReleaseHighlight(
-            "PC pairing setup code import",
-            "Pair your phone and PC in seconds. Paste a jarvis-pair link, JSON config, or .env snippet to automatically configure your PC host address and pairing token.",
-            "Settings → PC connection; Chat → Connect PC"
+            "Recurring tasks & habits",
+            "Set tasks to repeat daily, weekdays (Mon–Fri), weekly, or monthly. Manage repeating tasks and routines directly from the task editor.",
+            "Today → Your tasks"
         ),
         ReleaseHighlight(
-            "Live connection test before apply",
-            "Test host reachability directly inside the setup dialog before applying changes, with masked token preview for peace of mind.",
-            "Settings → PC connection"
+            "Automatic next occurrence",
+            "Marking a recurring task complete preserves the completed record and automatically schedules the next occurrence with updated due and reminder dates.",
+            "Today → Your tasks"
         ),
         ReleaseHighlight(
-            "PC terminal pairing helper",
-            "Run 'python -m server.pair_helper' on your PC to discover local network IPv4 addresses and generate one-click pairing links and setup snippets.",
-            "Jarvis PC Server"
+            "Recurrence indicator & widget",
+            "Glance at recurring tasks with a dedicated repeat icon in Today and cycle status badges on the Android home screen widget.",
+            "Today; Home screen widget"
         ),
         ReleaseHighlight(
-            "Backup safety status",
-            "Clear confirmation of when your local Jarvis data was last backed up, helping you keep your conversations, tasks, and routines safe.",
-            "Settings → Data & storage"
+            "Offline privacy & backup",
+            "Recurrence rules are computed purely locally without network or model inference, and are fully preserved across device reboots and local backups.",
+            "Today; Backup & restore"
         )
     ))
 }

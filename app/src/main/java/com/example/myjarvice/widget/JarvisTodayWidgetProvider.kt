@@ -131,13 +131,19 @@ class JarvisTodayWidgetProvider : AppWidgetProvider() {
         }
 
         fun formatWidgetDue(task: LocalTask, now: Long): String {
-            val due = task.dueAt ?: return ""
+            val due = task.dueAt
             val today = LocalDayWindow.containing(now)
-            return when {
+            val base = when {
+                due == null -> ""
                 due < today.startsAt -> "Overdue"
                 due < today.endsAtExclusive -> "Today"
                 due < LocalDayWindow.containing(today.endsAtExclusive).endsAtExclusive -> "Tomorrow"
                 else -> DateFormat.getDateInstance(DateFormat.SHORT).format(Date(due))
+            }
+            return when {
+                task.repeats && base.isNotEmpty() -> "$base · \u21bb"
+                task.repeats && base.isEmpty() -> "\u21bb ${task.recurrence.chipLabel}"
+                else -> base
             }
         }
     }

@@ -1,5 +1,15 @@
 # Jarvis changes
 
+## 1.8.0 — 2026-10-30 — Android build 12
+
+- Added **Recurring tasks & repeating habits** in Today:
+  - Configure tasks to repeat `Daily`, `Weekdays` (Mon–Fri), `Weekly`, or `Monthly` directly in the task editor.
+  - Completing a recurring task records the completed instance in the completed list and automatically generates the next occurrence with the advanced due date.
+  - Preserves reminder offsets relative to due dates so repeating alerts remain scheduled on time.
+  - Added repeat badge indicator in Today task rows.
+  - Updated Android home screen widget to show cycle badges (`⟳`) for repeating tasks.
+  - Full local backup and restore support with backward compatibility for existing backups.
+
 ## 1.7.0 — 2026-10-28 — Android build 11
 
 - Added **PC pairing setup code import**:

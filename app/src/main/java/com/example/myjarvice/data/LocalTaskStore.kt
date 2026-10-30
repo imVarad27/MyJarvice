@@ -18,9 +18,11 @@ data class LocalTask(
     val createdAt: Long,
     val dueAt: Long? = null,
     val completedAt: Long? = null,
-    val reminderAt: Long? = null
+    val reminderAt: Long? = null,
+    val recurrence: TaskRecurrence = TaskRecurrence.NONE
 ) {
     val completed: Boolean get() = completedAt != null
+    val repeats: Boolean get() = recurrence != TaskRecurrence.NONE
 }
 
 data class TaskAgenda(
@@ -53,6 +55,8 @@ class LocalTaskStore(private val context: Context) {
         runCatching {
             val array = JSONArray(String(file.readFully(), Charsets.UTF_8))
             List(array.length()) { index -> array.getJSONObject(index).let { obj ->
+                val recurrenceName = obj.optString("recurrence", TaskRecurrence.NONE.name)
+                val recurrence = runCatching { TaskRecurrence.valueOf(recurrenceName) }.getOrDefault(TaskRecurrence.NONE)
                 LocalTask(
                     id = obj.getString("id"),
                     title = obj.getString("title"),
@@ -60,7 +64,8 @@ class LocalTaskStore(private val context: Context) {
                     createdAt = obj.getLong("createdAt"),
                     dueAt = obj.optLong("dueAt", -1).takeIf { it > 0 },
                     completedAt = obj.optLong("completedAt", -1).takeIf { it > 0 },
-                    reminderAt = obj.optLong("reminderAt", -1).takeIf { it > 0 }
+                    reminderAt = obj.optLong("reminderAt", -1).takeIf { it > 0 },
+                    recurrence = recurrence
                 )
             } }
         }.getOrDefault(emptyList())
@@ -71,7 +76,8 @@ class LocalTaskStore(private val context: Context) {
         title: String,
         notes: String = "",
         dueAt: Long? = null,
-        reminderAt: Long? = null
+        reminderAt: Long? = null,
+        recurrence: TaskRecurrence = TaskRecurrence.NONE
     ): LocalTask = synchronized(lock) {
         val cleanTitle = title.trim()
         val cleanNotes = notes.trim()
@@ -88,9 +94,16 @@ class LocalTaskStore(private val context: Context) {
                 notes = cleanNotes,
                 createdAt = System.currentTimeMillis(),
                 dueAt = dueAt,
-                reminderAt = reminderAt
+                reminderAt = reminderAt,
+                recurrence = recurrence
             )
-        } else existing.copy(title = cleanTitle, notes = cleanNotes, dueAt = dueAt, reminderAt = reminderAt)
+        } else existing.copy(
+            title = cleanTitle,
+            notes = cleanNotes,
+            dueAt = dueAt,
+            reminderAt = reminderAt,
+            recurrence = recurrence
+        )
 
         if (existing?.reminderAt != null && existing.reminderAt != reminderAt) {
             cancelReminder(existing)
@@ -132,15 +145,42 @@ class LocalTaskStore(private val context: Context) {
     }
 
     fun setCompleted(id: String, completed: Boolean, at: Long = System.currentTimeMillis()) = synchronized(lock) {
-        val all = tasks().map {
-            if (it.id == id) {
-                if (completed && it.reminderAt != null) {
-                    cancelReminder(it)
-                }
-                it.copy(completedAt = if (completed) at else null)
-            } else it
+        val currentTasks = tasks().toMutableList()
+        val targetIndex = currentTasks.indexOfFirst { it.id == id }
+        if (targetIndex < 0) return@synchronized
+        val target = currentTasks[targetIndex]
+
+        if (completed && target.reminderAt != null) {
+            cancelReminder(target)
         }
-        persist(all)
+        currentTasks[targetIndex] = target.copy(completedAt = if (completed) at else null)
+
+        if (completed && target.repeats) {
+            val nextDue = TaskRecurrenceCalculator.computeNextDue(target.dueAt, target.recurrence, at)
+            val nextReminder = TaskRecurrenceCalculator.computeNextReminder(
+                target.dueAt,
+                target.reminderAt,
+                target.recurrence,
+                nextDue,
+                at
+            )
+            if (currentTasks.size < 1_000) {
+                val spawned = LocalTask(
+                    id = UUID.randomUUID().toString(),
+                    title = target.title,
+                    notes = target.notes,
+                    createdAt = at,
+                    dueAt = nextDue,
+                    reminderAt = nextReminder,
+                    recurrence = target.recurrence
+                )
+                currentTasks.add(spawned)
+                if (nextReminder != null && nextReminder > at) {
+                    scheduleReminder(spawned, nextReminder)
+                }
+            }
+        }
+        persist(currentTasks)
     }
 
     fun delete(id: String) = synchronized(lock) {
@@ -184,6 +224,7 @@ class LocalTaskStore(private val context: Context) {
                     .put("notes", task.notes).put("createdAt", task.createdAt)
                     .put("dueAt", task.dueAt ?: -1).put("completedAt", task.completedAt ?: -1)
                     .put("reminderAt", task.reminderAt ?: -1)
+                    .put("recurrence", task.recurrence.name)
             )
         }
         val output = file.startWrite()

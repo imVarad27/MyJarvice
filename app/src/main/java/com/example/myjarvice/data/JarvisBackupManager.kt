@@ -332,7 +332,8 @@ class JarvisBackupManager(private val context: Context) {
         items.take(1_000).forEach { task -> array.put(JSONObject().put("id", task.id).put("title", task.title)
             .put("notes", task.notes).put("createdAt", task.createdAt)
             .put("dueAt", task.dueAt ?: -1).put("completedAt", task.completedAt ?: -1)
-            .put("reminderAt", task.reminderAt ?: -1)) }
+            .put("reminderAt", task.reminderAt ?: -1)
+            .put("recurrence", task.recurrence.name)) }
     }
 
     private fun decodeTasks(array: JSONArray): List<LocalTask> {
@@ -341,12 +342,15 @@ class JarvisBackupManager(private val context: Context) {
             val title = obj.getString("title")
             val notes = obj.optString("notes")
             require(title.isNotBlank() && title.length <= 180 && notes.length <= 2_000) { "A task in this backup is invalid." }
+            val recurrenceName = obj.optString("recurrence", TaskRecurrence.NONE.name)
+            val recurrence = runCatching { TaskRecurrence.valueOf(recurrenceName) }.getOrDefault(TaskRecurrence.NONE)
             LocalTask(
                 id = obj.getString("id").take(160), title = title, notes = notes,
                 createdAt = obj.optLong("createdAt"),
                 dueAt = obj.optLong("dueAt", -1).takeIf { it > 0 },
                 completedAt = obj.optLong("completedAt", -1).takeIf { it > 0 },
-                reminderAt = obj.optLong("reminderAt", -1).takeIf { it > 0 }
+                reminderAt = obj.optLong("reminderAt", -1).takeIf { it > 0 },
+                recurrence = recurrence
             )
         } }
     }

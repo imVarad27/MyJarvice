@@ -58,8 +58,10 @@ import com.example.myjarvice.data.LocalRoutine
 import com.example.myjarvice.data.LocalRoutineStore
 import com.example.myjarvice.data.LocalDayWindow
 import com.example.myjarvice.data.TaskAgenda
+import com.example.myjarvice.data.TaskRecurrence
 import com.example.myjarvice.data.TodayBrief
 import com.example.myjarvice.ui.JarvisBrandMark
+import com.example.myjarvice.ui.icons.IconRepeat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -250,9 +252,9 @@ internal fun AssistantHome(
             }
         },
         onDismiss = { showTaskEditor = false },
-        onSave = { title, notes, dueAt, reminderAt -> scope.launch {
+        onSave = { title, notes, dueAt, reminderAt, recurrence -> scope.launch {
             try {
-                withContext(Dispatchers.IO) { taskStore.saveTask(editingTask?.id, title, notes, dueAt, reminderAt) }
+                withContext(Dispatchers.IO) { taskStore.saveTask(editingTask?.id, title, notes, dueAt, reminderAt, recurrence) }
                 showTaskEditor = false
                 revision++
             } catch (error: kotlinx.coroutines.CancellationException) { throw error
@@ -564,13 +566,20 @@ private fun HomeTaskRow(task: LocalTask, now: Long, onToggle: (Boolean) -> Unit,
             Checkbox(checked = task.completed, onCheckedChange = onToggle,
                 modifier = Modifier.semantics { contentDescription = if (task.completed) "Reopen task: ${task.title}" else "Complete task: ${task.title}" })
             Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
-                Text(task.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(task.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (task.repeats) {
+                        Spacer(Modifier.width(6.dp))
+                        IconRepeat(tint = MaterialTheme.colorScheme.primary, size = 13.dp)
+                    }
+                }
                 val due = taskDueLabel(task, now)
                 val reminder = taskReminderLabel(task, now)
                 val subtitle = when {
-                    due != null && reminder != null -> "$due · $reminder"
-                    due != null -> due
-                    reminder != null -> reminder
+                    due != null && reminder != null -> "$due · $reminder" + if (task.repeats) " · ${task.recurrence.chipLabel}" else ""
+                    due != null -> due + if (task.repeats) " · ${task.recurrence.chipLabel}" else ""
+                    reminder != null -> reminder + if (task.repeats) " · ${task.recurrence.chipLabel}" else ""
+                    task.repeats -> task.recurrence.label
                     else -> null
                 }
                 subtitle?.let { label ->
@@ -642,7 +651,7 @@ private fun TaskEditorDialog(
     now: Long,
     onRequestNotificationPermission: () -> Unit,
     onDismiss: () -> Unit,
-    onSave: (String, String, Long?, Long?) -> Unit,
+    onSave: (String, String, Long?, Long?, TaskRecurrence) -> Unit,
     onDelete: (() -> Unit)?
 ) {
     val context = LocalContext.current
@@ -650,6 +659,7 @@ private fun TaskEditorDialog(
     var notes by rememberSaveable(task?.id) { mutableStateOf(task?.notes.orEmpty()) }
     var dueAt by rememberSaveable(task?.id) { mutableStateOf(task?.dueAt) }
     var reminderAt by rememberSaveable(task?.id) { mutableStateOf(task?.reminderAt) }
+    var recurrence by rememberSaveable(task?.id) { mutableStateOf(task?.recurrence ?: TaskRecurrence.NONE) }
     var showDatePicker by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     val today = LocalDayWindow.containing(now)
@@ -685,6 +695,29 @@ private fun TaskEditorDialog(
                     FilterChip(selected = dueAt == today.endsAtExclusive, onClick = { dueAt = today.endsAtExclusive }, label = { Text("Tomorrow") })
                     FilterChip(selected = dueAt != null && dueAt != today.startsAt && dueAt != today.endsAtExclusive,
                         onClick = { showDatePicker = true }, label = { Text(dueAt?.let(::formatTaskDate) ?: "Pick date") })
+                }
+                Text("Repeat", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TaskRecurrence.values().forEach { rec ->
+                        FilterChip(
+                            selected = recurrence == rec,
+                            onClick = {
+                                recurrence = rec
+                                if (rec != TaskRecurrence.NONE && dueAt == null) {
+                                    dueAt = today.startsAt
+                                }
+                            },
+                            label = { Text(rec.chipLabel) }
+                        )
+                    }
+                }
+                if (recurrence != TaskRecurrence.NONE) {
+                    Text(
+                        "Spawns the next occurrence automatically when marked complete.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
                 Text("Reminder", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -730,7 +763,7 @@ private fun TaskEditorDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(title, notes, dueAt, reminderAt) }, enabled = title.isNotBlank()) { Text("Save") } },
+        confirmButton = { TextButton(onClick = { onSave(title, notes, dueAt, reminderAt, recurrence) }, enabled = title.isNotBlank()) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
     if (showDatePicker) DatePickerDialog(

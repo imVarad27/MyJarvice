@@ -420,3 +420,45 @@ fun IconMail(
     }
 }
 
+@Composable
+fun IconRepeat(
+    tint: Color = Color.White,
+    size: Dp = 14.dp,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier.size(size)) {
+        val stroke = Stroke(width = 1.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val w = this.size.width
+        val h = this.size.height
+
+        val topPath = Path().apply {
+            moveTo(w * 0.25f, h * 0.45f)
+            lineTo(w * 0.25f, h * 0.32f)
+            quadraticTo(w * 0.25f, h * 0.20f, w * 0.40f, h * 0.20f)
+            lineTo(w * 0.72f, h * 0.20f)
+        }
+        drawPath(topPath, color = tint, style = stroke)
+        val topArrow = Path().apply {
+            moveTo(w * 0.62f, h * 0.10f)
+            lineTo(w * 0.76f, h * 0.20f)
+            lineTo(w * 0.62f, h * 0.30f)
+        }
+        drawPath(topArrow, color = tint, style = stroke)
+
+        val bottomPath = Path().apply {
+            moveTo(w * 0.75f, h * 0.55f)
+            lineTo(w * 0.75f, h * 0.68f)
+            quadraticTo(w * 0.75f, h * 0.80f, w * 0.60f, h * 0.80f)
+            lineTo(w * 0.28f, h * 0.80f)
+        }
+        drawPath(bottomPath, color = tint, style = stroke)
+        val bottomArrow = Path().apply {
+            moveTo(w * 0.38f, h * 0.70f)
+            lineTo(w * 0.24f, h * 0.80f)
+            lineTo(w * 0.38f, h * 0.90f)
+        }
+        drawPath(bottomArrow, color = tint, style = stroke)
+    }
+}
+
+
