@@ -80,7 +80,7 @@ class LocalAgentHarness(
             record(call.name, when {
                 !result.succeeded -> "failed"
                 !result.hasData -> "no_data"
-                call.name in setOf("open_app", "navigate", "set_alarm", "set_timer") -> "prepared"
+                call.name in setOf("open_app", "navigate", "set_alarm", "set_timer", "open_dialer", "open_sms") -> "prepared"
                 else -> "completed"
             })
             if (!result.hasData || !result.succeeded) return decorate(result.text, used + label(call.name), sources + result.sources.take(3).map { it.take(160) })
@@ -88,7 +88,7 @@ class LocalAgentHarness(
             sources.addAll(result.sources.take(3).map { it.take(160) })
             used.add(label(call.name))
             // Saved content cannot authorize a later write or device action.
-            if (call.name in setOf("search_phone", "query_schedule", "search_library", "search_inbox", "list_memories", "list_tasks")) readOnly = true
+            if (call.name in setOf("search_phone", "query_schedule", "search_contacts", "list_apps", "search_library", "search_inbox", "list_memories", "list_tasks")) readOnly = true
             if (isActionTool(call.name)) return decorate(result.text, used, sources)
         }
         return failure("Unable to complete the local request within the tool budget.", used, sources)
@@ -103,12 +103,16 @@ class LocalAgentHarness(
     }
 
     companion object {
-        private val actionTools = setOf("remember", "add_task", "open_app", "navigate", "flashlight", "set_alarm", "set_timer")
+        private val actionTools = setOf("remember", "add_task", "open_app", "navigate", "flashlight", "set_alarm", "set_timer", "open_dialer", "open_sms")
         fun isActionTool(name: String): Boolean = name in actionTools
         private val specs = linkedMapOf(
             "calculate" to LocalToolSpec("Evaluate arithmetic using digits, decimal points, parentheses and + - * /.", "expression", 200),
             "search_phone" to LocalToolSpec("Search across all phone data: tasks, routines, calendar events, saved notes, memories and documents.", "query", 200),
             "query_schedule" to LocalToolSpec("Look up your schedule combining calendar events and due tasks.", "when", 80, setOf("today", "tomorrow", "week")),
+            "search_contacts" to LocalToolSpec("Search phone contacts by name, phone number, or email.", "query", 100),
+            "open_dialer" to LocalToolSpec("Open phone dialer with a contact or number pre-filled. Tap Call in the dialer.", "recipient", 100),
+            "open_sms" to LocalToolSpec("Open SMS app with recipient pre-filled. Format: 'Recipient: Message' or just recipient.", "details", 300),
+            "list_apps" to LocalToolSpec("List installed launchable apps. Put a search keyword or 'all' in query.", "query", 80),
             "search_library" to LocalToolSpec("Search explicitly saved memories and imported documents.", "query", 200),
             "search_inbox" to LocalToolSpec("Search items saved in the Remember inbox.", "query", 200),
             "clock" to LocalToolSpec("Read the phone's current date, time and timezone."),
@@ -162,6 +166,10 @@ class LocalAgentHarness(
             "calculate" -> "Calculator"
             "search_phone" -> "Phone search"
             "query_schedule" -> "Phone schedule"
+            "search_contacts" -> "Contacts search"
+            "open_dialer" -> "Phone dialer"
+            "open_sms" -> "SMS composer"
+            "list_apps" -> "Installed apps"
             "search_library" -> "Memory & documents"
             "search_inbox" -> "Saved inbox"
             "clock" -> "Phone clock"

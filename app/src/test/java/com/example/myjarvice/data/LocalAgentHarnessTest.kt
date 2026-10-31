@@ -196,4 +196,32 @@ class LocalAgentHarnessTest {
         assertTrue(answer.startsWith("No matching saved text found."))
         assertTrue(answer.contains("Local tools: Memory & documents"))
     }
+
+    @Test fun searchContactsIsParsedAndMarkedReadOnly() = runTest {
+        val call = LocalAgentHarness.parseCall("""{"tool":"search_contacts","argument":"Alice"}""")
+        assertNotNull(call)
+        assertEquals("search_contacts", call?.name)
+        assertEquals("Alice", call?.argument)
+    }
+
+    @Test fun dialerAndSmsPreparationAreLabeledCorrectly() = runTest {
+        var status = ""
+        val harness = LocalAgentHarness({ _, _ -> """{"tool":"open_dialer","argument":"Alice"}""" },
+            { LocalToolResult("Opened phone dialer with 555-0101. Tap Call to proceed.") }, audit = { _, outcome -> status = outcome })
+        val answer = harness.answer("Call Alice")
+        assertEquals("prepared", status)
+        assertTrue(answer.contains("Local tools: Phone dialer"))
+
+        val smsCall = LocalAgentHarness.parseCall("""{"tool":"open_sms","argument":"Alice: On my way"}""")
+        assertNotNull(smsCall)
+        assertEquals("open_sms", smsCall?.name)
+        assertEquals("Alice: On my way", smsCall?.argument)
+    }
+
+    @Test fun listAppsToolIsParsed() = runTest {
+        val call = LocalAgentHarness.parseCall("""{"tool":"list_apps","argument":"camera"}""")
+        assertNotNull(call)
+        assertEquals("list_apps", call?.name)
+        assertEquals("camera", call?.argument)
+    }
 }

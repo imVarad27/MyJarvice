@@ -44,6 +44,25 @@ class DeviceActionExecutor(private val context: Context) {
                 if (open.isEmpty()) "Your phone task list is clear."
                 else open.take(10).joinToString("\n") { "• ${it.title}${taskDueSuffix(it.dueAt)}" }
             }
+            "OPEN_DIALER" -> {
+                val number = PhoneContactsRepository(context).findFirstNumber(action.query)
+                    ?: error("Could not find a phone number for \"${action.query}\".")
+                val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number"))
+                launch(intent)
+                "Opened phone dialer with $number. Tap Call to proceed."
+            }
+            "OPEN_SMS" -> {
+                val parts = action.query.split(":", limit = 2)
+                val recipientQuery = parts[0].trim()
+                val messageBody = if (parts.size > 1) parts[1].trim() else ""
+                val number = PhoneContactsRepository(context).findFirstNumber(recipientQuery) ?: recipientQuery
+                val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number")).apply {
+                    if (messageBody.isNotBlank()) putExtra("sms_body", messageBody)
+                }
+                launch(intent)
+                "Opened SMS composer for $number" + (if (messageBody.isNotBlank()) " with drafted message." else ".") + " Review and send in your messaging app."
+            }
+            "LIST_APPS" -> listInstalledApps(action.query)
             else -> error("This phone action is not allowlisted.")
         }
     }
@@ -292,6 +311,29 @@ class DeviceActionExecutor(private val context: Context) {
         Log.w(TAG, "No installed app matched '$q'")
         toast("Couldn't find an app called \"$rawQuery\"")
         error("Couldn't find an installed app called $rawQuery.")
+    }
+
+    private fun listInstalledApps(query: String): String {
+        val pm = context.packageManager
+        val main = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val activities = pm.queryIntentActivities(main, 0)
+        val q = query.trim().lowercase()
+
+        val matching = activities.mapNotNull { resolveInfo ->
+            val label = resolveInfo.loadLabel(pm).toString()
+            val pkg = resolveInfo.activityInfo.packageName
+            if (q.isBlank() || label.lowercase().contains(q) || pkg.lowercase().contains(q)) {
+                label
+            } else null
+        }.distinct().sorted()
+
+        return if (matching.isEmpty()) {
+            "No installed apps found matching \"$query\"."
+        } else {
+            val count = matching.size
+            val preview = matching.take(15).joinToString(", ")
+            "Found $count installed app(s)" + (if (q.isNotBlank()) " matching \"$query\"" else "") + ": $preview" + (if (count > 15) "..." else ".")
+        }
     }
 
     // --- Place call -------------------------------------------------------

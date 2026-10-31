@@ -12,26 +12,26 @@ internal data class ReleaseHighlight(val title: String, val description: String,
 internal data class AppRelease(val version: String, val date: String, val highlights: List<ReleaseHighlight>)
 
 internal object JarvisReleases {
-    val latest = AppRelease("1.9.0", "2026-10-31", listOf(
+    val latest = AppRelease("1.10.0", "2026-10-31", listOf(
         ReleaseHighlight(
-            "Unified phone RAG search",
-            "Ask Jarvis anything about your phone data. A unified local retrieval engine queries across tasks, routines, calendar events, saved notes, and memories in a single search.",
+            "Phone contacts search & reverse lookup",
+            "Ask Jarvis to find contact phone numbers, emails, or look up who a phone number belongs to with private, on-device contacts search.",
             "Chat; Voice mode"
         ),
         ReleaseHighlight(
-            "Schedule & agenda query",
-            "Ask what is on your schedule for today, tomorrow, or this week to get a combined chronological timeline of calendar meetings and due tasks.",
-            "Chat; Voice mode"
-        ),
-        ReleaseHighlight(
-            "Offline privacy & zero battery drain",
-            "Retrieval uses fast on-device indexing with no heavy background embedding models, keeping your private phone content completely offline.",
+            "Dialer & messaging prep",
+            "Prepare calls and SMS drafts directly through Jarvis. Dial numbers or compose messages in native phone apps for easy user confirmation.",
             "Phone assistant"
         ),
         ReleaseHighlight(
-            "Context-aware telemetry",
-            "Phone task counts and schedule state are securely provided to assistant context so replies accurately reflect what's on your agenda.",
-            "Phone & PC connection"
+            "Installed apps explorer",
+            "Query and discover installed launchable apps by keyword or category to effortlessly launch applications with voice or chat.",
+            "Phone assistant"
+        ),
+        ReleaseHighlight(
+            "Unified contacts RAG indexing",
+            "Contacts are seamlessly integrated into unified phone search, letting you find people alongside tasks, calendar events, routines, and notes.",
+            "Phone assistant"
         )
     ))
 }

@@ -18,7 +18,10 @@ object PhoneActionPolicy {
         "SET_TIMER" to 80,
         "ADD_LOCAL_TASK" to 180,
         "CALL" to 120,
-        "WHATSAPP" to 500
+        "WHATSAPP" to 500,
+        "OPEN_DIALER" to 120,
+        "OPEN_SMS" to 300,
+        "LIST_APPS" to 80
     )
     private val confirmationRequired = setOf("CALL", "WHATSAPP")
 
@@ -31,6 +34,10 @@ object PhoneActionPolicy {
             }
         }
         val maxLength = boundedArguments[normalizedType] ?: return null
+        if (normalizedType == "LIST_APPS") {
+            if (normalizedQuery.length > maxLength || '\u0000' in normalizedQuery) return null
+            return SafePhoneAction(normalizedType, normalizedQuery, false)
+        }
         if (normalizedQuery.isBlank() || normalizedQuery.length > maxLength || '\u0000' in normalizedQuery) return null
         if (normalizedType == "FLASHLIGHT" && normalizedQuery.lowercase() !in setOf("on", "off", "toggle")) return null
         if (normalizedType == "SET_ALARM" && runCatching { ClockActionParameters.alarm(normalizedQuery) }.isFailure) return null

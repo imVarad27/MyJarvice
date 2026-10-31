@@ -18,7 +18,9 @@ class PhoneContextAggregatorTest {
         private val calendarList: List<CalendarAgendaItem> = emptyList(),
         private val inboxList: List<RememberItem> = emptyList(),
         private val knowledgeList: List<KnowledgeEntry> = emptyList(),
-        private val calendarGranted: Boolean = true
+        private val calendarGranted: Boolean = true,
+        private val contactList: List<ContactCard> = emptyList(),
+        private val contactsGranted: Boolean = true
     ) : PhoneDataProvider {
         override fun tasks() = taskList
         override fun routines() = routineList
@@ -26,6 +28,8 @@ class PhoneContextAggregatorTest {
         override fun inboxItems() = inboxList
         override fun knowledgeEntries() = knowledgeList
         override fun isCalendarPermissionGranted() = calendarGranted
+        override fun contacts() = contactList
+        override fun isContactsPermissionGranted() = contactsGranted
     }
 
     @Test
@@ -128,5 +132,49 @@ class PhoneContextAggregatorTest {
         val schedule = aggregator.querySchedule("today", now)
         assertTrue(schedule.contains("No events scheduled"))
         assertTrue(schedule.contains("No open tasks due Today"))
+    }
+
+    @Test
+    fun `search includes contacts when permission is granted`() {
+        val contacts = listOf(
+            ContactCard("c1", "Dr. Emily Dental", listOf("555-4321"), listOf("emily@dentalcare.com"))
+        )
+        val aggregator = PhoneContextAggregator(
+            FakePhoneDataProvider(
+                contactList = contacts,
+                contactsGranted = true
+            )
+        )
+
+        val hits = aggregator.search("Emily", now)
+        assertTrue(hits.isNotEmpty())
+        assertTrue(hits.any { it.source.contains("Contact") })
+    }
+
+    @Test
+    fun `searchContacts formats contact card details`() {
+        val contacts = listOf(
+            ContactCard("c1", "Tony Stark", listOf("555-3000"), listOf("tony@stark.com"))
+        )
+        val aggregator = PhoneContextAggregator(
+            FakePhoneDataProvider(
+                contactList = contacts,
+                contactsGranted = true
+            )
+        )
+
+        val result = aggregator.searchContacts("Tony")
+        assertTrue(result.contains("Tony Stark"))
+        assertTrue(result.contains("555-3000"))
+        assertTrue(result.contains("tony@stark.com"))
+    }
+
+    @Test
+    fun `searchContacts guides user when permission is not granted`() {
+        val aggregator = PhoneContextAggregator(
+            FakePhoneDataProvider(contactsGranted = false)
+        )
+        val result = aggregator.searchContacts("Tony")
+        assertTrue(result.contains("Contacts permission is required"))
     }
 }

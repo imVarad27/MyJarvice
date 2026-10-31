@@ -22,6 +22,10 @@ class LocalAgentTools(private val context: Context) {
                 hasData = true
             )
         }
+        "search_contacts" -> {
+            val result = PhoneContextAggregator(context).searchContacts(call.argument)
+            LocalToolResult(result, listOf("Contacts"), hasData = !result.startsWith("No contacts"))
+        }
         "search_library" -> excerpts(LocalKnowledgeStore(context).search(call.argument))
         "search_inbox" -> {
             val entries = RememberInboxStore(context).items().map { item ->
@@ -62,6 +66,9 @@ class LocalAgentTools(private val context: Context) {
         "flashlight" -> executePhone("FLASHLIGHT", call.argument)
         "set_alarm" -> executePhone("SET_ALARM", call.argument)
         "set_timer" -> executePhone("SET_TIMER", call.argument)
+        "open_dialer" -> executePhone("OPEN_DIALER", call.argument)
+        "open_sms" -> executePhone("OPEN_SMS", call.argument)
+        "list_apps" -> executePhone("LIST_APPS", if (call.argument.equals("all", ignoreCase = true)) "" else call.argument)
         else -> error("This tool is not available on the phone.")
     }
 

@@ -1,5 +1,18 @@
 # Jarvis changes
 
+## 1.10.0 — 2026-10-31 — Android build 14
+
+- Added **Phone Contacts Search & Reverse Lookup (`search_contacts`)**:
+  - Search phone contacts by name, partial name, phone number, or email address with offline, on-device contact indexing.
+  - Supports reverse phone number lookup to identify unknown callers or numbers.
+  - Seamlessly integrates with unified phone RAG (`search_phone`) so contacts appear in general knowledge searches.
+- Added **Dialer & SMS Preparation Tools (`open_dialer`, `open_sms`)**:
+  - Open system phone dialer with recipient contact numbers pre-filled for user confirmation.
+  - Open native SMS composer with recipient and draft message pre-filled for user review and sending.
+- Added **Installed Apps Explorer (`list_apps`)**:
+  - Query and discover launchable applications installed on the phone by keyword or category.
+  - Seamlessly complements app launcher (`open_app`) with clear visibility into available applications.
+
 ## 1.9.0 — 2026-10-31 — Android build 13
 
 - Added **Unified Phone RAG Search (`search_phone`)**:

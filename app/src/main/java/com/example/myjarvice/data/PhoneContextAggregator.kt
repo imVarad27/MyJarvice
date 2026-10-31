@@ -16,6 +16,8 @@ interface PhoneDataProvider {
     fun inboxItems(): List<RememberItem>
     fun knowledgeEntries(): List<KnowledgeEntry>
     fun isCalendarPermissionGranted(): Boolean
+    fun contacts(): List<ContactCard>
+    fun isContactsPermissionGranted(): Boolean
 }
 
 /** Default implementation binding to local Android stores and permissioned providers. */
@@ -31,6 +33,14 @@ class AndroidPhoneDataProvider(private val context: Context) : PhoneDataProvider
     override fun knowledgeEntries(): List<KnowledgeEntry> = LocalKnowledgeStore(context).entries()
     override fun isCalendarPermissionGranted(): Boolean {
         return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
+    }
+    override fun contacts(): List<ContactCard> {
+        return if (isContactsPermissionGranted()) {
+            AndroidContactsDataProvider(context).queryAllContacts()
+        } else emptyList()
+    }
+    override fun isContactsPermissionGranted(): Boolean {
+        return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
     }
 }
 
@@ -85,7 +95,54 @@ class PhoneContextAggregator internal constructor(
         // 5. Personal memories & documents
         entries.addAll(provider.knowledgeEntries().filter { it.enabled })
 
+        // 6. Contacts (if permission granted)
+        if (provider.isContactsPermissionGranted()) {
+            provider.contacts().forEach { contact ->
+                val nums = if (contact.numbers.isNotEmpty()) " · Phone: " + contact.numbers.joinToString(", ") else ""
+                val mails = if (contact.emails.isNotEmpty()) " · Email: " + contact.emails.joinToString(", ") else ""
+                val text = "Contact: ${contact.name}$nums$mails"
+                entries.add(KnowledgeEntry(id = "contact-${contact.id}", name = "Contact · ${contact.name}", text = text, memory = false))
+            }
+        }
+
         return LocalKnowledgeStore.rank(query, entries)
+    }
+
+    /**
+     * Dedicated contact search returning formatted contact cards.
+     * Searches by name, phone number (reverse lookup), or email.
+     */
+    fun searchContacts(query: String): String {
+        if (!provider.isContactsPermissionGranted()) {
+            return "Contacts permission is required to read contacts. You can enable it in Android Settings."
+        }
+        val q = query.trim().lowercase()
+        if (q.isBlank()) return "Please provide a name, phone number, or email to search."
+
+        val queryDigits = q.filter { it.isDigit() }
+        val matchesNumber = queryDigits.length >= 3
+
+        val matched = provider.contacts().asSequence()
+            .filter { contact ->
+                val nameMatch = contact.name.lowercase().contains(q)
+                val emailMatch = contact.emails.any { it.lowercase().contains(q) }
+                val phoneMatch = matchesNumber && contact.numbers.any { num ->
+                    num.filter { it.isDigit() }.contains(queryDigits)
+                }
+                nameMatch || emailMatch || phoneMatch
+            }
+            .take(5)
+            .toList()
+
+        if (matched.isEmpty()) {
+            return "No contacts found matching \"$query\"."
+        }
+
+        return matched.joinToString("\n\n") { c ->
+            val phones = if (c.numbers.isNotEmpty()) "Phone: " + c.numbers.joinToString(", ") else "No phone"
+            val emails = if (c.emails.isNotEmpty()) "Email: " + c.emails.joinToString(", ") else null
+            "• ${c.name}\n  $phones" + (if (emails != null) "\n  $emails" else "")
+        }
     }
 
     /**

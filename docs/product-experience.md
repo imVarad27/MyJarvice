@@ -39,6 +39,7 @@ Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer co
 - PC connection includes setup code import: paste a `jarvis-pair://v1` URL, JSON config, or `.env` snippet with live host reachability pre-testing and masked token confirmation before applying. The companion `python -m server.pair_helper` CLI utility exposes local addresses and pairing codes directly on the PC.
 - Data & storage now tracks and displays the latest backup timestamp so users can verify backup currency at a glance.
 - Assistant tools include unified phone RAG (`search_phone`) and schedule retrieval (`query_schedule`): fast, local lexical ranking across phone tasks, routines, permissioned calendar events, saved inbox items, and personal memories/documents in a single tool call with clear citations and zero background battery drain.
+- Assistant tools include permissioned contacts search (`search_contacts`) with reverse phone number lookup, dialer preparation (`open_dialer`), SMS drafting (`open_sms`), and installed apps discovery (`list_apps`), enabling rich on-device assistance with clear user review for communication actions.
 
 ## What a personal assistant needs next
 
