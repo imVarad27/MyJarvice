@@ -1,5 +1,17 @@
 # Jarvis changes
 
+## 1.9.0 — 2026-10-31 — Android build 13
+
+- Added **Unified Phone RAG Search (`search_phone`)**:
+  - Connects Tasks, Routines, Calendar events (with user permission), Saved Inbox items, and Personal Memories/Documents into a single retrieval engine.
+  - Queries return relevant excerpts with citations across all phone content without needing separate specialized tool calls.
+  - Uses fast, lightweight lexical ranking directly on-device without background battery drain.
+- Added **Schedule & Agenda Query (`query_schedule`)**:
+  - Combines calendar events and open tasks due for `today`, `tomorrow`, or `this week` into a unified chronological timeline.
+  - Transparently indicates calendar permission status when ungranted.
+- Extended **Device Context Telemetry**:
+  - Automatically provides pending task and schedule indicators to assistant context.
+
 ## 1.8.0 — 2026-10-30 — Android build 12
 
 - Added **Recurring tasks & repeating habits** in Today:

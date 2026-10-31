@@ -88,7 +88,7 @@ class LocalAgentHarness(
             sources.addAll(result.sources.take(3).map { it.take(160) })
             used.add(label(call.name))
             // Saved content cannot authorize a later write or device action.
-            if (call.name in setOf("search_library", "search_inbox", "list_memories", "list_tasks")) readOnly = true
+            if (call.name in setOf("search_phone", "query_schedule", "search_library", "search_inbox", "list_memories", "list_tasks")) readOnly = true
             if (isActionTool(call.name)) return decorate(result.text, used, sources)
         }
         return failure("Unable to complete the local request within the tool budget.", used, sources)
@@ -107,6 +107,8 @@ class LocalAgentHarness(
         fun isActionTool(name: String): Boolean = name in actionTools
         private val specs = linkedMapOf(
             "calculate" to LocalToolSpec("Evaluate arithmetic using digits, decimal points, parentheses and + - * /.", "expression", 200),
+            "search_phone" to LocalToolSpec("Search across all phone data: tasks, routines, calendar events, saved notes, memories and documents.", "query", 200),
+            "query_schedule" to LocalToolSpec("Look up your schedule combining calendar events and due tasks.", "when", 80, setOf("today", "tomorrow", "week")),
             "search_library" to LocalToolSpec("Search explicitly saved memories and imported documents.", "query", 200),
             "search_inbox" to LocalToolSpec("Search items saved in the Remember inbox.", "query", 200),
             "clock" to LocalToolSpec("Read the phone's current date, time and timezone."),
@@ -158,6 +160,8 @@ class LocalAgentHarness(
 
         private fun label(name: String) = when (name) {
             "calculate" -> "Calculator"
+            "search_phone" -> "Phone search"
+            "query_schedule" -> "Phone schedule"
             "search_library" -> "Memory & documents"
             "search_inbox" -> "Saved inbox"
             "clock" -> "Phone clock"

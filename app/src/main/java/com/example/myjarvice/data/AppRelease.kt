@@ -12,26 +12,26 @@ internal data class ReleaseHighlight(val title: String, val description: String,
 internal data class AppRelease(val version: String, val date: String, val highlights: List<ReleaseHighlight>)
 
 internal object JarvisReleases {
-    val latest = AppRelease("1.8.0", "2026-10-30", listOf(
+    val latest = AppRelease("1.9.0", "2026-10-31", listOf(
         ReleaseHighlight(
-            "Recurring tasks & habits",
-            "Set tasks to repeat daily, weekdays (Mon–Fri), weekly, or monthly. Manage repeating tasks and routines directly from the task editor.",
-            "Today → Your tasks"
+            "Unified phone RAG search",
+            "Ask Jarvis anything about your phone data. A unified local retrieval engine queries across tasks, routines, calendar events, saved notes, and memories in a single search.",
+            "Chat; Voice mode"
         ),
         ReleaseHighlight(
-            "Automatic next occurrence",
-            "Marking a recurring task complete preserves the completed record and automatically schedules the next occurrence with updated due and reminder dates.",
-            "Today → Your tasks"
+            "Schedule & agenda query",
+            "Ask what is on your schedule for today, tomorrow, or this week to get a combined chronological timeline of calendar meetings and due tasks.",
+            "Chat; Voice mode"
         ),
         ReleaseHighlight(
-            "Recurrence indicator & widget",
-            "Glance at recurring tasks with a dedicated repeat icon in Today and cycle status badges on the Android home screen widget.",
-            "Today; Home screen widget"
+            "Offline privacy & zero battery drain",
+            "Retrieval uses fast on-device indexing with no heavy background embedding models, keeping your private phone content completely offline.",
+            "Phone assistant"
         ),
         ReleaseHighlight(
-            "Offline privacy & backup",
-            "Recurrence rules are computed purely locally without network or model inference, and are fully preserved across device reboots and local backups.",
-            "Today; Backup & restore"
+            "Context-aware telemetry",
+            "Phone task counts and schedule state are securely provided to assistant context so replies accurately reflect what's on your agenda.",
+            "Phone & PC connection"
         )
     ))
 }

@@ -31,12 +31,18 @@ class DeviceContextProvider(private val context: Context) {
 
         val currentTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
 
+        val openTasks = runCatching { LocalTaskStore(context).tasks().filterNot { it.completed } }.getOrDefault(emptyList())
+        val today = LocalDayWindow.containing(System.currentTimeMillis())
+        val dueToday = openTasks.filter { it.dueAt != null && it.dueAt >= today.startsAt && it.dueAt < today.endsAtExclusive }
+
         return mapOf(
             "battery_level" to "$batteryPct%",
             "is_charging" to isCharging,
             "connection_type" to if (isWifi) "Wi-Fi" else "Cellular/Offline",
             "time" to currentTime,
-            "device_model" to android.os.Build.MODEL
+            "device_model" to android.os.Build.MODEL,
+            "open_tasks_count" to openTasks.size,
+            "due_today_count" to dueToday.size
         )
     }
 }

@@ -137,6 +137,9 @@ class LocalAgentHarnessTest {
         ).forEach { assertNull(it, LocalAgentHarness.parseCall(it)) }
         assertEquals(LocalToolCall("clock", ""), LocalAgentHarness.parseCall("""{"tool":"clock","argument":""}"""))
         assertEquals(LocalToolCall("phone_status", ""), LocalAgentHarness.parseCall("""{"tool":"phone_status","argument":""}"""))
+        assertEquals(LocalToolCall("search_phone", "dentist"), LocalAgentHarness.parseCall("""{"tool":"search_phone","argument":"dentist"}"""))
+        assertEquals(LocalToolCall("query_schedule", "today"), LocalAgentHarness.parseCall("""{"tool":"query_schedule","argument":"today"}"""))
+        assertNull(LocalAgentHarness.parseCall("""{"tool":"query_schedule","argument":"next_year"}"""))
     }
 
     @Test fun unavailableToolNeverExecutes() = runTest {

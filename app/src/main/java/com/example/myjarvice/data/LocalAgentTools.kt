@@ -10,6 +10,18 @@ import java.util.TimeZone
 class LocalAgentTools(private val context: Context) {
     fun execute(call: LocalToolCall): LocalToolResult = when (call.name) {
         "calculate" -> LocalToolResult("${call.argument} = ${LocalCalculator.evaluate(call.argument)}")
+        "search_phone" -> {
+            val hits = PhoneContextAggregator(context).search(call.argument)
+            excerpts(hits)
+        }
+        "query_schedule" -> {
+            val schedule = PhoneContextAggregator(context).querySchedule(call.argument)
+            LocalToolResult(
+                text = schedule,
+                sources = listOf("Schedule · ${call.argument.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }}"),
+                hasData = true
+            )
+        }
         "search_library" -> excerpts(LocalKnowledgeStore(context).search(call.argument))
         "search_inbox" -> {
             val entries = RememberInboxStore(context).items().map { item ->
