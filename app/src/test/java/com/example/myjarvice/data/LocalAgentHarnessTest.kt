@@ -224,4 +224,26 @@ class LocalAgentHarnessTest {
         assertEquals("list_apps", call?.name)
         assertEquals("camera", call?.argument)
     }
+
+    @Test fun systemToolsAreParsedAndLabeledCorrectly() = runTest {
+        val volCall = LocalAgentHarness.parseCall("""{"tool":"adjust_volume","argument":"50%"}""")
+        assertNotNull(volCall)
+        assertEquals("adjust_volume", volCall?.name)
+
+        val setCall = LocalAgentHarness.parseCall("""{"tool":"open_settings","argument":"wifi"}""")
+        assertNotNull(setCall)
+        assertEquals("open_settings", setCall?.name)
+
+        val clipRead = LocalAgentHarness.parseCall("""{"tool":"read_clipboard","argument":""}""")
+        assertNotNull(clipRead)
+        assertEquals("read_clipboard", clipRead?.name)
+
+        val clipCopy = LocalAgentHarness.parseCall("""{"tool":"copy_to_clipboard","argument":"copied text"}""")
+        assertNotNull(clipCopy)
+        assertEquals("copy_to_clipboard", clipCopy?.name)
+
+        val urlCall = LocalAgentHarness.parseCall("""{"tool":"open_url","argument":"https://google.com"}""")
+        assertNotNull(urlCall)
+        assertEquals("open_url", urlCall?.name)
+    }
 }

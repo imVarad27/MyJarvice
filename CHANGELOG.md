@@ -1,5 +1,21 @@
 # Jarvis changes
 
+## 1.11.0 — 2026-11-02 — Android build 15
+
+- Added **Volume & Audio Control (`adjust_volume`)**:
+  - Adjust media volume (up, down, mute, or explicit percentage/level) with native Android volume slider HUD feedback (`FLAG_SHOW_UI`).
+  - Query current media volume, max steps, and ringer mode (Normal, Silent, Vibrate).
+- Added **System Settings Shortcuts (`open_settings`)**:
+  - Direct navigation to specific Android Settings panels: Wi-Fi, Bluetooth, Display & Brightness, Sound & Vibration, Battery, Apps, Date & Time, and Device Info.
+  - Automatically handles voice and chat queries such as "open wifi settings" or "open bluetooth settings" within `open_app`.
+- Added **Clipboard Assistant (`read_clipboard`, `copy_to_clipboard`)**:
+  - Read active clipboard text to ground queries or summarize copied snippets.
+  - Copy assistant answers, calculations, or drafts directly to the Android clipboard.
+- Added **Web Browser Navigation (`open_url`)**:
+  - Launch web URLs or search queries in the user's default browser.
+- Extended **Hardware & Storage Telemetry**:
+  - `phone_status` now reports free and total phone storage (GB) and available system RAM alongside battery, connection, and task indicators.
+
 ## 1.10.0 — 2026-10-31 — Android build 14
 
 - Added **Phone Contacts Search & Reverse Lookup (`search_contacts`)**:

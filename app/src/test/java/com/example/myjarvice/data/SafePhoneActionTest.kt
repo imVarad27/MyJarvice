@@ -9,6 +9,11 @@ class SafePhoneActionTest {
         assertEquals(SafePhoneAction("FLASHLIGHT", "on", false), PhoneActionPolicy.validate("FLASHLIGHT", "on"))
         assertEquals(SafePhoneAction("OPEN_APP", "YouTube", false), PhoneActionPolicy.validate("OPEN_APP", "YouTube"))
         assertEquals(SafePhoneAction("NAVIGATE", "Central Park", false), PhoneActionPolicy.validate("NAVIGATE", "Central Park"))
+        assertEquals(SafePhoneAction("ADJUST_VOLUME", "50%", false), PhoneActionPolicy.validate("ADJUST_VOLUME", "50%"))
+        assertEquals(SafePhoneAction("OPEN_SETTINGS", "wifi", false), PhoneActionPolicy.validate("OPEN_SETTINGS", "wifi"))
+        assertEquals(SafePhoneAction("READ_CLIPBOARD", "", false), PhoneActionPolicy.validate("READ_CLIPBOARD", ""))
+        assertEquals(SafePhoneAction("COPY_CLIPBOARD", "hello world", false), PhoneActionPolicy.validate("COPY_CLIPBOARD", "hello world"))
+        assertEquals(SafePhoneAction("OPEN_URL", "https://google.com", false), PhoneActionPolicy.validate("OPEN_URL", "https://google.com"))
     }
 
     @Test fun riskyActionsRequireConfirmation() {

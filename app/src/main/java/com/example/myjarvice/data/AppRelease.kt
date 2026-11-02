@@ -12,25 +12,25 @@ internal data class ReleaseHighlight(val title: String, val description: String,
 internal data class AppRelease(val version: String, val date: String, val highlights: List<ReleaseHighlight>)
 
 internal object JarvisReleases {
-    val latest = AppRelease("1.10.0", "2026-10-31", listOf(
+    val latest = AppRelease("1.11.0", "2026-11-02", listOf(
         ReleaseHighlight(
-            "Phone contacts search & reverse lookup",
-            "Ask Jarvis to find contact phone numbers, emails, or look up who a phone number belongs to with private, on-device contacts search.",
+            "Volume & sound control",
+            "Adjust phone media volume, mute, or check current levels with native on-screen volume slider feedback.",
             "Chat; Voice mode"
         ),
         ReleaseHighlight(
-            "Dialer & messaging prep",
-            "Prepare calls and SMS drafts directly through Jarvis. Dial numbers or compose messages in native phone apps for easy user confirmation.",
+            "Settings shortcuts",
+            "Instantly jump to Wi-Fi, Bluetooth, Display, Sound, Battery, Apps, or Date & Time system settings.",
             "Phone assistant"
         ),
         ReleaseHighlight(
-            "Installed apps explorer",
-            "Query and discover installed launchable apps by keyword or category to effortlessly launch applications with voice or chat.",
+            "Clipboard assistant",
+            "Read copied text from the phone clipboard or copy generated answers and notes directly to clipboard.",
             "Phone assistant"
         ),
         ReleaseHighlight(
-            "Unified contacts RAG indexing",
-            "Contacts are seamlessly integrated into unified phone search, letting you find people alongside tasks, calendar events, routines, and notes.",
+            "Web search & hardware telemetry",
+            "Open websites or web searches in the phone browser, and monitor live storage and RAM capacity in phone status.",
             "Phone assistant"
         )
     ))

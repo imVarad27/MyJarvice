@@ -1,9 +1,12 @@
 package com.example.myjarvice.data
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -28,7 +31,7 @@ class DeviceActionExecutor(private val context: Context) {
                 val values = DeviceContextProvider(context).getDeviceContext()
                 "Battery ${values["battery_level"] ?: "unknown"} · " +
                     (if (values["is_charging"] == true) "charging" else "not charging") +
-                    " · ${values["connection_type"] ?: "connection unknown"} · ${values["time"] ?: "time unavailable"}"
+                    " · ${values["connection_type"] ?: "connection unknown"} · Storage ${values["storage"] ?: "unknown"} · ${values["time"] ?: "time unavailable"}"
             }
             "FLASHLIGHT" -> { toggleFlashlight(action.query); "Flashlight command completed (${action.query})." }
             "OPEN_APP" -> { openApp(action.query); "Opening ${action.query}." }
@@ -63,6 +66,11 @@ class DeviceActionExecutor(private val context: Context) {
                 "Opened SMS composer for $number" + (if (messageBody.isNotBlank()) " with drafted message." else ".") + " Review and send in your messaging app."
             }
             "LIST_APPS" -> listInstalledApps(action.query)
+            "ADJUST_VOLUME" -> adjustVolume(action.query)
+            "OPEN_SETTINGS" -> openSettings(action.query)
+            "READ_CLIPBOARD" -> readClipboard()
+            "COPY_CLIPBOARD" -> copyClipboard(action.query)
+            "OPEN_URL" -> openBrowser(action.query)
             else -> error("This phone action is not allowlisted.")
         }
     }
@@ -281,8 +289,8 @@ class DeviceActionExecutor(private val context: Context) {
                 openMaps()
                 return
             }
-            q == "settings" -> {
-                launch(Intent(Settings.ACTION_SETTINGS))
+            q.contains("setting") -> {
+                openSettings(q)
                 return
             }
         }
@@ -379,6 +387,127 @@ class DeviceActionExecutor(private val context: Context) {
             if (cursor.moveToFirst()) return cursor.getString(0)
         }
         return null
+    }
+
+    private fun adjustVolume(query: String): String {
+        val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            ?: error("Audio service unavailable.")
+        val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val current = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val q = query.trim().lowercase()
+        return when {
+            q == "up" || q.contains("raise") || q.contains("increase") -> {
+                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
+                val newVol = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+                val pct = if (max > 0) (newVol * 100 / max) else 0
+                "Turned volume up to $pct% ($newVol/$max)."
+            }
+            q == "down" || q.contains("lower") || q.contains("decrease") -> {
+                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
+                val newVol = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+                val pct = if (max > 0) (newVol * 100 / max) else 0
+                "Turned volume down to $pct% ($newVol/$max)."
+            }
+            q == "mute" || q == "silent" || q == "0" || q == "0%" -> {
+                audio.setStreamVolume(AudioManager.STREAM_MUSIC, 0, AudioManager.FLAG_SHOW_UI)
+                "Muted media volume."
+            }
+            q == "status" || q == "check" || q.contains("what") -> {
+                val pct = if (max > 0) (current * 100 / max) else 0
+                val ringMode = when (audio.ringerMode) {
+                    AudioManager.RINGER_MODE_SILENT -> "Silent"
+                    AudioManager.RINGER_MODE_VIBRATE -> "Vibrate"
+                    else -> "Normal"
+                }
+                "Media volume is at $pct% ($current/$max) · Ringer mode: $ringMode."
+            }
+            else -> {
+                val digits = q.filter { it.isDigit() }.toIntOrNull()
+                if (digits != null) {
+                    val target = if (q.contains("%")) {
+                        (digits.coerceIn(0, 100) * max / 100).coerceIn(0, max)
+                    } else {
+                        digits.coerceIn(0, max)
+                    }
+                    audio.setStreamVolume(AudioManager.STREAM_MUSIC, target, AudioManager.FLAG_SHOW_UI)
+                    val pct = if (max > 0) (target * 100 / max) else 0
+                    "Set media volume to $pct% ($target/$max)."
+                } else {
+                    val pct = if (max > 0) (current * 100 / max) else 0
+                    "Media volume is at $pct% ($current/$max)."
+                }
+            }
+        }
+    }
+
+    private fun openSettings(category: String): String {
+        val q = category.trim().lowercase()
+        val intent = when {
+            q.contains("wifi") || q.contains("wi-fi") || q.contains("internet") || q.contains("network") ->
+                Intent(Settings.ACTION_WIFI_SETTINGS)
+            q.contains("bluetooth") || q.contains("bt") ->
+                Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
+            q.contains("display") || q.contains("brightness") || q.contains("screen") ->
+                Intent(Settings.ACTION_DISPLAY_SETTINGS)
+            q.contains("sound") || q.contains("volume") || q.contains("audio") || q.contains("ring") ->
+                Intent(Settings.ACTION_SOUND_SETTINGS)
+            q.contains("battery") || q.contains("power") ->
+                Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS)
+            q.contains("app") || q.contains("application") || q.contains("permission") ->
+                Intent(Settings.ACTION_APPLICATION_SETTINGS)
+            q.contains("date") || q.contains("time") ->
+                Intent(Settings.ACTION_DATE_SETTINGS)
+            q.contains("device") || q.contains("about") || q.contains("info") || q.contains("phone") ->
+                Intent(Settings.ACTION_DEVICE_INFO_SETTINGS)
+            else -> Intent(Settings.ACTION_SETTINGS)
+        }
+        launch(intent)
+        val label = when (intent.action) {
+            Settings.ACTION_WIFI_SETTINGS -> "Wi-Fi"
+            Settings.ACTION_BLUETOOTH_SETTINGS -> "Bluetooth"
+            Settings.ACTION_DISPLAY_SETTINGS -> "Display & Brightness"
+            Settings.ACTION_SOUND_SETTINGS -> "Sound & Vibration"
+            Settings.ACTION_BATTERY_SAVER_SETTINGS -> "Battery"
+            Settings.ACTION_APPLICATION_SETTINGS -> "Apps"
+            Settings.ACTION_DATE_SETTINGS -> "Date & Time"
+            Settings.ACTION_DEVICE_INFO_SETTINGS -> "About phone"
+            else -> "Settings"
+        }
+        return "Opening $label settings."
+    }
+
+    private fun readClipboard(): String {
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            ?: return "Clipboard service unavailable."
+        val clip = cm.primaryClip
+        if (clip == null || clip.itemCount == 0) return "Clipboard is empty."
+        val text = clip.getItemAt(0)?.text?.toString()
+        return if (text.isNullOrBlank()) "Clipboard is empty."
+        else "Clipboard text: \"$text\""
+    }
+
+    private fun copyClipboard(text: String): String {
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            ?: error("Clipboard service unavailable.")
+        val clip = ClipData.newPlainText("Jarvis", text)
+        cm.setPrimaryClip(clip)
+        val preview = if (text.length > 50) text.take(50) + "..." else text
+        return "Copied to clipboard: \"$preview\""
+    }
+
+    private fun openBrowser(rawQuery: String): String {
+        val q = rawQuery.trim()
+        require(q.isNotBlank()) { "Supply a URL or search query." }
+        val uri = if (q.startsWith("http://") || q.startsWith("https://")) {
+            Uri.parse(q)
+        } else if (q.contains(".") && !q.contains(" ")) {
+            Uri.parse("https://$q")
+        } else {
+            Uri.parse("https://www.google.com/search?q=" + Uri.encode(q))
+        }
+        val intent = Intent(Intent.ACTION_VIEW, uri)
+        launch(intent)
+        return "Opening in web browser: $uri"
     }
 
     // --- Helpers ----------------------------------------------------------

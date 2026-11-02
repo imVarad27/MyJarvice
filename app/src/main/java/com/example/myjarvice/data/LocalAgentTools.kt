@@ -45,6 +45,9 @@ class LocalAgentTools(private val context: Context) {
                 "Battery: ${values["battery_level"] ?: "unknown"}; " +
                     "charging: ${values["is_charging"] ?: "unknown"}; " +
                     "connection: ${values["connection_type"] ?: "unknown"}; " +
+                    "storage: ${values["storage"] ?: "unknown"}; " +
+                    "RAM: ${values["ram"] ?: "unknown"}; " +
+                    "tasks: ${values["open_tasks_count"] ?: 0} open (${values["due_today_count"] ?: 0} due today); " +
                     "phone time: ${values["time"] ?: "unknown"}."
             )
         }
@@ -69,6 +72,11 @@ class LocalAgentTools(private val context: Context) {
         "open_dialer" -> executePhone("OPEN_DIALER", call.argument)
         "open_sms" -> executePhone("OPEN_SMS", call.argument)
         "list_apps" -> executePhone("LIST_APPS", if (call.argument.equals("all", ignoreCase = true)) "" else call.argument)
+        "adjust_volume" -> executePhone("ADJUST_VOLUME", call.argument)
+        "open_settings" -> executePhone("OPEN_SETTINGS", call.argument)
+        "read_clipboard" -> executePhone("READ_CLIPBOARD", "")
+        "copy_to_clipboard" -> executePhone("COPY_CLIPBOARD", call.argument)
+        "open_url" -> executePhone("OPEN_URL", call.argument)
         else -> error("This tool is not available on the phone.")
     }
 

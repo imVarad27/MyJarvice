@@ -40,6 +40,7 @@ Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer co
 - Data & storage now tracks and displays the latest backup timestamp so users can verify backup currency at a glance.
 - Assistant tools include unified phone RAG (`search_phone`) and schedule retrieval (`query_schedule`): fast, local lexical ranking across phone tasks, routines, permissioned calendar events, saved inbox items, and personal memories/documents in a single tool call with clear citations and zero background battery drain.
 - Assistant tools include permissioned contacts search (`search_contacts`) with reverse phone number lookup, dialer preparation (`open_dialer`), SMS drafting (`open_sms`), and installed apps discovery (`list_apps`), enabling rich on-device assistance with clear user review for communication actions.
+- Assistant tools include volume and audio control (`adjust_volume`), system settings navigation (`open_settings`), clipboard reading and copying (`read_clipboard`, `copy_to_clipboard`), web browser navigation (`open_url`), and hardware storage and memory monitoring in `phone_status`.
 
 ## What a personal assistant needs next
 
