@@ -1,5 +1,17 @@
 # Jarvis changes
 
+## 1.12.0 — 2026-11-03 — Android build 16
+
+- Added **Quick Note & Link Capture (`save_note`)**:
+  - Save notes, thoughts, and web links directly into the private Remember inbox.
+  - Newly saved items are immediately indexed for phone RAG and accessible in search.
+- Added **Instant Camera Launcher (`open_camera`)**:
+  - Open the device camera or launch camera capture mode directly with voice or chat.
+- Added **Nearby Places & Maps Search (`search_places`)**:
+  - Search for nearby facilities, restaurants, or locations on Google Maps via geo search.
+- Added **Clock Alarms & Timers Inspectors (`show_alarms`, `show_timers`)**:
+  - View existing alarms and timers directly in the native Android Clock application.
+
 ## 1.11.0 — 2026-11-02 — Android build 15
 
 - Added **Volume & Audio Control (`adjust_volume`)**:

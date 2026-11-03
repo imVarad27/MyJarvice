@@ -80,7 +80,7 @@ class LocalAgentHarness(
             record(call.name, when {
                 !result.succeeded -> "failed"
                 !result.hasData -> "no_data"
-                call.name in setOf("open_app", "navigate", "set_alarm", "set_timer", "open_dialer", "open_sms", "open_settings", "open_url") -> "prepared"
+                call.name in setOf("open_app", "navigate", "set_alarm", "set_timer", "open_dialer", "open_sms", "open_settings", "open_url", "open_camera", "search_places", "show_alarms", "show_timers") -> "prepared"
                 else -> "completed"
             })
             if (!result.hasData || !result.succeeded) return decorate(result.text, used + label(call.name), sources + result.sources.take(3).map { it.take(160) })
@@ -103,7 +103,7 @@ class LocalAgentHarness(
     }
 
     companion object {
-        private val actionTools = setOf("remember", "add_task", "open_app", "navigate", "flashlight", "set_alarm", "set_timer", "open_dialer", "open_sms", "adjust_volume", "open_settings", "copy_to_clipboard", "open_url")
+        private val actionTools = setOf("remember", "add_task", "save_note", "open_app", "navigate", "flashlight", "set_alarm", "set_timer", "open_dialer", "open_sms", "adjust_volume", "open_settings", "copy_to_clipboard", "open_url", "open_camera", "search_places", "show_alarms", "show_timers")
         fun isActionTool(name: String): Boolean = name in actionTools
         private val specs = linkedMapOf(
             "calculate" to LocalToolSpec("Evaluate arithmetic using digits, decimal points, parentheses and + - * /.", "expression", 200),
@@ -118,6 +118,11 @@ class LocalAgentHarness(
             "read_clipboard" to LocalToolSpec("Read the text currently copied to the phone clipboard."),
             "copy_to_clipboard" to LocalToolSpec("Copy text to the phone clipboard.", "text", 500),
             "open_url" to LocalToolSpec("Open a website URL or web search in the phone browser.", "url_or_query", 300),
+            "save_note" to LocalToolSpec("Save a note or link into the private phone inbox.", "text", 1000),
+            "open_camera" to LocalToolSpec("Open the phone camera."),
+            "search_places" to LocalToolSpec("Search for nearby places or businesses on Google Maps.", "query", 160),
+            "show_alarms" to LocalToolSpec("Open the phone clock alarms screen."),
+            "show_timers" to LocalToolSpec("Open the phone clock timers screen."),
             "search_library" to LocalToolSpec("Search explicitly saved memories and imported documents.", "query", 200),
             "search_inbox" to LocalToolSpec("Search items saved in the Remember inbox.", "query", 200),
             "clock" to LocalToolSpec("Read the phone's current date, time and timezone."),
@@ -179,6 +184,11 @@ class LocalAgentHarness(
             "open_settings" -> "Settings shortcut"
             "read_clipboard", "copy_to_clipboard" -> "Clipboard"
             "open_url" -> "Web browser"
+            "save_note" -> "Inbox note"
+            "open_camera" -> "Camera"
+            "search_places" -> "Places search"
+            "show_alarms" -> "Alarms"
+            "show_timers" -> "Timers"
             "search_library" -> "Memory & documents"
             "search_inbox" -> "Saved inbox"
             "clock" -> "Phone clock"

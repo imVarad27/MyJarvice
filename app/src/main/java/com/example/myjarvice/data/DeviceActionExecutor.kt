@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.AlarmClock
@@ -71,6 +72,10 @@ class DeviceActionExecutor(private val context: Context) {
             "READ_CLIPBOARD" -> readClipboard()
             "COPY_CLIPBOARD" -> copyClipboard(action.query)
             "OPEN_URL" -> openBrowser(action.query)
+            "OPEN_CAMERA" -> { openCamera(); "Opening phone camera." }
+            "SEARCH_PLACES" -> { searchPlaces(action.query); "Searching for “${action.query}” on Google Maps." }
+            "SHOW_ALARMS" -> { showAlarms(); "Opening phone clock alarms." }
+            "SHOW_TIMERS" -> { showTimers(); "Opening phone clock timers." }
             else -> error("This phone action is not allowlisted.")
         }
     }
@@ -508,6 +513,41 @@ class DeviceActionExecutor(private val context: Context) {
         val intent = Intent(Intent.ACTION_VIEW, uri)
         launch(intent)
         return "Opening in web browser: $uri"
+    }
+
+    private fun searchPlaces(query: String) {
+        val q = query.trim()
+        val encoded = Uri.encode(q)
+        val pm = context.packageManager
+        val geoUri = Uri.parse("geo:0,0?q=$encoded")
+        val intent = Intent(Intent.ACTION_VIEW, geoUri).apply {
+            setPackage(MAPS_PACKAGE)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        if (intent.resolveActivity(pm) != null) {
+            launch(intent)
+            return
+        }
+        val webUri = Uri.parse("https://www.google.com/maps/search/?api=1&query=$encoded")
+        launch(Intent(Intent.ACTION_VIEW, webUri))
+    }
+
+    private fun showAlarms() {
+        val intent = Intent(AlarmClock.ACTION_SHOW_ALARMS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        launch(intent)
+    }
+
+    private fun showTimers() {
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent(AlarmClock.ACTION_SHOW_TIMERS)
+        } else {
+            Intent(AlarmClock.ACTION_SHOW_ALARMS)
+        }.apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        launch(intent)
     }
 
     // --- Helpers ----------------------------------------------------------

@@ -77,6 +77,14 @@ class LocalAgentTools(private val context: Context) {
         "read_clipboard" -> executePhone("READ_CLIPBOARD", "")
         "copy_to_clipboard" -> executePhone("COPY_CLIPBOARD", call.argument)
         "open_url" -> executePhone("OPEN_URL", call.argument)
+        "save_note" -> {
+            val item = RememberInboxStore(context).addText(call.argument)
+            LocalToolResult("Saved to private inbox: \"${item.title}\"")
+        }
+        "open_camera" -> executePhone("OPEN_CAMERA", "")
+        "search_places" -> executePhone("SEARCH_PLACES", call.argument)
+        "show_alarms" -> executePhone("SHOW_ALARMS", "")
+        "show_timers" -> executePhone("SHOW_TIMERS", "")
         else -> error("This tool is not available on the phone.")
     }
 

@@ -245,5 +245,25 @@ class LocalAgentHarnessTest {
         val urlCall = LocalAgentHarness.parseCall("""{"tool":"open_url","argument":"https://google.com"}""")
         assertNotNull(urlCall)
         assertEquals("open_url", urlCall?.name)
+
+        val noteCall = LocalAgentHarness.parseCall("""{"tool":"save_note","argument":"Buy groceries later"}""")
+        assertNotNull(noteCall)
+        assertEquals("save_note", noteCall?.name)
+
+        val camCall = LocalAgentHarness.parseCall("""{"tool":"open_camera","argument":""}""")
+        assertNotNull(camCall)
+        assertEquals("open_camera", camCall?.name)
+
+        val placesCall = LocalAgentHarness.parseCall("""{"tool":"search_places","argument":"coffee shop"}""")
+        assertNotNull(placesCall)
+        assertEquals("search_places", placesCall?.name)
+
+        val alarmsCall = LocalAgentHarness.parseCall("""{"tool":"show_alarms","argument":""}""")
+        assertNotNull(alarmsCall)
+        assertEquals("show_alarms", alarmsCall?.name)
+
+        val timersCall = LocalAgentHarness.parseCall("""{"tool":"show_timers","argument":""}""")
+        assertNotNull(timersCall)
+        assertEquals("show_timers", timersCall?.name)
     }
 }

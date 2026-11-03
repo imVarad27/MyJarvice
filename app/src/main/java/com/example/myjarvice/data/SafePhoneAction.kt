@@ -9,7 +9,7 @@ data class SafePhoneAction(
 
 /** Safety and bounds stay deterministic even though intent selection is model-driven. */
 object PhoneActionPolicy {
-    private val noArgument = setOf("DEVICE_STATUS", "SHOW_LOCAL_TASKS", "READ_CLIPBOARD")
+    private val noArgument = setOf("DEVICE_STATUS", "SHOW_LOCAL_TASKS", "READ_CLIPBOARD", "SHOW_ALARMS", "SHOW_TIMERS", "OPEN_CAMERA")
     private val boundedArguments = mapOf(
         "FLASHLIGHT" to 6,
         "OPEN_APP" to 80,
@@ -25,7 +25,8 @@ object PhoneActionPolicy {
         "ADJUST_VOLUME" to 40,
         "OPEN_SETTINGS" to 60,
         "COPY_CLIPBOARD" to 1000,
-        "OPEN_URL" to 300
+        "OPEN_URL" to 300,
+        "SEARCH_PLACES" to 160
     )
     private val confirmationRequired = setOf("CALL", "WHATSAPP")
 
