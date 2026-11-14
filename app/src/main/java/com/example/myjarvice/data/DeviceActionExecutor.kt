@@ -16,6 +16,7 @@ import android.provider.ContactsContract
 import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
+import android.view.KeyEvent
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 
@@ -76,6 +77,9 @@ class DeviceActionExecutor(private val context: Context) {
             "SEARCH_PLACES" -> { searchPlaces(action.query); "Searching for “${action.query}” on Google Maps." }
             "SHOW_ALARMS" -> { showAlarms(); "Opening phone clock alarms." }
             "SHOW_TIMERS" -> { showTimers(); "Opening phone clock timers." }
+            "COMPLETE_LOCAL_TASK" -> completeTaskByQuery(action.query)
+            "CONTROL_MEDIA" -> controlMedia(action.query)
+            "SET_RINGER_MODE" -> setRingerMode(action.query)
             else -> error("This phone action is not allowlisted.")
         }
     }
@@ -548,6 +552,74 @@ class DeviceActionExecutor(private val context: Context) {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         launch(intent)
+    }
+
+    private fun completeTaskByQuery(query: String): String {
+        val store = LocalTaskStore(context)
+        val openTasks = store.tasks().filterNot { it.completed }
+        val q = query.trim().lowercase()
+        val match = openTasks.firstOrNull { it.title.lowercase() == q }
+            ?: openTasks.firstOrNull { it.title.lowercase().startsWith(q) }
+            ?: openTasks.firstOrNull { it.title.lowercase().contains(q) }
+        if (match == null) {
+            return "No open task matching “$query” found."
+        }
+        store.setCompleted(match.id, true)
+        return "Marked task “${match.title}” as completed."
+    }
+
+    private fun controlMedia(command: String): String {
+        val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            ?: error("Audio service unavailable.")
+        val q = command.trim().lowercase()
+        val keycode = when {
+            q == "play" -> KeyEvent.KEYCODE_MEDIA_PLAY
+            q == "pause" || q == "stop" -> KeyEvent.KEYCODE_MEDIA_PAUSE
+            q == "play_pause" || q == "toggle" -> KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+            q == "next" || q.contains("skip") -> KeyEvent.KEYCODE_MEDIA_NEXT
+            q == "previous" || q == "prev" || q.contains("back") -> KeyEvent.KEYCODE_MEDIA_PREVIOUS
+            else -> KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+        }
+        val down = KeyEvent(KeyEvent.ACTION_DOWN, keycode)
+        val up = KeyEvent(KeyEvent.ACTION_UP, keycode)
+        audio.dispatchMediaKeyEvent(down)
+        audio.dispatchMediaKeyEvent(up)
+        val actionName = when (keycode) {
+            KeyEvent.KEYCODE_MEDIA_PLAY -> "Play"
+            KeyEvent.KEYCODE_MEDIA_PAUSE -> "Pause"
+            KeyEvent.KEYCODE_MEDIA_NEXT -> "Next track"
+            KeyEvent.KEYCODE_MEDIA_PREVIOUS -> "Previous track"
+            else -> "Play/Pause"
+        }
+        return "$actionName command sent to media player."
+    }
+
+    private fun setRingerMode(modeQuery: String): String {
+        val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            ?: error("Audio service unavailable.")
+        val q = modeQuery.trim().lowercase()
+        return when {
+            q.contains("vibrate") -> {
+                audio.ringerMode = AudioManager.RINGER_MODE_VIBRATE
+                "Ringer mode set to Vibrate."
+            }
+            q.contains("silent") || q.contains("mute") -> {
+                audio.ringerMode = AudioManager.RINGER_MODE_SILENT
+                "Ringer mode set to Silent."
+            }
+            q.contains("normal") || q.contains("ring") || q.contains("sound") -> {
+                audio.ringerMode = AudioManager.RINGER_MODE_NORMAL
+                "Ringer mode set to Normal."
+            }
+            else -> {
+                val current = when (audio.ringerMode) {
+                    AudioManager.RINGER_MODE_SILENT -> "Silent"
+                    AudioManager.RINGER_MODE_VIBRATE -> "Vibrate"
+                    else -> "Normal"
+                }
+                "Current ringer mode: $current."
+            }
+        }
     }
 
     // --- Helpers ----------------------------------------------------------

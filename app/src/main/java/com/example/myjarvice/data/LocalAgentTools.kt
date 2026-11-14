@@ -85,6 +85,9 @@ class LocalAgentTools(private val context: Context) {
         "search_places" -> executePhone("SEARCH_PLACES", call.argument)
         "show_alarms" -> executePhone("SHOW_ALARMS", "")
         "show_timers" -> executePhone("SHOW_TIMERS", "")
+        "complete_task" -> executePhone("COMPLETE_LOCAL_TASK", call.argument)
+        "control_media" -> executePhone("CONTROL_MEDIA", call.argument)
+        "set_ringer_mode" -> executePhone("SET_RINGER_MODE", call.argument)
         else -> error("This tool is not available on the phone.")
     }
 

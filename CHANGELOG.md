@@ -1,5 +1,15 @@
 # Jarvis changes
 
+## 1.13.0 — 2026-11-04 — Android build 17
+
+- Added **Task Completion Tool (`complete_task`)**:
+  - Mark open tasks as completed by title or keyword directly using voice or chat.
+  - Automatically handles repeating task recurrence schedules and reminder cancellations.
+- Added **Media Playback Control (`control_media`)**:
+  - Dispatch media key events (play, pause, next track, previous track, toggle) to active media players.
+- Added **Ringer Mode Control (`set_ringer_mode`)**:
+  - Set phone ringer to Normal, Vibrate, or Silent, or inspect current ringer mode.
+
 ## 1.12.0 — 2026-11-03 — Android build 16
 
 - Added **Quick Note & Link Capture (`save_note`)**:

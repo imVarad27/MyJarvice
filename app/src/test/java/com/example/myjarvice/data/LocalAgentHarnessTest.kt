@@ -265,5 +265,17 @@ class LocalAgentHarnessTest {
         val timersCall = LocalAgentHarness.parseCall("""{"tool":"show_timers","argument":""}""")
         assertNotNull(timersCall)
         assertEquals("show_timers", timersCall?.name)
+
+        val completeCall = LocalAgentHarness.parseCall("""{"tool":"complete_task","argument":"Buy groceries"}""")
+        assertNotNull(completeCall)
+        assertEquals("complete_task", completeCall?.name)
+
+        val mediaCall = LocalAgentHarness.parseCall("""{"tool":"control_media","argument":"pause"}""")
+        assertNotNull(mediaCall)
+        assertEquals("control_media", mediaCall?.name)
+
+        val ringerCall = LocalAgentHarness.parseCall("""{"tool":"set_ringer_mode","argument":"vibrate"}""")
+        assertNotNull(ringerCall)
+        assertEquals("set_ringer_mode", ringerCall?.name)
     }
 }

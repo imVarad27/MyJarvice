@@ -12,25 +12,25 @@ internal data class ReleaseHighlight(val title: String, val description: String,
 internal data class AppRelease(val version: String, val date: String, val highlights: List<ReleaseHighlight>)
 
 internal object JarvisReleases {
-    val latest = AppRelease("1.12.0", "2026-11-03", listOf(
+    val latest = AppRelease("1.13.0", "2026-11-04", listOf(
         ReleaseHighlight(
-            "Quick note & link capture",
-            "Save thoughts, links, and text directly into your private phone inbox with voice or chat, indexed immediately across phone search.",
+            "Task completion by voice or chat",
+            "Mark open tasks as completed by name or keyword directly through Jarvis, seamlessly triggering recurring tasks.",
             "Chat; Voice mode"
         ),
         ReleaseHighlight(
-            "Instant camera launch",
-            "Open the camera or prepare photo capture directly through assistant voice commands.",
+            "Media playback control",
+            "Play, pause, skip, or resume music and media playback directly through assistant commands.",
             "Phone assistant"
         ),
         ReleaseHighlight(
-            "Nearby places & Maps search",
-            "Search for nearby businesses, gas stations, or places of interest directly in Google Maps.",
+            "Ringer mode control",
+            "Switch phone sound modes between Normal, Vibrate, or Silent, or check the current ringer mode.",
             "Phone assistant"
         ),
         ReleaseHighlight(
-            "Clock alarms & timers inspectors",
-            "Jump straight to your active alarms or timers in the Android Clock app.",
+            "Full device action suite",
+            "Control phone media, tasks, settings, clipboard, and apps effortlessly using on-device deterministic tools.",
             "Phone assistant"
         )
     ))

@@ -80,7 +80,7 @@ class LocalAgentHarness(
             record(call.name, when {
                 !result.succeeded -> "failed"
                 !result.hasData -> "no_data"
-                call.name in setOf("open_app", "navigate", "set_alarm", "set_timer", "open_dialer", "open_sms", "open_settings", "open_url", "open_camera", "search_places", "show_alarms", "show_timers") -> "prepared"
+                call.name in setOf("open_app", "navigate", "set_alarm", "set_timer", "open_dialer", "open_sms", "open_settings", "open_url", "open_camera", "search_places", "show_alarms", "show_timers", "control_media", "set_ringer_mode") -> "prepared"
                 else -> "completed"
             })
             if (!result.hasData || !result.succeeded) return decorate(result.text, used + label(call.name), sources + result.sources.take(3).map { it.take(160) })
@@ -103,7 +103,7 @@ class LocalAgentHarness(
     }
 
     companion object {
-        private val actionTools = setOf("remember", "add_task", "save_note", "open_app", "navigate", "flashlight", "set_alarm", "set_timer", "open_dialer", "open_sms", "adjust_volume", "open_settings", "copy_to_clipboard", "open_url", "open_camera", "search_places", "show_alarms", "show_timers")
+        private val actionTools = setOf("remember", "add_task", "save_note", "complete_task", "open_app", "navigate", "flashlight", "set_alarm", "set_timer", "open_dialer", "open_sms", "adjust_volume", "open_settings", "copy_to_clipboard", "open_url", "open_camera", "search_places", "show_alarms", "show_timers", "control_media", "set_ringer_mode")
         fun isActionTool(name: String): Boolean = name in actionTools
         private val specs = linkedMapOf(
             "calculate" to LocalToolSpec("Evaluate arithmetic using digits, decimal points, parentheses and + - * /.", "expression", 200),
@@ -123,6 +123,9 @@ class LocalAgentHarness(
             "search_places" to LocalToolSpec("Search for nearby places or businesses on Google Maps.", "query", 160),
             "show_alarms" to LocalToolSpec("Open the phone clock alarms screen."),
             "show_timers" to LocalToolSpec("Open the phone clock timers screen."),
+            "complete_task" to LocalToolSpec("Mark an open phone task as completed by title or keyword.", "task", 180),
+            "control_media" to LocalToolSpec("Control media playback: play, pause, next, previous, or toggle.", "action", 40, setOf("play", "pause", "next", "previous", "toggle")),
+            "set_ringer_mode" to LocalToolSpec("Set phone ringer mode: normal, vibrate, silent, or status.", "mode", 40, setOf("normal", "vibrate", "silent", "status")),
             "search_library" to LocalToolSpec("Search explicitly saved memories and imported documents.", "query", 200),
             "search_inbox" to LocalToolSpec("Search items saved in the Remember inbox.", "query", 200),
             "clock" to LocalToolSpec("Read the phone's current date, time and timezone."),
@@ -194,7 +197,9 @@ class LocalAgentHarness(
             "clock" -> "Phone clock"
             "phone_status" -> "Phone status"
             "remember", "list_memories" -> "Local memory"
-            "add_task", "list_tasks" -> "Phone tasks"
+            "add_task", "list_tasks", "complete_task" -> "Phone tasks"
+            "control_media" -> "Media playback"
+            "set_ringer_mode" -> "Ringer mode"
             "open_app" -> "App launcher"
             "navigate" -> "Navigation"
             "flashlight" -> "Flashlight"
