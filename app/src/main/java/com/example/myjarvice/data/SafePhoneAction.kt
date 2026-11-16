@@ -29,7 +29,9 @@ object PhoneActionPolicy {
         "SEARCH_PLACES" to 160,
         "COMPLETE_LOCAL_TASK" to 180,
         "CONTROL_MEDIA" to 40,
-        "SET_RINGER_MODE" to 40
+        "SET_RINGER_MODE" to 40,
+        "OPEN_WHATSAPP" to 500,
+        "WEB_SEARCH" to 200
     )
     private val confirmationRequired = setOf("CALL", "WHATSAPP")
 

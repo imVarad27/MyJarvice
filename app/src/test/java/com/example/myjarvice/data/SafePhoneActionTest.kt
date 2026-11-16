@@ -21,6 +21,8 @@ class SafePhoneActionTest {
         assertEquals(SafePhoneAction("COMPLETE_LOCAL_TASK", "Buy milk", false), PhoneActionPolicy.validate("COMPLETE_LOCAL_TASK", "Buy milk"))
         assertEquals(SafePhoneAction("CONTROL_MEDIA", "play", false), PhoneActionPolicy.validate("CONTROL_MEDIA", "play"))
         assertEquals(SafePhoneAction("SET_RINGER_MODE", "vibrate", false), PhoneActionPolicy.validate("SET_RINGER_MODE", "vibrate"))
+        assertEquals(SafePhoneAction("OPEN_WHATSAPP", "Mom: On my way", false), PhoneActionPolicy.validate("OPEN_WHATSAPP", "Mom: On my way"))
+        assertEquals(SafePhoneAction("WEB_SEARCH", "weather today", false), PhoneActionPolicy.validate("WEB_SEARCH", "weather today"))
     }
 
     @Test fun riskyActionsRequireConfirmation() {

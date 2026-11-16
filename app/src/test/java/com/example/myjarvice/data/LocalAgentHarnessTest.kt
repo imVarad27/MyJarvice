@@ -277,5 +277,13 @@ class LocalAgentHarnessTest {
         val ringerCall = LocalAgentHarness.parseCall("""{"tool":"set_ringer_mode","argument":"vibrate"}""")
         assertNotNull(ringerCall)
         assertEquals("set_ringer_mode", ringerCall?.name)
+
+        val whatsappCall = LocalAgentHarness.parseCall("""{"tool":"open_whatsapp","argument":"Alice: See you at 5"}""")
+        assertNotNull(whatsappCall)
+        assertEquals("open_whatsapp", whatsappCall?.name)
+
+        val webCall = LocalAgentHarness.parseCall("""{"tool":"web_search","argument":"current weather in Tokyo"}""")
+        assertNotNull(webCall)
+        assertEquals("web_search", webCall?.name)
     }
 }

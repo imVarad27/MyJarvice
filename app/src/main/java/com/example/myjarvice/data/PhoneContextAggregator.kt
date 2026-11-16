@@ -2,11 +2,16 @@ package com.example.myjarvice.data
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.core.content.ContextCompat
 import java.text.DateFormat
 import java.util.Date
 import java.util.TimeZone
+
+/** Represents an installed launcher application on the phone. */
+data class InstalledAppCard(val label: String, val packageName: String)
 
 /** Interface providing phone data for offline RAG indexing. */
 interface PhoneDataProvider {
@@ -18,6 +23,8 @@ interface PhoneDataProvider {
     fun isCalendarPermissionGranted(): Boolean
     fun contacts(): List<ContactCard>
     fun isContactsPermissionGranted(): Boolean
+    fun installedApps(): List<InstalledAppCard>
+    fun deviceStatusSummary(): String
 }
 
 /** Default implementation binding to local Android stores and permissioned providers. */
@@ -26,7 +33,7 @@ class AndroidPhoneDataProvider(private val context: Context) : PhoneDataProvider
     override fun routines(): List<LocalRoutine> = LocalRoutineStore(context).routines()
     override fun calendarEvents(): List<CalendarAgendaItem> {
         return if (isCalendarPermissionGranted()) {
-            runCatching { CalendarAgendaRepository(context).week().events }.getOrDefault(emptyList())
+            runCatching { CalendarAgendaRepository(context).month().events }.getOrDefault(emptyList())
         } else emptyList()
     }
     override fun inboxItems(): List<RememberItem> = RememberInboxStore(context).items()
@@ -41,6 +48,35 @@ class AndroidPhoneDataProvider(private val context: Context) : PhoneDataProvider
     }
     override fun isContactsPermissionGranted(): Boolean {
         return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
+    }
+    override fun installedApps(): List<InstalledAppCard> {
+        return runCatching {
+            val pm = context.packageManager
+            val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            val resolveInfos = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                pm.queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                pm.queryIntentActivities(intent, 0)
+            }
+            resolveInfos.mapNotNull { ri ->
+                val label = ri.loadLabel(pm).toString().trim().ifBlank { return@mapNotNull null }
+                val pkg = ri.activityInfo?.packageName ?: return@mapNotNull null
+                InstalledAppCard(label, pkg)
+            }.distinctBy { it.packageName }.sortedBy { it.label.lowercase() }
+        }.getOrDefault(emptyList())
+    }
+    override fun deviceStatusSummary(): String {
+        return runCatching {
+            val ctx = DeviceContextProvider(context).getDeviceContext()
+            val battery = ctx["battery_level"] ?: "unknown"
+            val charging = if (ctx["is_charging"] == true) "charging" else "not charging"
+            val conn = ctx["connection_type"] ?: "unknown"
+            val storage = ctx["storage"] ?: "unknown"
+            val ram = ctx["ram"] ?: "unknown"
+            val openTasks = ctx["open_tasks_count"] ?: 0
+            "Phone device status: Battery is at $battery ($charging). Network: $conn. Storage: $storage. RAM: $ram. Open tasks: $openTasks."
+        }.getOrDefault("")
     }
 }
 
@@ -103,6 +139,18 @@ class PhoneContextAggregator internal constructor(
                 val text = "Contact: ${contact.name}$nums$mails"
                 entries.add(KnowledgeEntry(id = "contact-${contact.id}", name = "Contact · ${contact.name}", text = text, memory = false))
             }
+        }
+
+        // 7. Installed applications
+        provider.installedApps().forEach { app ->
+            val text = "Installed app: ${app.label}\nPackage: ${app.packageName}"
+            entries.add(KnowledgeEntry(id = "app-${app.packageName}", name = "Installed App · ${app.label}", text = text, memory = false))
+        }
+
+        // 8. Live device telemetry snapshot
+        val statusText = provider.deviceStatusSummary()
+        if (statusText.isNotBlank()) {
+            entries.add(KnowledgeEntry(id = "phone-device-status", name = "Phone system status", text = statusText, memory = false))
         }
 
         return LocalKnowledgeStore.rank(query, entries)

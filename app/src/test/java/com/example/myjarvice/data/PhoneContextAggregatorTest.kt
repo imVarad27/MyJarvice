@@ -20,7 +20,9 @@ class PhoneContextAggregatorTest {
         private val knowledgeList: List<KnowledgeEntry> = emptyList(),
         private val calendarGranted: Boolean = true,
         private val contactList: List<ContactCard> = emptyList(),
-        private val contactsGranted: Boolean = true
+        private val contactsGranted: Boolean = true,
+        private val installedAppList: List<InstalledAppCard> = emptyList(),
+        private val statusSummary: String = ""
     ) : PhoneDataProvider {
         override fun tasks() = taskList
         override fun routines() = routineList
@@ -30,6 +32,8 @@ class PhoneContextAggregatorTest {
         override fun isCalendarPermissionGranted() = calendarGranted
         override fun contacts() = contactList
         override fun isContactsPermissionGranted() = contactsGranted
+        override fun installedApps() = installedAppList
+        override fun deviceStatusSummary() = statusSummary
     }
 
     @Test
@@ -176,5 +180,31 @@ class PhoneContextAggregatorTest {
         )
         val result = aggregator.searchContacts("Tony")
         assertTrue(result.contains("Contacts permission is required"))
+    }
+
+    @Test
+    fun `search finds matching installed applications`() {
+        val apps = listOf(
+            InstalledAppCard("Spotify", "com.spotify.music"),
+            InstalledAppCard("WhatsApp", "com.whatsapp"),
+            InstalledAppCard("Google Photos", "com.google.android.apps.photos")
+        )
+        val aggregator = PhoneContextAggregator(
+            FakePhoneDataProvider(installedAppList = apps)
+        )
+        val hits = aggregator.search("Spotify", now)
+        assertTrue(hits.isNotEmpty())
+        assertTrue(hits.any { it.source.contains("Installed App") && it.text.contains("com.spotify.music") })
+    }
+
+    @Test
+    fun `search finds matching device telemetry and status`() {
+        val summary = "Phone device status: Battery is at 88% (charging). Network: Wi-Fi. Storage: 45.0 GB free of 128.0 GB. RAM: 3.2 GB available of 8.0 GB."
+        val aggregator = PhoneContextAggregator(
+            FakePhoneDataProvider(statusSummary = summary)
+        )
+        val hits = aggregator.search("battery", now)
+        assertTrue(hits.isNotEmpty())
+        assertTrue(hits.any { it.source.contains("Phone system status") && it.text.contains("88%") })
     }
 }

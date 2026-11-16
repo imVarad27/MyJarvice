@@ -1,5 +1,16 @@
 # Jarvis changes
 
+## 1.14.0 — 2026-11-04 — Android build 18
+
+- Added **Installed Applications & Hardware Telemetry to Offline Phone RAG (`search_phone`)**:
+  - Full indexing of installed launcher applications (app labels and package names) into offline phone search.
+  - Live system telemetry (battery level, charging status, network connectivity, available storage, and free RAM) indexed into phone search.
+  - Expanded calendar event horizon to 30 days (`month()`) in the phone RAG provider.
+- Added **WhatsApp Message Composer Tool (`open_whatsapp`)**:
+  - Pre-fill WhatsApp message drafts with recipient name resolution and phone number lookup for quick user review and sending.
+- Added **Web Search Tool (`web_search`)**:
+  - Instant Google web search invocation directly through voice and text commands.
+
 ## 1.13.0 — 2026-11-04 — Android build 17
 
 - Added **Task Completion Tool (`complete_task`)**:

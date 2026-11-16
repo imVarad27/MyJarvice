@@ -80,7 +80,7 @@ class LocalAgentHarness(
             record(call.name, when {
                 !result.succeeded -> "failed"
                 !result.hasData -> "no_data"
-                call.name in setOf("open_app", "navigate", "set_alarm", "set_timer", "open_dialer", "open_sms", "open_settings", "open_url", "open_camera", "search_places", "show_alarms", "show_timers", "control_media", "set_ringer_mode") -> "prepared"
+                call.name in setOf("open_app", "navigate", "set_alarm", "set_timer", "open_dialer", "open_sms", "open_whatsapp", "web_search", "open_settings", "open_url", "open_camera", "search_places", "show_alarms", "show_timers", "control_media", "set_ringer_mode") -> "prepared"
                 else -> "completed"
             })
             if (!result.hasData || !result.succeeded) return decorate(result.text, used + label(call.name), sources + result.sources.take(3).map { it.take(160) })
@@ -103,15 +103,17 @@ class LocalAgentHarness(
     }
 
     companion object {
-        private val actionTools = setOf("remember", "add_task", "save_note", "complete_task", "open_app", "navigate", "flashlight", "set_alarm", "set_timer", "open_dialer", "open_sms", "adjust_volume", "open_settings", "copy_to_clipboard", "open_url", "open_camera", "search_places", "show_alarms", "show_timers", "control_media", "set_ringer_mode")
+        private val actionTools = setOf("remember", "add_task", "save_note", "complete_task", "open_app", "navigate", "flashlight", "set_alarm", "set_timer", "open_dialer", "open_sms", "open_whatsapp", "web_search", "adjust_volume", "open_settings", "copy_to_clipboard", "open_url", "open_camera", "search_places", "show_alarms", "show_timers", "control_media", "set_ringer_mode")
         fun isActionTool(name: String): Boolean = name in actionTools
         private val specs = linkedMapOf(
             "calculate" to LocalToolSpec("Evaluate arithmetic using digits, decimal points, parentheses and + - * /.", "expression", 200),
-            "search_phone" to LocalToolSpec("Search across all phone data: tasks, routines, calendar events, saved notes, memories and documents.", "query", 200),
+            "search_phone" to LocalToolSpec("Search across all phone data: tasks, routines, calendar events, saved notes, memories, contacts, installed apps, and device status.", "query", 200),
             "query_schedule" to LocalToolSpec("Look up your schedule combining calendar events and due tasks.", "when", 80, setOf("today", "tomorrow", "week")),
             "search_contacts" to LocalToolSpec("Search phone contacts by name, phone number, or email.", "query", 100),
             "open_dialer" to LocalToolSpec("Open phone dialer with a contact or number pre-filled. Tap Call in the dialer.", "recipient", 100),
             "open_sms" to LocalToolSpec("Open SMS app with recipient pre-filled. Format: 'Recipient: Message' or just recipient.", "details", 300),
+            "open_whatsapp" to LocalToolSpec("Open WhatsApp with recipient and message drafted for review. Format: 'Recipient: Message' or just 'Message'.", "details", 300),
+            "web_search" to LocalToolSpec("Search Google or the web for a topic or question.", "query", 200),
             "list_apps" to LocalToolSpec("List installed launchable apps. Put a search keyword or 'all' in query.", "query", 80),
             "adjust_volume" to LocalToolSpec("Adjust phone media volume. Use 'up', 'down', 'mute', 'status', or percentage like '50%'.", "level", 40),
             "open_settings" to LocalToolSpec("Open specific phone settings: wifi, bluetooth, display, sound, battery, apps, date, or phone.", "category", 60),
@@ -182,6 +184,8 @@ class LocalAgentHarness(
             "search_contacts" -> "Contacts search"
             "open_dialer" -> "Phone dialer"
             "open_sms" -> "SMS composer"
+            "open_whatsapp" -> "WhatsApp message"
+            "web_search" -> "Web search"
             "list_apps" -> "Installed apps"
             "adjust_volume" -> "Volume control"
             "open_settings" -> "Settings shortcut"

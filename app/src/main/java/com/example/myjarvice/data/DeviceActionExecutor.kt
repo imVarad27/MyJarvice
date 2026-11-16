@@ -80,6 +80,8 @@ class DeviceActionExecutor(private val context: Context) {
             "COMPLETE_LOCAL_TASK" -> completeTaskByQuery(action.query)
             "CONTROL_MEDIA" -> controlMedia(action.query)
             "SET_RINGER_MODE" -> setRingerMode(action.query)
+            "OPEN_WHATSAPP" -> openWhatsApp(action.query)
+            "WEB_SEARCH" -> webSearch(action.query)
             else -> error("This phone action is not allowlisted.")
         }
     }
@@ -620,6 +622,53 @@ class DeviceActionExecutor(private val context: Context) {
                 "Current ringer mode: $current."
             }
         }
+    }
+
+    private fun openWhatsApp(rawQuery: String): String {
+        val q = rawQuery.trim()
+        require(q.isNotBlank()) { "Please provide a recipient or message for WhatsApp." }
+        val colonIdx = q.indexOf(':')
+        val (recipient, message) = if (colonIdx > 0) {
+            q.substring(0, colonIdx).trim() to q.substring(colonIdx + 1).trim()
+        } else {
+            "" to q
+        }
+        val targetNumber = if (recipient.isNotBlank()) {
+            val digits = recipient.filter { it.isDigit() || it == '+' }
+            if (recipient.none { it.isLetter() } && digits.count { it.isDigit() } >= 3) {
+                digits
+            } else {
+                PhoneContactsRepository(context).findFirstNumber(recipient) ?: ""
+            }
+        } else ""
+        val phoneParam = if (targetNumber.isNotBlank()) "phone=${targetNumber.filter { it.isDigit() }}" else ""
+        val textParam = if (message.isNotBlank()) "text=${Uri.encode(message)}" else ""
+        val params = listOf(phoneParam, textParam).filter { it.isNotBlank() }.joinToString("&")
+        val uri = Uri.parse("https://api.whatsapp.com/send" + if (params.isNotBlank()) "?$params" else "")
+        val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+            setPackage("com.whatsapp")
+        }
+        return try {
+            launch(intent)
+            if (recipient.isNotBlank()) {
+                "Opening WhatsApp chat with “$recipient”" + (if (message.isNotBlank()) " with drafted message." else ".") + " Review and tap Send in WhatsApp."
+            } else {
+                "Opening WhatsApp with drafted message. Select a recipient to send."
+            }
+        } catch (_: Exception) {
+            val fallback = Intent(Intent.ACTION_VIEW, uri)
+            launch(fallback)
+            "Opening WhatsApp draft."
+        }
+    }
+
+    private fun webSearch(rawQuery: String): String {
+        val q = rawQuery.trim()
+        require(q.isNotBlank()) { "Please provide a query to search." }
+        val uri = Uri.parse("https://www.google.com/search?q=${Uri.encode(q)}")
+        val intent = Intent(Intent.ACTION_VIEW, uri)
+        launch(intent)
+        return "Searching the web for “$q”."
     }
 
     // --- Helpers ----------------------------------------------------------

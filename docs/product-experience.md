@@ -43,6 +43,7 @@ Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer co
 - Assistant tools include volume and audio control (`adjust_volume`), system settings navigation (`open_settings`), clipboard reading and copying (`read_clipboard`, `copy_to_clipboard`), web browser navigation (`open_url`), and hardware storage and memory monitoring in `phone_status`.
 - Assistant tools include quick note capture into the private Remember inbox (`save_note`), direct camera launch (`open_camera`), nearby places maps search (`search_places`), and Clock alarms/timers viewers (`show_alarms`, `show_timers`).
 - Assistant tools include marking open tasks completed (`complete_task`), media playback transport control (`control_media`), and phone ringer mode adjustments (`set_ringer_mode`).
+- Assistant tools include installed apps indexing and live system telemetry in phone RAG (`search_phone`), WhatsApp message drafting (`open_whatsapp`), and Google web search (`web_search`).
 
 ## What a personal assistant needs next
 

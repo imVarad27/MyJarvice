@@ -12,25 +12,25 @@ internal data class ReleaseHighlight(val title: String, val description: String,
 internal data class AppRelease(val version: String, val date: String, val highlights: List<ReleaseHighlight>)
 
 internal object JarvisReleases {
-    val latest = AppRelease("1.13.0", "2026-11-04", listOf(
+    val latest = AppRelease("1.14.0", "2026-11-04", listOf(
         ReleaseHighlight(
-            "Task completion by voice or chat",
-            "Mark open tasks as completed by name or keyword directly through Jarvis, seamlessly triggering recurring tasks.",
-            "Chat; Voice mode"
+            "Installed apps in phone RAG",
+            "Jarvis now indexes all installed launcher applications in offline phone search to instantly answer queries about your apps.",
+            "Phone search; RAG"
         ),
         ReleaseHighlight(
-            "Media playback control",
-            "Play, pause, skip, or resume music and media playback directly through assistant commands.",
+            "Live phone status & 30-day calendar RAG",
+            "Offline RAG now includes live hardware telemetry (battery, charging, storage, RAM) and an expanded 30-day calendar horizon.",
+            "Phone search; RAG"
+        ),
+        ReleaseHighlight(
+            "WhatsApp draft composer",
+            "Draft and review WhatsApp messages with contacts directly using voice or text without manual typing.",
             "Phone assistant"
         ),
         ReleaseHighlight(
-            "Ringer mode control",
-            "Switch phone sound modes between Normal, Vibrate, or Silent, or check the current ringer mode.",
-            "Phone assistant"
-        ),
-        ReleaseHighlight(
-            "Full device action suite",
-            "Control phone media, tasks, settings, clipboard, and apps effortlessly using on-device deterministic tools.",
+            "Google web search tool",
+            "Instantly search the web or Google for answers and topics directly from assistant commands.",
             "Phone assistant"
         )
     ))

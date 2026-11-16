@@ -35,6 +35,15 @@ class CalendarAgendaRepository internal constructor(
         return readLocalWindow(LocalDayWindow(days.first().startsAt, days.last().endsAtExclusive), zone)
     }
 
+    /** Expanded 32-day horizon (2 days past, 30 days future) for full-month RAG indexing. */
+    fun month(now: Long = System.currentTimeMillis()): CalendarSnapshot {
+        val zone = TimeZone.getDefault()
+        val startOfToday = LocalDayWindow.containing(now).startsAt
+        val windowStart = startOfToday - 2L * 86_400_000L
+        val windowEnd = startOfToday + 30L * 86_400_000L
+        return readLocalWindow(LocalDayWindow(windowStart, windowEnd), zone)
+    }
+
     fun today(now: Long = System.currentTimeMillis()): List<CalendarAgendaItem> {
         val zone = TimeZone.getDefault()
         val snapshot = readLocalWindow(CalendarWeekPlanner.days(now, zone).first(), zone)
