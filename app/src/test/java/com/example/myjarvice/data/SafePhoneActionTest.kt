@@ -23,6 +23,8 @@ class SafePhoneActionTest {
         assertEquals(SafePhoneAction("SET_RINGER_MODE", "vibrate", false), PhoneActionPolicy.validate("SET_RINGER_MODE", "vibrate"))
         assertEquals(SafePhoneAction("OPEN_WHATSAPP", "Mom: On my way", false), PhoneActionPolicy.validate("OPEN_WHATSAPP", "Mom: On my way"))
         assertEquals(SafePhoneAction("WEB_SEARCH", "weather today", false), PhoneActionPolicy.validate("WEB_SEARCH", "weather today"))
+        assertEquals(SafePhoneAction("OPEN_EMAIL", "boss@work.com: Project update | Done", false), PhoneActionPolicy.validate("OPEN_EMAIL", "boss@work.com: Project update | Done"))
+        assertEquals(SafePhoneAction("OPEN_CALENDAR_EVENT", "Dentist appointment", false), PhoneActionPolicy.validate("OPEN_CALENDAR_EVENT", "Dentist appointment"))
     }
 
     @Test fun riskyActionsRequireConfirmation() {

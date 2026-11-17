@@ -101,4 +101,22 @@ class PhoneContactsRepositoryTest {
         assertNull(repo.findFirstNumber("Unknown Person"))
         assertNull(repo.findFirstNumber("   "))
     }
+
+    @Test
+    fun `findFirstEmail resolves raw email and contact name`() {
+        val provider = FakeContactsProvider(
+            granted = true,
+            contactList = mutableListOf(
+                ContactCard("c1", "Tony Stark", listOf("555-3000"), listOf("tony@stark.com")),
+                ContactCard("c2", "Bruce Wayne", listOf("555-4000"), listOf())
+            )
+        )
+        val repo = PhoneContactsRepository(provider)
+
+        assertEquals("direct@example.com", repo.findFirstEmail("direct@example.com"))
+        assertEquals("tony@stark.com", repo.findFirstEmail("Tony Stark"))
+        assertNull(repo.findFirstEmail("Bruce Wayne"))
+        assertNull(repo.findFirstEmail("Unknown Contact"))
+        assertNull(repo.findFirstEmail("   "))
+    }
 }

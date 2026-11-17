@@ -41,10 +41,13 @@ class LocalAgentTools(private val context: Context) {
         }
         "phone_status" -> {
             val values = DeviceContextProvider(context).getDeviceContext()
+            val powerSaveStr = if (values["is_power_save"] == true) " (power saver on)" else ""
+            val ringerStr = values["ringer_mode"]?.let { "; ringer: $it" } ?: ""
+            val dndStr = if (values["dnd_active"] == true) "; DND: active" else ""
             LocalToolResult(
                 "Battery: ${values["battery_level"] ?: "unknown"}; " +
-                    "charging: ${values["is_charging"] ?: "unknown"}; " +
-                    "connection: ${values["connection_type"] ?: "unknown"}; " +
+                    "charging: ${values["is_charging"] ?: "unknown"}$powerSaveStr; " +
+                    "connection: ${values["connection_type"] ?: "unknown"}$ringerStr$dndStr; " +
                     "storage: ${values["storage"] ?: "unknown"}; " +
                     "RAM: ${values["ram"] ?: "unknown"}; " +
                     "tasks: ${values["open_tasks_count"] ?: 0} open (${values["due_today_count"] ?: 0} due today); " +
@@ -90,6 +93,8 @@ class LocalAgentTools(private val context: Context) {
         "set_ringer_mode" -> executePhone("SET_RINGER_MODE", call.argument)
         "open_whatsapp" -> executePhone("OPEN_WHATSAPP", call.argument)
         "web_search" -> executePhone("WEB_SEARCH", call.argument)
+        "open_email" -> executePhone("OPEN_EMAIL", call.argument)
+        "open_calendar_event" -> executePhone("OPEN_CALENDAR_EVENT", call.argument)
         else -> error("This tool is not available on the phone.")
     }
 

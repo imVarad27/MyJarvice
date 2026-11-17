@@ -27,7 +27,39 @@ class DeviceContextProvider(private val context: Context) {
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val activeNetwork = connectivityManager.activeNetwork
         val caps = connectivityManager.getNetworkCapabilities(activeNetwork)
-        val isWifi = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        val connectionType = when {
+            caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true -> "Wi-Fi"
+            caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true -> "Cellular"
+            caps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true -> "Ethernet"
+            activeNetwork == null || caps == null -> "Offline"
+            else -> "Connected"
+        }
+
+        val isPowerSave = runCatching {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+            pm?.isPowerSaveMode == true
+        }.getOrDefault(false)
+
+        val isBluetoothEnabled = runCatching {
+            val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager
+            bm?.adapter?.isEnabled == true
+        }.getOrNull()
+
+        val ringerMode = runCatching {
+            val audio = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+            when (audio?.ringerMode) {
+                android.media.AudioManager.RINGER_MODE_SILENT -> "Silent"
+                android.media.AudioManager.RINGER_MODE_VIBRATE -> "Vibrate"
+                android.media.AudioManager.RINGER_MODE_NORMAL -> "Normal"
+                else -> null
+            }
+        }.getOrNull()
+
+        val dndActive = runCatching {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+            val filter = nm?.currentInterruptionFilter ?: android.app.NotificationManager.INTERRUPTION_FILTER_ALL
+            filter != android.app.NotificationManager.INTERRUPTION_FILTER_ALL && filter != android.app.NotificationManager.INTERRUPTION_FILTER_UNKNOWN
+        }.getOrDefault(false)
 
         val currentTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
 
@@ -56,7 +88,11 @@ class DeviceContextProvider(private val context: Context) {
         return mapOf(
             "battery_level" to "$batteryPct%",
             "is_charging" to isCharging,
-            "connection_type" to if (isWifi) "Wi-Fi" else "Cellular/Offline",
+            "is_power_save" to isPowerSave,
+            "connection_type" to connectionType,
+            "bluetooth_enabled" to (isBluetoothEnabled ?: false),
+            "ringer_mode" to (ringerMode ?: "Normal"),
+            "dnd_active" to dndActive,
             "time" to currentTime,
             "device_model" to android.os.Build.MODEL,
             "storage" to (storageInfo ?: "unknown"),

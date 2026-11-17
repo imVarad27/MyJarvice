@@ -285,5 +285,13 @@ class LocalAgentHarnessTest {
         val webCall = LocalAgentHarness.parseCall("""{"tool":"web_search","argument":"current weather in Tokyo"}""")
         assertNotNull(webCall)
         assertEquals("web_search", webCall?.name)
+
+        val emailCall = LocalAgentHarness.parseCall("""{"tool":"open_email","argument":"Alice: Update | Finished early"}""")
+        assertNotNull(emailCall)
+        assertEquals("open_email", emailCall?.name)
+
+        val calendarCall = LocalAgentHarness.parseCall("""{"tool":"open_calendar_event","argument":"Team Sync"}""")
+        assertNotNull(calendarCall)
+        assertEquals("open_calendar_event", calendarCall?.name)
     }
 }

@@ -12,25 +12,25 @@ internal data class ReleaseHighlight(val title: String, val description: String,
 internal data class AppRelease(val version: String, val date: String, val highlights: List<ReleaseHighlight>)
 
 internal object JarvisReleases {
-    val latest = AppRelease("1.14.0", "2026-11-04", listOf(
+    val latest = AppRelease("1.15.0", "2026-11-04", listOf(
         ReleaseHighlight(
-            "Installed apps in phone RAG",
-            "Jarvis now indexes all installed launcher applications in offline phone search to instantly answer queries about your apps.",
-            "Phone search; RAG"
-        ),
-        ReleaseHighlight(
-            "Live phone status & 30-day calendar RAG",
-            "Offline RAG now includes live hardware telemetry (battery, charging, storage, RAM) and an expanded 30-day calendar horizon.",
-            "Phone search; RAG"
-        ),
-        ReleaseHighlight(
-            "WhatsApp draft composer",
-            "Draft and review WhatsApp messages with contacts directly using voice or text without manual typing.",
+            "Native email draft composer",
+            "Prepare emails with recipient contact resolution, subject, and body drafted directly via assistant commands.",
             "Phone assistant"
         ),
         ReleaseHighlight(
-            "Google web search tool",
-            "Instantly search the web or Google for answers and topics directly from assistant commands.",
+            "Calendar event creator",
+            "Open the calendar event composer with meeting titles and times pre-filled directly for quick saving.",
+            "Phone assistant"
+        ),
+        ReleaseHighlight(
+            "Enhanced hardware telemetry",
+            "Live detection of battery saver mode, Bluetooth status, Do Not Disturb state, and precise network transport.",
+            "Phone status; RAG"
+        ),
+        ReleaseHighlight(
+            "Comprehensive phone control",
+            "Unified voice and text tools across communication, calendar, media, settings, tasks, and system telemetry.",
             "Phone assistant"
         )
     ))

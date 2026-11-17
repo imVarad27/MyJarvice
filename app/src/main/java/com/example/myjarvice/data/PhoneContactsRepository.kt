@@ -164,6 +164,19 @@ class PhoneContactsRepository internal constructor(
         return contacts.firstOrNull { it.numbers.isNotEmpty() }?.numbers?.firstOrNull()
     }
 
+    /**
+     * Resolves a raw name or email query to an email address.
+     * If query already looks like an email (contains '@'), returns it trimmed.
+     * If query is a contact name, returns their primary email address.
+     */
+    fun findFirstEmail(nameOrQuery: String): String? {
+        val trimmed = nameOrQuery.trim()
+        if (trimmed.isBlank()) return null
+        if (trimmed.contains('@') && !trimmed.contains(' ')) return trimmed
+        val contacts = search(trimmed, maxResults = 3)
+        return contacts.firstOrNull { it.emails.isNotEmpty() }?.emails?.firstOrNull()
+    }
+
     private fun calculateMatchScore(
         contact: ContactCard,
         q: String,

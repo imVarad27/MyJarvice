@@ -71,11 +71,14 @@ class AndroidPhoneDataProvider(private val context: Context) : PhoneDataProvider
             val ctx = DeviceContextProvider(context).getDeviceContext()
             val battery = ctx["battery_level"] ?: "unknown"
             val charging = if (ctx["is_charging"] == true) "charging" else "not charging"
+            val powerSave = if (ctx["is_power_save"] == true) " · Power saver: On" else ""
             val conn = ctx["connection_type"] ?: "unknown"
+            val ringer = ctx["ringer_mode"] ?: "Normal"
+            val dnd = if (ctx["dnd_active"] == true) " · DND active" else ""
             val storage = ctx["storage"] ?: "unknown"
             val ram = ctx["ram"] ?: "unknown"
             val openTasks = ctx["open_tasks_count"] ?: 0
-            "Phone device status: Battery is at $battery ($charging). Network: $conn. Storage: $storage. RAM: $ram. Open tasks: $openTasks."
+            "Phone device status: Battery is at $battery ($charging$powerSave). Network: $conn. Ringer: $ringer$dnd. Storage: $storage. RAM: $ram. Open tasks: $openTasks."
         }.getOrDefault("")
     }
 }

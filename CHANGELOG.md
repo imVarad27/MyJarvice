@@ -1,5 +1,15 @@
 # Jarvis changes
 
+## 1.15.0 — 2026-11-04 — Android build 19
+
+- Added **Native Email Draft Composer (`open_email`)**:
+  - Automatically resolves contact names to email addresses using `PhoneContactsRepository`.
+  - Opens the native email client (Gmail, Outlook, etc.) with recipient, subject, and body pre-filled for review.
+- Added **Calendar Event Creator Tool (`open_calendar_event`)**:
+  - Pre-fills event title and upcoming start/end times directly into the Android Calendar app for quick saving.
+- Added **Enhanced System & Hardware Telemetry**:
+  - Live detection of battery saver mode, Bluetooth status, Do Not Disturb state, and discrete network transport (Wi-Fi, Cellular, Offline) in `phone_status` and offline RAG search.
+
 ## 1.14.0 — 2026-11-04 — Android build 18
 
 - Added **Installed Applications & Hardware Telemetry to Offline Phone RAG (`search_phone`)**:

@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.AlarmClock
+import android.provider.CalendarContract
 import android.provider.ContactsContract
 import android.provider.MediaStore
 import android.provider.Settings
@@ -82,6 +83,8 @@ class DeviceActionExecutor(private val context: Context) {
             "SET_RINGER_MODE" -> setRingerMode(action.query)
             "OPEN_WHATSAPP" -> openWhatsApp(action.query)
             "WEB_SEARCH" -> webSearch(action.query)
+            "OPEN_EMAIL" -> openEmail(action.query)
+            "OPEN_CALENDAR_EVENT" -> openCalendarEvent(action.query)
             else -> error("This phone action is not allowlisted.")
         }
     }
@@ -669,6 +672,57 @@ class DeviceActionExecutor(private val context: Context) {
         val intent = Intent(Intent.ACTION_VIEW, uri)
         launch(intent)
         return "Searching the web for “$q”."
+    }
+
+    private fun openEmail(rawQuery: String): String {
+        val q = rawQuery.trim()
+        require(q.isNotBlank()) { "Please provide an email recipient, subject, or message." }
+
+        val colonIdx = q.indexOf(':')
+        val (recipientPart, contentPart) = if (colonIdx > 0) {
+            q.substring(0, colonIdx).trim() to q.substring(colonIdx + 1).trim()
+        } else {
+            q to ""
+        }
+
+        val pipeIdx = contentPart.indexOf('|')
+        val (subject, body) = if (pipeIdx >= 0) {
+            contentPart.substring(0, pipeIdx).trim() to contentPart.substring(pipeIdx + 1).trim()
+        } else {
+            "" to contentPart
+        }
+
+        val email = PhoneContactsRepository(context).findFirstEmail(recipientPart) ?: recipientPart
+        val uri = Uri.parse("mailto:$email")
+        val intent = Intent(Intent.ACTION_SENDTO, uri).apply {
+            if (subject.isNotBlank()) putExtra(Intent.EXTRA_SUBJECT, subject)
+            if (body.isNotBlank()) putExtra(Intent.EXTRA_TEXT, body)
+        }
+        launch(intent)
+        return "Opened email composer for “$email”" + (if (subject.isNotBlank()) " with subject “$subject”." else ".") + " Review and send in your email app."
+    }
+
+    private fun openCalendarEvent(rawQuery: String): String {
+        val q = rawQuery.trim()
+        require(q.isNotBlank()) { "Please provide a title for the calendar event." }
+
+        val pipeIdx = q.indexOf('|')
+        val (title, _) = if (pipeIdx > 0) {
+            q.substring(0, pipeIdx).trim() to q.substring(pipeIdx + 1).trim()
+        } else {
+            q to ""
+        }
+
+        val intent = Intent(Intent.ACTION_INSERT).apply {
+            data = CalendarContract.Events.CONTENT_URI
+            putExtra(CalendarContract.Events.TITLE, title)
+            val now = System.currentTimeMillis()
+            val nextHour = now + (3600_000L - (now % 3600_000L))
+            putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, nextHour)
+            putExtra(CalendarContract.EXTRA_EVENT_END_TIME, nextHour + 3600_000L)
+        }
+        launch(intent)
+        return "Opened calendar event composer for “$title”. Review date, time, and tap Save."
     }
 
     // --- Helpers ----------------------------------------------------------
