@@ -25,6 +25,7 @@ interface PhoneDataProvider {
     fun isContactsPermissionGranted(): Boolean
     fun installedApps(): List<InstalledAppCard>
     fun deviceStatusSummary(): String
+    fun nextAlarmSummary(): String
 }
 
 /** Default implementation binding to local Android stores and permissioned providers. */
@@ -70,16 +71,28 @@ class AndroidPhoneDataProvider(private val context: Context) : PhoneDataProvider
         return runCatching {
             val ctx = DeviceContextProvider(context).getDeviceContext()
             val battery = ctx["battery_level"] ?: "unknown"
-            val charging = if (ctx["is_charging"] == true) "charging" else "not charging"
+            val charging = if (ctx["is_charging"] == true) "charging via ${ctx["battery_plugged"] ?: "charger"}" else "not charging"
             val powerSave = if (ctx["is_power_save"] == true) " · Power saver: On" else ""
             val conn = ctx["connection_type"] ?: "unknown"
             val ringer = ctx["ringer_mode"] ?: "Normal"
             val dnd = if (ctx["dnd_active"] == true) " · DND active" else ""
+            val nextAlarm = ctx["next_alarm"] ?: "None scheduled"
             val storage = ctx["storage"] ?: "unknown"
             val ram = ctx["ram"] ?: "unknown"
             val openTasks = ctx["open_tasks_count"] ?: 0
-            "Phone device status: Battery is at $battery ($charging$powerSave). Network: $conn. Ringer: $ringer$dnd. Storage: $storage. RAM: $ram. Open tasks: $openTasks."
+            "Phone device status: Battery: $battery ($charging$powerSave). Network: $conn. Ringer: $ringer$dnd. Next alarm: $nextAlarm. Storage: $storage. RAM: $ram. Open tasks: $openTasks."
         }.getOrDefault("")
+    }
+    override fun nextAlarmSummary(): String {
+        return runCatching {
+            val am = context.getSystemService(Context.ALARM_SERVICE) as? android.app.AlarmManager
+            am?.nextAlarmClock?.let { clock ->
+                val dateStr = java.text.DateFormat.getDateTimeInstance(
+                    java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT
+                ).format(Date(clock.triggerTime))
+                "Next scheduled phone alarm: $dateStr"
+            } ?: "No upcoming alarm set on this phone."
+        }.getOrDefault("No upcoming alarm set on this phone.")
     }
 }
 
@@ -154,6 +167,12 @@ class PhoneContextAggregator internal constructor(
         val statusText = provider.deviceStatusSummary()
         if (statusText.isNotBlank()) {
             entries.add(KnowledgeEntry(id = "phone-device-status", name = "Phone system status", text = statusText, memory = false))
+        }
+
+        // 9. Next scheduled alarm clock
+        val alarmText = provider.nextAlarmSummary()
+        if (alarmText.isNotBlank()) {
+            entries.add(KnowledgeEntry(id = "phone-next-alarm", name = "Phone alarm clock", text = alarmText, memory = false))
         }
 
         return LocalKnowledgeStore.rank(query, entries)

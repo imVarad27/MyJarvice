@@ -293,5 +293,15 @@ class LocalAgentHarnessTest {
         val calendarCall = LocalAgentHarness.parseCall("""{"tool":"open_calendar_event","argument":"Team Sync"}""")
         assertNotNull(calendarCall)
         assertEquals("open_calendar_event", calendarCall?.name)
+
+        val deleteCall = LocalAgentHarness.parseCall("""{"tool":"delete_task","argument":"Old task"}""")
+        assertNotNull(deleteCall)
+        assertEquals("delete_task", deleteCall?.name)
+        assertTrue(LocalAgentHarness.isActionTool("delete_task"))
+
+        val batteryDiagCall = LocalAgentHarness.parseCall("""{"tool":"battery_diagnostics","argument":""}""")
+        assertNotNull(batteryDiagCall)
+        assertEquals("battery_diagnostics", batteryDiagCall?.name)
+        assertFalse(LocalAgentHarness.isActionTool("battery_diagnostics"))
     }
 }

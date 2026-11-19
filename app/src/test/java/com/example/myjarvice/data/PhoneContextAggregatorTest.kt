@@ -22,7 +22,8 @@ class PhoneContextAggregatorTest {
         private val contactList: List<ContactCard> = emptyList(),
         private val contactsGranted: Boolean = true,
         private val installedAppList: List<InstalledAppCard> = emptyList(),
-        private val statusSummary: String = ""
+        private val statusSummary: String = "",
+        private val alarmSummary: String = ""
     ) : PhoneDataProvider {
         override fun tasks() = taskList
         override fun routines() = routineList
@@ -34,6 +35,7 @@ class PhoneContextAggregatorTest {
         override fun isContactsPermissionGranted() = contactsGranted
         override fun installedApps() = installedAppList
         override fun deviceStatusSummary() = statusSummary
+        override fun nextAlarmSummary() = alarmSummary
     }
 
     @Test
@@ -206,5 +208,16 @@ class PhoneContextAggregatorTest {
         val hits = aggregator.search("battery", now)
         assertTrue(hits.isNotEmpty())
         assertTrue(hits.any { it.source.contains("Phone system status") && it.text.contains("88%") })
+    }
+
+    @Test
+    fun `search finds scheduled next alarm clock`() {
+        val alarm = "Next scheduled phone alarm: Nov 5, 2026, 7:00 AM"
+        val aggregator = PhoneContextAggregator(
+            FakePhoneDataProvider(alarmSummary = alarm)
+        )
+        val hits = aggregator.search("alarm", now)
+        assertTrue(hits.isNotEmpty())
+        assertTrue(hits.any { it.source.contains("Phone alarm clock") && it.text.contains("7:00 AM") })
     }
 }

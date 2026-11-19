@@ -79,6 +79,7 @@ class DeviceActionExecutor(private val context: Context) {
             "SHOW_ALARMS" -> { showAlarms(); "Opening phone clock alarms." }
             "SHOW_TIMERS" -> { showTimers(); "Opening phone clock timers." }
             "COMPLETE_LOCAL_TASK" -> completeTaskByQuery(action.query)
+            "DELETE_LOCAL_TASK" -> deleteTaskByQuery(action.query)
             "CONTROL_MEDIA" -> controlMedia(action.query)
             "SET_RINGER_MODE" -> setRingerMode(action.query)
             "OPEN_WHATSAPP" -> openWhatsApp(action.query)
@@ -571,6 +572,20 @@ class DeviceActionExecutor(private val context: Context) {
         }
         store.setCompleted(match.id, true)
         return "Marked task “${match.title}” as completed."
+    }
+
+    private fun deleteTaskByQuery(query: String): String {
+        val store = LocalTaskStore(context)
+        val allTasks = store.tasks()
+        val q = query.trim().lowercase()
+        val match = allTasks.firstOrNull { it.title.lowercase() == q }
+            ?: allTasks.firstOrNull { it.title.lowercase().startsWith(q) }
+            ?: allTasks.firstOrNull { it.title.lowercase().contains(q) }
+        if (match == null) {
+            return "No task matching “$query” found to delete."
+        }
+        store.delete(match.id)
+        return "Deleted task “${match.title}” from your phone."
     }
 
     private fun controlMedia(command: String): String {

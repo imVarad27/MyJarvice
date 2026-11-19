@@ -12,21 +12,21 @@ internal data class ReleaseHighlight(val title: String, val description: String,
 internal data class AppRelease(val version: String, val date: String, val highlights: List<ReleaseHighlight>)
 
 internal object JarvisReleases {
-    val latest = AppRelease("1.15.0", "2026-11-04", listOf(
+    val latest = AppRelease("1.16.0", "2026-11-04", listOf(
         ReleaseHighlight(
-            "Native email draft composer",
-            "Prepare emails with recipient contact resolution, subject, and body drafted directly via assistant commands.",
-            "Phone assistant"
+            "Task deletion tool",
+            "Delete completed or obsolete phone tasks by voice or model tool calls with title and keyword matching.",
+            "Phone tasks"
         ),
         ReleaseHighlight(
-            "Calendar event creator",
-            "Open the calendar event composer with meeting titles and times pre-filled directly for quick saving.",
-            "Phone assistant"
+            "Battery diagnostics inspector",
+            "Check detailed battery health, temperature in °C, charging source (AC, USB, Wireless), and power saver status.",
+            "Phone status"
         ),
         ReleaseHighlight(
-            "Enhanced hardware telemetry",
-            "Live detection of battery saver mode, Bluetooth status, Do Not Disturb state, and precise network transport.",
-            "Phone status; RAG"
+            "Next alarm clock telemetry & RAG",
+            "Automatically query upcoming alarm clock schedules and index them into offline RAG search.",
+            "Phone search; RAG"
         ),
         ReleaseHighlight(
             "Comprehensive phone control",

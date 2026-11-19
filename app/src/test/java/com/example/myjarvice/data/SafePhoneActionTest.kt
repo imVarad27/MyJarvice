@@ -19,6 +19,7 @@ class SafePhoneActionTest {
         assertEquals(SafePhoneAction("SHOW_ALARMS", "", false), PhoneActionPolicy.validate("SHOW_ALARMS", ""))
         assertEquals(SafePhoneAction("SHOW_TIMERS", "", false), PhoneActionPolicy.validate("SHOW_TIMERS", ""))
         assertEquals(SafePhoneAction("COMPLETE_LOCAL_TASK", "Buy milk", false), PhoneActionPolicy.validate("COMPLETE_LOCAL_TASK", "Buy milk"))
+        assertEquals(SafePhoneAction("DELETE_LOCAL_TASK", "Buy milk", false), PhoneActionPolicy.validate("DELETE_LOCAL_TASK", "Buy milk"))
         assertEquals(SafePhoneAction("CONTROL_MEDIA", "play", false), PhoneActionPolicy.validate("CONTROL_MEDIA", "play"))
         assertEquals(SafePhoneAction("SET_RINGER_MODE", "vibrate", false), PhoneActionPolicy.validate("SET_RINGER_MODE", "vibrate"))
         assertEquals(SafePhoneAction("OPEN_WHATSAPP", "Mom: On my way", false), PhoneActionPolicy.validate("OPEN_WHATSAPP", "Mom: On my way"))

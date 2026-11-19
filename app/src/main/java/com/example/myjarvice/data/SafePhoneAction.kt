@@ -28,6 +28,7 @@ object PhoneActionPolicy {
         "OPEN_URL" to 300,
         "SEARCH_PLACES" to 160,
         "COMPLETE_LOCAL_TASK" to 180,
+        "DELETE_LOCAL_TASK" to 180,
         "CONTROL_MEDIA" to 40,
         "SET_RINGER_MODE" to 40,
         "OPEN_WHATSAPP" to 500,

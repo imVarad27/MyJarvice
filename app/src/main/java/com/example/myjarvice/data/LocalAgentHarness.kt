@@ -103,7 +103,7 @@ class LocalAgentHarness(
     }
 
     companion object {
-        private val actionTools = setOf("remember", "add_task", "save_note", "complete_task", "open_app", "navigate", "flashlight", "set_alarm", "set_timer", "open_dialer", "open_sms", "open_whatsapp", "web_search", "open_email", "open_calendar_event", "adjust_volume", "open_settings", "copy_to_clipboard", "open_url", "open_camera", "search_places", "show_alarms", "show_timers", "control_media", "set_ringer_mode")
+        private val actionTools = setOf("remember", "add_task", "save_note", "complete_task", "delete_task", "open_app", "navigate", "flashlight", "set_alarm", "set_timer", "open_dialer", "open_sms", "open_whatsapp", "web_search", "open_email", "open_calendar_event", "adjust_volume", "open_settings", "copy_to_clipboard", "open_url", "open_camera", "search_places", "show_alarms", "show_timers", "control_media", "set_ringer_mode")
         fun isActionTool(name: String): Boolean = name in actionTools
         private val specs = linkedMapOf(
             "calculate" to LocalToolSpec("Evaluate arithmetic using digits, decimal points, parentheses and + - * /.", "expression", 200),
@@ -128,6 +128,8 @@ class LocalAgentHarness(
             "show_alarms" to LocalToolSpec("Open the phone clock alarms screen."),
             "show_timers" to LocalToolSpec("Open the phone clock timers screen."),
             "complete_task" to LocalToolSpec("Mark an open phone task as completed by title or keyword.", "task", 180),
+            "delete_task" to LocalToolSpec("Delete a phone task by title or keyword.", "task", 180),
+            "battery_diagnostics" to LocalToolSpec("Check detailed phone battery diagnostics: percentage, charging source, health, temperature, and power saver mode."),
             "control_media" to LocalToolSpec("Control media playback: play, pause, next, previous, or toggle.", "action", 40, setOf("play", "pause", "next", "previous", "toggle")),
             "set_ringer_mode" to LocalToolSpec("Set phone ringer mode: normal, vibrate, silent, or status.", "mode", 40, setOf("normal", "vibrate", "silent", "status")),
             "search_library" to LocalToolSpec("Search explicitly saved memories and imported documents.", "query", 200),
@@ -203,9 +205,9 @@ class LocalAgentHarness(
             "search_library" -> "Memory & documents"
             "search_inbox" -> "Saved inbox"
             "clock" -> "Phone clock"
-            "phone_status" -> "Phone status"
+            "phone_status", "battery_diagnostics" -> "Phone status"
             "remember", "list_memories" -> "Local memory"
-            "add_task", "list_tasks", "complete_task" -> "Phone tasks"
+            "add_task", "list_tasks", "complete_task", "delete_task" -> "Phone tasks"
             "control_media" -> "Media playback"
             "set_ringer_mode" -> "Ringer mode"
             "open_app" -> "App launcher"

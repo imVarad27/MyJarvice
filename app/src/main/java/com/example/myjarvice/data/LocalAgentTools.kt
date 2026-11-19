@@ -89,6 +89,16 @@ class LocalAgentTools(private val context: Context) {
         "show_alarms" -> executePhone("SHOW_ALARMS", "")
         "show_timers" -> executePhone("SHOW_TIMERS", "")
         "complete_task" -> executePhone("COMPLETE_LOCAL_TASK", call.argument)
+        "delete_task" -> executePhone("DELETE_LOCAL_TASK", call.argument)
+        "battery_diagnostics" -> {
+            val ctx = DeviceContextProvider(context).getDeviceContext()
+            val level = ctx["battery_level"] ?: "unknown"
+            val charging = if (ctx["is_charging"] == true) "Charging via ${ctx["battery_plugged"] ?: "charger"}" else "Discharging (unplugged)"
+            val health = ctx["battery_health"] ?: "Normal"
+            val temp = ctx["battery_temperature"] ?: "unknown"
+            val powerSave = if (ctx["is_power_save"] == true) "On" else "Off"
+            LocalToolResult("Battery: $level ($charging). Health: $health. Temperature: $temp. Power saver: $powerSave.")
+        }
         "control_media" -> executePhone("CONTROL_MEDIA", call.argument)
         "set_ringer_mode" -> executePhone("SET_RINGER_MODE", call.argument)
         "open_whatsapp" -> executePhone("OPEN_WHATSAPP", call.argument)

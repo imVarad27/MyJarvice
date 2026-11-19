@@ -45,6 +45,7 @@ Quiet neutral surfaces, a muted teal accent, consistent typography, and fewer co
 - Assistant tools include marking open tasks completed (`complete_task`), media playback transport control (`control_media`), and phone ringer mode adjustments (`set_ringer_mode`).
 - Assistant tools include installed apps indexing and live system telemetry in phone RAG (`search_phone`), WhatsApp message drafting (`open_whatsapp`), and Google web search (`web_search`).
 - Assistant tools include email composer drafting with contact address resolution (`open_email`), calendar event creation (`open_calendar_event`), and expanded system telemetry (battery saver, Bluetooth, DND, network state).
+- Assistant tools include task deletion (`delete_task`), detailed battery diagnostics (`battery_diagnostics` with health, temperature, charging source, and power saver state), and next alarm schedule indexing in offline phone search (`search_phone`).
 
 ## What a personal assistant needs next
 

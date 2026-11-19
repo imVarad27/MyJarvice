@@ -1,5 +1,16 @@
 # Jarvis changes
 
+## 1.16.0 — 2026-11-04 — Android build 20
+
+- Added **Task Deletion Tool (`delete_task`)**:
+  - Delete open or completed phone tasks by title or keyword matching via `LocalTaskStore`.
+  - Fully bound into agent harness action tools and safe phone execution with bounds verification.
+- Added **Battery Diagnostics Inspector Tool (`battery_diagnostics`)**:
+  - Detailed readout of battery level, charging source (AC charger, USB, Wireless, Unplugged), battery health status, temperature in °C, and power saver state.
+- Added **Next Alarm Clock Telemetry & Offline RAG Indexing**:
+  - Live query of `AlarmManager.nextAlarmClock` incorporated into device context and system status summary.
+  - Automatically indexed into unified offline phone search (`search_phone`) so users can ask "When is my next alarm?" or search alarm status offline.
+
 ## 1.15.0 — 2026-11-04 — Android build 19
 
 - Added **Native Email Draft Composer (`open_email`)**:

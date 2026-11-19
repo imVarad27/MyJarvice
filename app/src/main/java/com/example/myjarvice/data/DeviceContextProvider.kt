@@ -23,6 +23,21 @@ class DeviceContextProvider(private val context: Context) {
 
         val status: Int = batteryStatus?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
         val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+        val plugType = when (batteryStatus?.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1)) {
+            BatteryManager.BATTERY_PLUGGED_AC -> "AC charger"
+            BatteryManager.BATTERY_PLUGGED_USB -> "USB"
+            BatteryManager.BATTERY_PLUGGED_WIRELESS -> "Wireless charger"
+            else -> if (isCharging) "Charging" else "Unplugged"
+        }
+        val rawTemp = batteryStatus?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1
+        val tempStr = if (rawTemp > 0) String.format(Locale.US, "%.1f°C", rawTemp / 10.0) else "unknown"
+        val healthStr = when (batteryStatus?.getIntExtra(BatteryManager.EXTRA_HEALTH, -1)) {
+            BatteryManager.BATTERY_HEALTH_GOOD -> "Good"
+            BatteryManager.BATTERY_HEALTH_OVERHEAT -> "Overheating"
+            BatteryManager.BATTERY_HEALTH_DEAD -> "Dead"
+            BatteryManager.BATTERY_HEALTH_OVER_VOLTAGE -> "Over-voltage"
+            else -> "Normal"
+        }
 
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val activeNetwork = connectivityManager.activeNetwork
@@ -85,14 +100,27 @@ class DeviceContextProvider(private val context: Context) {
         val today = LocalDayWindow.containing(System.currentTimeMillis())
         val dueToday = openTasks.filter { it.dueAt != null && it.dueAt >= today.startsAt && it.dueAt < today.endsAtExclusive }
 
+        val nextAlarmInfo = runCatching {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? android.app.AlarmManager
+            alarmManager?.nextAlarmClock?.let { clock ->
+                java.text.DateFormat.getDateTimeInstance(
+                    java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT
+                ).format(Date(clock.triggerTime))
+            }
+        }.getOrNull()
+
         return mapOf(
             "battery_level" to "$batteryPct%",
             "is_charging" to isCharging,
+            "battery_plugged" to plugType,
+            "battery_temperature" to tempStr,
+            "battery_health" to healthStr,
             "is_power_save" to isPowerSave,
             "connection_type" to connectionType,
             "bluetooth_enabled" to (isBluetoothEnabled ?: false),
             "ringer_mode" to (ringerMode ?: "Normal"),
             "dnd_active" to dndActive,
+            "next_alarm" to (nextAlarmInfo ?: "None scheduled"),
             "time" to currentTime,
             "device_model" to android.os.Build.MODEL,
             "storage" to (storageInfo ?: "unknown"),
